@@ -1,0 +1,37 @@
+# Unreal Engine Build System
+Binaries/
+Build/
+DerivedDataCache/
+Intermediate/
+Saved/
+
+# C++ Build Files
+.vs/
+.vsconfig
+.vscode/
+.idea/
+*.opensdf
+*.opendb
+*.sdf
+*.suo
+*.VC.db
+*.sln
+*.pdb
+*.user
+*.exe
+*.dll
+*.lib
+*.ilk
+*.manifest
+*.log
+*.obj
+
+# Unreal Header Tool Generated Files
+Source/**/*.gen.cpp
+Source/**/*.generated.h
+Source/**/*.gen.h
+
+# Mac
+*.xcodeproj
+*.xcworkspace
+*.DS_Store
