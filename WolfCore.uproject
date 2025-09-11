@@ -7,7 +7,13 @@
 		{
 			"Name": "WolfCore",
 			"Type": "Runtime",
-			"LoadingPhase": "Default"
+			"LoadingPhase": "Default",
+			"AdditionalDependencies": [
+				"Engine",
+				"AIModule",
+				"GameplayAbilities",
+				"EnhancedInput"
+			]
 		}
 	],
 	"Plugins": [
@@ -17,6 +23,14 @@
 			"TargetAllowList": [
 				"Editor"
 			]
+		},
+		{
+			"Name": "GameplayStateTree",
+			"Enabled": true
+		},
+		{
+			"Name": "GameplayAbilities",
+			"Enabled": true
 		}
 	]
 }
