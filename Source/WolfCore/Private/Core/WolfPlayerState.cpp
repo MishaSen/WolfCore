@@ -1,7 +1,7 @@
 // Fill out your copyright notice in the Description page of Project Settings.
 
 
-#include "WolfCore/Public/Player/WolfPlayerState.h"
+#include "WolfCore/Public/Core/WolfPlayerState.h"
 
 #include "WolfCore/Public/AbilitySystem/WolfAbilitySystemComponent.h"
 #include "WolfCore/Public/AbilitySystem/WolfAttributeSet.h"

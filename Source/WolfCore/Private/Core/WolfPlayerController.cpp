@@ -1,7 +1,7 @@
 // Fill out your copyright notice in the Description page of Project Settings.
 
 
-#include "WolfCore/Public/Player/WolfPlayerController.h"
+#include "WolfCore/Public/Core/WolfPlayerController.h"
 
 #include "EnhancedInputSubsystems.h"
 #include "WolfCore/Public/AbilitySystem//WolfAbilitySystemComponent.h"

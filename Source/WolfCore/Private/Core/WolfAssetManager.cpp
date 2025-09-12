@@ -1,10 +1,10 @@
 // Fill out your copyright notice in the Description page of Project Settings.
 
 
-#include "WolfCore/Public/AssetManager/WolfAssetManager.h"
+#include "WolfCore/Public/Core/WolfAssetManager.h"
 
 #include "AbilitySystemGlobals.h"
-#include "WolfCore/Public/AbilitySystem/WolfGameplayTags.h"
+#include "WolfCore/Public/Core/WolfGameplayTags.h"
 
 UWolfAssetManager& UWolfAssetManager::Get()
 {
