@@ -20,6 +20,7 @@ struct FWolfGameplayTags
 	FGameplayTag Input_Ability_2;
 	FGameplayTag Input_Ability_3;
 	FGameplayTag Input_Ability_4;
+	FGameplayTag Input_Jump;
 
 	// --- Mouse Inputs ---
 	FGameplayTag Input_LMB;
