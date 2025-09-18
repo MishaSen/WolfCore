@@ -1,25 +1,33 @@
 // Fill out your copyright notice in the Description page of Project Settings.
 
-#include "WolfCore/Public/Character/WolfCharacter.h"
+#include "WolfCore/Public/Character/WolfCharacterBase.h"
 
+#include "GameFramework/CharacterMovementComponent.h"
 #include "WolfCore/Public/AbilitySystem/WolfAbilitySystemComponent.h"
 #include "WolfCore/Public/AbilitySystem/WolfAttributeSet.h"
 #include "WolfCore/Public/Presage/PresageAbilityRequest.h"
 #include "WolfCore/Public/Presage/PresageSubsystem.h"
 
-AWolfCharacter::AWolfCharacter()
+AWolfCharacterBase::AWolfCharacterBase()
 {
 	PrimaryActorTick.bCanEverTick = true;
 	ASC = CreateDefaultSubobject<UWolfAbilitySystemComponent>(TEXT("Ability System Component"));
 	AtSet = CreateDefaultSubobject<UWolfAttributeSet>(TEXT("Attribute Set"));
+
+	bUseControllerRotationPitch = false;
+	bUseControllerRotationYaw = true;
+	bUseControllerRotationRoll = false;
+
+	GetCharacterMovement()->bOrientRotationToMovement = false;
+	GetCharacterMovement()->bUseControllerDesiredRotation = true;	
 }
 
-UAbilitySystemComponent* AWolfCharacter::GetAbilitySystemComponent() const
+UAbilitySystemComponent* AWolfCharacterBase::GetAbilitySystemComponent() const
 {
 	return ASC;
 }
 
-FGameplayAbilitySpecHandle AWolfCharacter::GetAbilitySpecHandle(const TSubclassOf<UGameplayAbility>& AbilityClass) const
+FGameplayAbilitySpecHandle AWolfCharacterBase::GetAbilitySpecHandle(const TSubclassOf<UGameplayAbility>& AbilityClass) const
 {
 	if (GrantedAbilityHandles.Contains(AbilityClass))
 	{
@@ -28,7 +36,7 @@ FGameplayAbilitySpecHandle AWolfCharacter::GetAbilitySpecHandle(const TSubclassO
 	return FGameplayAbilitySpecHandle();
 }
 
-void AWolfCharacter::QueueAbility(const FGameplayAbilitySpecHandle SpecHandle, const float ScheduledTime,
+void AWolfCharacterBase::QueueAbility(const FGameplayAbilitySpecHandle SpecHandle, const float ScheduledTime,
                                   const FGameplayTag AbilityTag)
 {
 	if (!ASC) return;
@@ -53,7 +61,7 @@ void AWolfCharacter::QueueAbility(const FGameplayAbilitySpecHandle SpecHandle, c
 	}
 }
 
-void AWolfCharacter::BeginPlay()
+void AWolfCharacterBase::BeginPlay()
 {
 	Super::BeginPlay();
 
@@ -70,23 +78,23 @@ void AWolfCharacter::BeginPlay()
 	}
 }
 
-void AWolfCharacter::Tick(float DeltaTime)
+void AWolfCharacterBase::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
 }
 
-void AWolfCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)
+void AWolfCharacterBase::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)
 {
 	Super::SetupPlayerInputComponent(PlayerInputComponent);
 }
 
-void AWolfCharacter::PossessedBy(AController* NewController)
+void AWolfCharacterBase::PossessedBy(AController* NewController)
 {
 	Super::PossessedBy(NewController);
 	AddCharacterAbilities();
 }
 
-void AWolfCharacter::AddCharacterAbilities()
+void AWolfCharacterBase::AddCharacterAbilities()
 {
 	if (!HasAuthority() || !ASC) return;
 

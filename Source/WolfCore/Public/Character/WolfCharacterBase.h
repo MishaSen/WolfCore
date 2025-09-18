@@ -8,7 +8,7 @@
 #include "GameplayAbilitySpecHandle.h"
 #include "GameplayTagContainer.h"
 
-#include "WolfCharacter.generated.h"
+#include "WolfCharacterBase.generated.h"
 
 class UGameplayAbility;
 class UWolfAbilitySystemComponent;
@@ -19,12 +19,12 @@ class UWolfAttributeSet;
 class UGameplayEffect;
 
 UCLASS()
-class WOLFCORE_API AWolfCharacter : public ACharacter, public IAbilitySystemInterface
+class WOLFCORE_API AWolfCharacterBase : public ACharacter, public IAbilitySystemInterface
 {
 	GENERATED_BODY()
 
 public:
-	AWolfCharacter();
+	AWolfCharacterBase();
 	virtual UAbilitySystemComponent* GetAbilitySystemComponent() const override;
 
 	UFUNCTION(BlueprintPure, Category = "Abilities")
@@ -36,11 +36,6 @@ public:
 	                  const FGameplayTag AbilityTag);
 
 protected:
-	virtual void BeginPlay() override;
-	virtual void Tick(float DeltaTime) override;
-	virtual void SetupPlayerInputComponent(class UInputComponent* PlayerInputComponent) override;
-	virtual void PossessedBy(AController* NewController) override;
-
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly)
 	UWolfAbilitySystemComponent* ASC;
 
@@ -49,6 +44,11 @@ protected:
 
 	UPROPERTY(EditDefaultsOnly, Category = "Abilities")
 	TMap<TSubclassOf<UGameplayAbility>, FGameplayTag> TBAbilities;
+	
+	virtual void BeginPlay() override;
+	virtual void Tick(float DeltaTime) override;
+	virtual void SetupPlayerInputComponent(class UInputComponent* PlayerInputComponent) override;
+	virtual void PossessedBy(AController* NewController) override;
 
 private:
 	UPROPERTY()

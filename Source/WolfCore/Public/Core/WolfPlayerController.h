@@ -8,6 +8,7 @@
 
 #include "WolfPlayerController.generated.h"
 
+struct FInputActionValue;
 struct FGameplayTag;
 class UWolfAbilitySystemComponent;
 class UWolfInputConfig;
@@ -59,6 +60,12 @@ private:
 
 	UPROPERTY(EditAnywhere, Category = "Input", meta = (AllowPrivateAccess = "true"))
 	TObjectPtr<UInputMappingContext> InCombatTBContext;
+
+	UPROPERTY(EditAnywhere, Category = "Input")
+	TObjectPtr<UInputAction> MoveAction;
+
+	UPROPERTY(EditAnywhere, Category = "Input")
+	TObjectPtr<UInputAction> LookAction;
 	
 	EInputContext CurrentInputContext = EInputContext::OutOfCombat;
 
@@ -66,6 +73,9 @@ private:
 	void AbilityInputTagPressed(const FGameplayTag InputTag);
 	void AbilityInputTagReleased(const FGameplayTag InputTag);
 	void AbilityInputTagHeld(const FGameplayTag InputTag);
+
+	void Move(const FInputActionValue& Value);
+	void Look(const FInputActionValue& Value);
 
 	UFUNCTION()
 	void HandleTBTransition(bool bIsEnteringTB);
