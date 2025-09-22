@@ -4,6 +4,8 @@
 #include "WolfCore/Public/Abilities/TBCombatAbility.h"
 #include "Abilities/Tasks/AbilityTask_PlayMontageAndWait.h"
 #include "Abilities/Tasks/AbilityTask_WaitDelay.h"
+#include "DrawDebugHelpers.h"
+#include "Abilities/Tasks/AbilityTask_WaitGameplayEvent.h"
 
 void UTBCombatAbility::ActivateAbility(const FGameplayAbilitySpecHandle Handle,
                                        const FGameplayAbilityActorInfo* ActorInfo,
@@ -70,6 +72,16 @@ void UTBCombatAbility::PlayCurrentPeriod(FGameplayAbilitySpecHandle Handle,
 		MontageTask->OnCancelled.AddDynamic(this, &UTBCombatAbility::K2_EndAbility);
 
 		MontageTask->ReadyForActivation();
+
+		/*
+		 * Listen for the event sent from AnimNotify_Hit
+		 * Define the tag in project settings: Gameplay Tags -> Gameplay Abilities -> Event -> Attack
+		 */
+		FGameplayTag EventTag = FGameplayTag::RequestGameplayTag("Event.Ability.Attack");
+
+		UAbilityTask_WaitGameplayEvent* WaitTask = UAbilityTask_WaitGameplayEvent::WaitGameplayEvent(this, EventTag);
+		WaitTask->EventReceived.AddDynamic(this, &UTBCombatAbility::OnGameplayEventReceived);
+		WaitTask->ReadyForActivation();
 	}
 	else if (Period.Duration > 0.f)
 	{
@@ -89,4 +101,24 @@ void UTBCombatAbility::OnDelayFinished()
 {
 	++CurrentPeriodIndex;
 	PlayCurrentPeriod(CachedHandle, CachedActorInfo, CachedActivationInfo);
+}
+
+void UTBCombatAbility::OnGameplayEventReceived(FGameplayEventData Payload)
+{
+	if (const AActor* TargetActor = GetAvatarActorFromActorInfo())
+	{
+		const FVector Forward = TargetActor->GetActorForwardVector();
+		const FVector Location = TargetActor->GetActorLocation();
+		const FVector SphereLocation = Location + Forward * 100.f;
+
+		DrawDebugSphere(
+			GetWorld(),
+			SphereLocation,
+			50.f,
+			12,
+			FColor::Red,
+			false,
+			5.f
+		);
+	}
 }

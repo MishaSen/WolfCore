@@ -16,22 +16,6 @@ enum class EPeriod : uint8
 };
 
 USTRUCT(BlueprintType)
-struct FAttackPoint
-{
-	GENERATED_BODY()
-	FAttackPoint()
-		: Time(0.0f)
-		, Damage(0.0f)
-	{}
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite)
-	float Time;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite)
-	float Damage;
-};
-
-USTRUCT(BlueprintType)
 struct FPeriod
 {
 	GENERATED_BODY()
@@ -39,7 +23,6 @@ struct FPeriod
 		: PeriodType(EPeriod::MoveTo)
 		, Duration(0.0f)
 		, bIsInvulnerable(false)
-		, AttackPoints()
 		, Montage(nullptr)
 	{}
 
@@ -51,9 +34,6 @@ struct FPeriod
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
 	bool bIsInvulnerable;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite)
-	TArray<FAttackPoint> AttackPoints;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
 	TObjectPtr<UAnimMontage> Montage;
@@ -73,16 +53,19 @@ public:
 
 	UFUNCTION()
 	void OnDelayFinished();
-	
-	void PlayCurrentPeriod(FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo,
-	                       const FGameplayAbilityActivationInfo& ActivationInfo);
-	
+
 	virtual void ActivateAbility(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo,
 	                             const FGameplayAbilityActivationInfo ActivationInfo,
 	                             const FGameplayEventData* TriggerEventData) override;
 
+	UFUNCTION()
+	void OnGameplayEventReceived(FGameplayEventData Payload);
+
 private:
 	int32 CurrentPeriodIndex = 0;
+
+	void PlayCurrentPeriod(FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo,
+	                       const FGameplayAbilityActivationInfo& ActivationInfo);
 
 	// Cached activation context for OnDelayFinished()
 	FGameplayAbilitySpecHandle CachedHandle;
