@@ -15,16 +15,14 @@ struct FWolfGameplayTags
 	static void AddNativeTag(FGameplayTag& Tag, const FName& TagName, const FString& Description);
 	static void InitializeNativeGameplayTags();
 
-	// --- Ability Inputs ---
-	FGameplayTag Input_Ability_1;
-	FGameplayTag Input_Ability_2;
-	FGameplayTag Input_Ability_3;
-	FGameplayTag Input_Ability_4;
+	// --- Input Tags ---
+	FGameplayTag Input_Ability1;
+	FGameplayTag Input_Ability2;
+	FGameplayTag Input_Ability3;
+	FGameplayTag Input_Ability4;
 	FGameplayTag Input_Jump;
-
-	// --- Mouse Inputs ---
-	FGameplayTag Input_LMB;
-	FGameplayTag Input_RMB;
+	FGameplayTag Input_Primary;
+	FGameplayTag Input_Secondary;
 
 	// Future extension: Add TMap<FGameplayTag, FGameplayTag> to link abilities to cooldowns, effects, etc.
 	// e.g. TMap<FGameplayTag, FGameplayTag> AbilityCooldowns;

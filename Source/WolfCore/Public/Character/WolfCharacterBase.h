@@ -10,6 +10,7 @@
 
 #include "WolfCharacterBase.generated.h"
 
+class UAbilityConfig;
 class UGameplayAbility;
 class UWolfAbilitySystemComponent;
 class UWolfAttributeSet;
@@ -43,7 +44,7 @@ protected:
 	TSubclassOf<UGameplayEffect> DefaultAttributes;
 
 	UPROPERTY(EditDefaultsOnly, Category = "Abilities")
-	TMap<TSubclassOf<UGameplayAbility>, FGameplayTag> TBAbilities;
+	TObjectPtr<UAbilityConfig> AbilityConfig;
 	
 	virtual void BeginPlay() override;
 	virtual void Tick(float DeltaTime) override;
@@ -56,6 +57,9 @@ private:
 
 	UPROPERTY()
 	TMap<TSubclassOf<UGameplayAbility>, FGameplayAbilitySpecHandle> GrantedAbilityHandles;
+
+	UPROPERTY()
+	TArray<FGameplayTag> GrantedAbilityTags;
 
 	UFUNCTION(BlueprintCallable, Category = "Abilities")
 	void AddCharacterAbilities();

@@ -2,6 +2,7 @@
 
 #include "WolfCore/Public/Character/WolfCharacterBase.h"
 
+#include "Abilities/AbilityConfig.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "WolfCore/Public/AbilitySystem/WolfAbilitySystemComponent.h"
 #include "WolfCore/Public/AbilitySystem/WolfAttributeSet.h"
@@ -19,7 +20,7 @@ AWolfCharacterBase::AWolfCharacterBase()
 	bUseControllerRotationRoll = false;
 
 	GetCharacterMovement()->bOrientRotationToMovement = false;
-	GetCharacterMovement()->bUseControllerDesiredRotation = true;	
+	GetCharacterMovement()->bUseControllerDesiredRotation = true;
 }
 
 UAbilitySystemComponent* AWolfCharacterBase::GetAbilitySystemComponent() const
@@ -27,7 +28,8 @@ UAbilitySystemComponent* AWolfCharacterBase::GetAbilitySystemComponent() const
 	return ASC;
 }
 
-FGameplayAbilitySpecHandle AWolfCharacterBase::GetAbilitySpecHandle(const TSubclassOf<UGameplayAbility>& AbilityClass) const
+FGameplayAbilitySpecHandle AWolfCharacterBase::GetAbilitySpecHandle(
+	const TSubclassOf<UGameplayAbility>& AbilityClass) const
 {
 	if (GrantedAbilityHandles.Contains(AbilityClass))
 	{
@@ -37,7 +39,7 @@ FGameplayAbilitySpecHandle AWolfCharacterBase::GetAbilitySpecHandle(const TSubcl
 }
 
 void AWolfCharacterBase::QueueAbility(const FGameplayAbilitySpecHandle SpecHandle, const float ScheduledTime,
-                                  const FGameplayTag AbilityTag)
+                                      const FGameplayTag AbilityTag)
 {
 	if (!ASC) return;
 
@@ -96,20 +98,24 @@ void AWolfCharacterBase::PossessedBy(AController* NewController)
 
 void AWolfCharacterBase::AddCharacterAbilities()
 {
-	if (!HasAuthority() || !ASC) return;
+	if (!HasAuthority() || !ASC || !AbilityConfig) return;
+	GrantedAbilityHandles.Empty();
 
-	GrantedAbilityHandles.Empty(); 
-	for (const auto& Pair : TBAbilities)
+	for (const auto& Tag : GrantedAbilityTags)
 	{
-		const TSubclassOf<UGameplayAbility> AbilityClass = Pair.Key;
-		const FGameplayTag InputTag = Pair.Value;
-		if (AbilityClass)
+		TArray<FAbilityInfo> AbilitiesWithTag;
+		AbilityConfig->GetAbilitiesByTag(Tag, AbilitiesWithTag);
+
+		for (const auto& AbilityInfo : AbilitiesWithTag)
 		{
-			FGameplayAbilitySpec NewAbilitySpec(AbilityClass, 1, 0);
-			NewAbilitySpec.GetDynamicSpecSourceTags().AddTag(InputTag);
-			if (FGameplayAbilitySpecHandle NewHandle = ASC->GiveAbility(NewAbilitySpec); NewHandle.IsValid())
+			if (AbilityInfo.Ability)
 			{
-				GrantedAbilityHandles.Add(AbilityClass, NewHandle);
+				FGameplayAbilitySpec NewAbilitySpec(AbilityInfo.Ability, 1, 0);
+				NewAbilitySpec.GetDynamicSpecSourceTags().AddTag(AbilityInfo.AbilityTag);
+				if (FGameplayAbilitySpecHandle NewHandle = ASC->GiveAbility(NewAbilitySpec); NewHandle.IsValid())
+				{
+					GrantedAbilityHandles.Add(AbilityInfo.Ability, NewHandle);
+				}
 			}
 		}
 	}
