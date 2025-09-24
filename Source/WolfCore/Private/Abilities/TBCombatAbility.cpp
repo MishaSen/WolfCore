@@ -77,7 +77,7 @@ void UTBCombatAbility::PlayCurrentPeriod(FGameplayAbilitySpecHandle Handle,
 		 * Listen for the event sent from AnimNotify_Hit
 		 * Define the tag in project settings: Gameplay Tags -> Gameplay Abilities -> Event -> Attack
 		 */
-		FGameplayTag EventTag = FGameplayTag::RequestGameplayTag("Event.Ability.Attack");
+		const FGameplayTag EventTag = FGameplayTag::RequestGameplayTag("Event.Ability.Attack");
 
 		UAbilityTask_WaitGameplayEvent* WaitTask = UAbilityTask_WaitGameplayEvent::WaitGameplayEvent(this, EventTag);
 		WaitTask->EventReceived.AddDynamic(this, &UTBCombatAbility::HandleGameplayEventHit);
