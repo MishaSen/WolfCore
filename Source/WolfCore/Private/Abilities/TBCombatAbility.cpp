@@ -80,7 +80,7 @@ void UTBCombatAbility::PlayCurrentPeriod(FGameplayAbilitySpecHandle Handle,
 		FGameplayTag EventTag = FGameplayTag::RequestGameplayTag("Event.Ability.Attack");
 
 		UAbilityTask_WaitGameplayEvent* WaitTask = UAbilityTask_WaitGameplayEvent::WaitGameplayEvent(this, EventTag);
-		WaitTask->EventReceived.AddDynamic(this, &UTBCombatAbility::OnGameplayEventReceived);
+		WaitTask->EventReceived.AddDynamic(this, &UTBCombatAbility::HandleGameplayEventHit);
 		WaitTask->ReadyForActivation();
 	}
 	else if (Period.Duration > 0.f)
@@ -97,28 +97,13 @@ void UTBCombatAbility::PlayCurrentPeriod(FGameplayAbilitySpecHandle Handle,
 	}
 }
 
+void UTBCombatAbility::HandleGameplayEventHit_Implementation(FGameplayEventData Payload)
+{
+	UE_LOG(LogTemp, Warning, TEXT("TB ability hit detected."))
+}
+
 void UTBCombatAbility::OnDelayFinished()
 {
 	++CurrentPeriodIndex;
 	PlayCurrentPeriod(CachedHandle, CachedActorInfo, CachedActivationInfo);
-}
-
-void UTBCombatAbility::OnGameplayEventReceived(FGameplayEventData Payload)
-{
-	if (const AActor* TargetActor = GetAvatarActorFromActorInfo())
-	{
-		const FVector Forward = TargetActor->GetActorForwardVector();
-		const FVector Location = TargetActor->GetActorLocation();
-		const FVector SphereLocation = Location + Forward * 100.f;
-
-		DrawDebugSphere(
-			GetWorld(),
-			SphereLocation,
-			50.f,
-			12,
-			FColor::Red,
-			false,
-			5.f
-		);
-	}
 }

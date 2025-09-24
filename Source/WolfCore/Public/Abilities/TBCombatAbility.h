@@ -58,14 +58,13 @@ public:
 	                             const FGameplayAbilityActivationInfo ActivationInfo,
 	                             const FGameplayEventData* TriggerEventData) override;
 
-	UFUNCTION()
-	void OnGameplayEventReceived(FGameplayEventData Payload);
-
 private:
 	int32 CurrentPeriodIndex = 0;
 
 	void PlayCurrentPeriod(FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo,
 	                       const FGameplayAbilityActivationInfo& ActivationInfo);
+
+	virtual void HandleGameplayEventHit_Implementation(FGameplayEventData Payload) override;
 
 	// Cached activation context for OnDelayFinished()
 	FGameplayAbilitySpecHandle CachedHandle;

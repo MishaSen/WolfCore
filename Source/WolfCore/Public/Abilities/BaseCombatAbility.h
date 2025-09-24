@@ -13,5 +13,9 @@ UCLASS()
 class WOLFCORE_API UBaseCombatAbility : public UGameplayAbility
 {
 	GENERATED_BODY()
-	
+
+protected:
+	UFUNCTION(BlueprintCallable, BlueprintNativeEvent, Category = "Combat")
+	void HandleGameplayEventHit(FGameplayEventData Payload);
+	virtual void HandleGameplayEventHit_Implementation(FGameplayEventData Payload);
 };
