@@ -3,3 +3,6 @@
 
 #include "WolfCore/Public/Abilities/BaseCombatAbility.h"
 
+void UBaseCombatAbility::HandleGameplayEventHit_Implementation(FGameplayEventData Payload)
+{
+}
