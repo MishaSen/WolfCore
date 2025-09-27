@@ -98,25 +98,8 @@ void AWolfCharacterBase::PossessedBy(AController* NewController)
 
 void AWolfCharacterBase::AddCharacterAbilities()
 {
-	if (!HasAuthority() || !ASC || !AbilityConfig) return;
-	GrantedAbilityHandles.Empty();
+	UWolfAbilitySystemComponent* WolfASC = CastChecked<UWolfAbilitySystemComponent>(ASC);
+	if (!HasAuthority()) return;
 
-	for (const auto& Tag : GrantedAbilityTags)
-	{
-		TArray<FAbilityInfo> AbilitiesWithTag;
-		AbilityConfig->GetAbilitiesByTag(Tag, AbilitiesWithTag);
-
-		for (const auto& AbilityInfo : AbilitiesWithTag)
-		{
-			if (AbilityInfo.Ability)
-			{
-				FGameplayAbilitySpec NewAbilitySpec(AbilityInfo.Ability, 1, 0);
-				NewAbilitySpec.GetDynamicSpecSourceTags().AddTag(AbilityInfo.AbilityTag);
-				if (FGameplayAbilitySpecHandle NewHandle = ASC->GiveAbility(NewAbilitySpec); NewHandle.IsValid())
-				{
-					GrantedAbilityHandles.Add(AbilityInfo.Ability, NewHandle);
-				}
-			}
-		}
-	}
+	WolfASC->AddCharacterAbilities(StartupAbilities);
 }

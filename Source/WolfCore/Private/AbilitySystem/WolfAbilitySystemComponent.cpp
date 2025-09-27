@@ -3,6 +3,8 @@
 
 #include "WolfCore/Public/AbilitySystem/WolfAbilitySystemComponent.h"
 
+#include "Abilities/BaseCombatAbility.h"
+
 void UWolfAbilitySystemComponent::AbilityInputTagPressed(const FGameplayTag& Tag)
 {
 	if (!Tag.IsValid()) return;
@@ -67,6 +69,18 @@ void UWolfAbilitySystemComponent::AbilityInputTagHeld(const FGameplayTag& Tag)
 			{
 				TryActivateAbility(AbilitySpec.Handle);
 			}
+		}
+	}
+}
+
+void UWolfAbilitySystemComponent::AddCharacterAbilities(TArray<TSubclassOf<UGameplayAbility>> StartupAbilities)
+{
+	for (const auto AbilityClass : StartupAbilities)
+	{
+		FGameplayAbilitySpec AbilitySpec = FGameplayAbilitySpec(AbilityClass, 1);
+		if (const UBaseCombatAbility* WolfAbility = Cast<UBaseCombatAbility>(AbilitySpec.Ability))
+		{
+			AbilitySpec.DynamicAbilityTags.AddTag(WolfAbility->StartupInputTag);
 		}
 	}
 }

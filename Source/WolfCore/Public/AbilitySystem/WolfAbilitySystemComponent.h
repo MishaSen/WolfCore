@@ -18,6 +18,7 @@ public:
 	void AbilityInputTagPressed(const FGameplayTag& Tag);
 	void AbilityInputTagReleased(const FGameplayTag& Tag);
 	void AbilityInputTagHeld(const FGameplayTag& Tag);
+	void AddCharacterAbilities(TArray<TSubclassOf<UGameplayAbility>> StartupAbilities);
 
 protected:
 	// --- UE Prediction Key Stuff ---

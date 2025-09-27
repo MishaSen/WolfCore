@@ -8,8 +8,6 @@
 
 #include "WolfInputComponent.generated.h"
 
-struct FTaggedInputAction;
-class UWolfInputConfig;
 /**
  * 
  */

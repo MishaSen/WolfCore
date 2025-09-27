@@ -4,3 +4,4 @@
 
 #include "CoreMinimal.h"
 
+#include "Character/WolfChar.h"

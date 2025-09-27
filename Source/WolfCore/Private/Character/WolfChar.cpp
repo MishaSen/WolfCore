@@ -1,13 +1,13 @@
 // Fill out your copyright notice in the Description page of Project Settings.
 
 
-#include "Character/WolfCharacter.h"
+#include "Character/WolfChar.h"
 
 #include "Camera/CameraComponent.h"
 #include "GameFramework/SpringArmComponent.h"
 
 
-AWolfCharacter::AWolfCharacter()
+AWolfChar::AWolfChar()
 {
 	PrimaryActorTick.bCanEverTick = true;
 
@@ -22,17 +22,17 @@ AWolfCharacter::AWolfCharacter()
 	FollowCamera->bUsePawnControlRotation = false; // Camera does not need to rotate relative to boom
 }
 
-void AWolfCharacter::Tick(float DeltaTime)
+void AWolfChar::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
 }
 
-void AWolfCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)
+void AWolfChar::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)
 {
 	Super::SetupPlayerInputComponent(PlayerInputComponent);
 }
 
-void AWolfCharacter::BeginPlay()
+void AWolfChar::BeginPlay()
 {
 	Super::BeginPlay();
 }

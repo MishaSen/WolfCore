@@ -19,7 +19,7 @@ class UWolfAttributeSet;
  */
 class UGameplayEffect;
 
-UCLASS()
+UCLASS(Blueprintable, BlueprintType)
 class WOLFCORE_API AWolfCharacterBase : public ACharacter, public IAbilitySystemInterface
 {
 	GENERATED_BODY()
@@ -60,6 +60,9 @@ private:
 
 	UPROPERTY()
 	TArray<FGameplayTag> GrantedAbilityTags;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Abilities")
+	TArray<TSubclassOf<UGameplayAbility>> StartupAbilities;
 
 	UFUNCTION(BlueprintCallable, Category = "Abilities")
 	void AddCharacterAbilities();

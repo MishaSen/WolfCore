@@ -15,10 +15,10 @@ struct FTaggedInputAction
 	GENERATED_BODY()
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly)
-	const class UInputAction* InputAction = nullptr;
+	const UInputAction* InputAction = nullptr;
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Meta = (Categories = "InputTag"))
-	FGameplayTag InputTag;
+	FGameplayTag InputTag = FGameplayTag();
 };
 
 /**

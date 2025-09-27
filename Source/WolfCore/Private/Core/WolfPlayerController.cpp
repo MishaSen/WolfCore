@@ -4,7 +4,7 @@
 #include "WolfCore/Public/Core/WolfPlayerController.h"
 
 #include "EnhancedInputSubsystems.h"
-#include "WolfCore/Public/AbilitySystem//WolfAbilitySystemComponent.h"
+#include "WolfCore/Public/AbilitySystem/WolfAbilitySystemComponent.h"
 #include "Engine/LocalPlayer.h"
 #include "AbilitySystemBlueprintLibrary.h"
 #include "GameFramework/Character.h"
@@ -35,18 +35,17 @@ void AWolfPlayerController::SetupInputComponent()
 {
 	Super::SetupInputComponent();
 
-	if (UEnhancedInputComponent* EnhancedInputComponent = Cast<UEnhancedInputComponent>(InputComponent))
+	if (UWolfInputComponent* WolfInputComponent = CastChecked<UWolfInputComponent>(InputComponent))
 	{
 		if (MoveAction)
 		{
-			EnhancedInputComponent->BindAction(MoveAction, ETriggerEvent::Triggered, this, &ThisClass::Move);
+			WolfInputComponent->BindAction(MoveAction, ETriggerEvent::Triggered, this, &ThisClass::Move);
 		}
 		if (LookAction)
 		{
-			EnhancedInputComponent->BindAction(LookAction, ETriggerEvent::Triggered, this, &ThisClass::Look);
+			WolfInputComponent->BindAction(LookAction, ETriggerEvent::Triggered, this, &ThisClass::Look);
 		}
-
-		if (UWolfInputComponent* WolfInputComponent = Cast<UWolfInputComponent>(InputComponent))
+		if (InputConfig)
 		{
 			WolfInputComponent->BindAbilityActions(
 				InputConfig,
@@ -54,7 +53,7 @@ void AWolfPlayerController::SetupInputComponent()
 				&ThisClass::AbilityInputTagPressed,
 				&ThisClass::AbilityInputTagReleased,
 				&ThisClass::AbilityInputTagHeld
-			);
+			);	
 		}
 	}
 }
@@ -100,6 +99,7 @@ void AWolfPlayerController::AbilityInputTagPressed(const FGameplayTag InputTag)
 	if (GetASC())
 	{
 		GetASC()->AbilityInputTagPressed(InputTag);
+		GEngine->AddOnScreenDebugMessage(1, 3.f, FColor::Red, *InputTag.ToString());
 	}
 }
 
@@ -108,6 +108,7 @@ void AWolfPlayerController::AbilityInputTagReleased(const FGameplayTag InputTag)
 	if (GetASC())
 	{
 		GetASC()->AbilityInputTagReleased(InputTag);
+		GEngine->AddOnScreenDebugMessage(2, 3.f, FColor::Blue, *InputTag.ToString());
 	}
 }
 
@@ -116,6 +117,7 @@ void AWolfPlayerController::AbilityInputTagHeld(const FGameplayTag InputTag)
 	if (GetASC())
 	{
 		GetASC()->AbilityInputTagHeld(InputTag);
+		GEngine->AddOnScreenDebugMessage(3, 3.f, FColor::Green, *InputTag.ToString());
 	}
 }
 
@@ -165,7 +167,8 @@ UWolfAbilitySystemComponent* AWolfPlayerController::GetASC()
 	{
 		if (ACharacter* ControlledCharacter = GetCharacter())
 		{
-			WolfASC = Cast<UWolfAbilitySystemComponent>(UAbilitySystemBlueprintLibrary::GetAbilitySystemComponent(ControlledCharacter));
+			WolfASC = Cast<UWolfAbilitySystemComponent>(
+				UAbilitySystemBlueprintLibrary::GetAbilitySystemComponent(ControlledCharacter));
 		}
 	}
 	return WolfASC;

@@ -4,19 +4,19 @@
 
 #include "CoreMinimal.h"
 #include "Character/WolfCharacterBase.h"
-#include "WolfCharacter.generated.h"
+#include "WolfChar.generated.h"
 
 class USpringArmComponent;
 class UCameraComponent;
 class UWolfInputConfig;
 
-UCLASS()
-class WOLFCORE_API AWolfCharacter : public AWolfCharacterBase
+UCLASS(Blueprintable)
+class WOLFCORE_API AWolfChar : public AWolfCharacterBase
 {
 	GENERATED_BODY()
 
 public:
-	AWolfCharacter();
+	AWolfChar();
 	virtual void Tick(float DeltaTime) override;
 	virtual void SetupPlayerInputComponent(class UInputComponent* PlayerInputComponent) override;
 
