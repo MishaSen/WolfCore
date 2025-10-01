@@ -37,8 +37,14 @@ public:
 	                  const FGameplayTag AbilityTag);
 
 protected:
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly)
-	UWolfAbilitySystemComponent* ASC;
+	UPROPERTY(EditDefaultsOnly, Category = "Ability System")
+	TSubclassOf<UWolfAbilitySystemComponent> AbilitySystemComponentClass;
+	
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Ability System")
+	TObjectPtr<UWolfAbilitySystemComponent> ASC;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Ability System")
+	TObjectPtr<UWolfAttributeSet> AttributeSet;
 
 	UPROPERTY(EditDefaultsOnly, Category = "Abilities")
 	TSubclassOf<UGameplayEffect> DefaultAttributes;
@@ -49,12 +55,11 @@ protected:
 	virtual void BeginPlay() override;
 	virtual void Tick(float DeltaTime) override;
 	virtual void SetupPlayerInputComponent(class UInputComponent* PlayerInputComponent) override;
+	void SetupAbilitySystem();
+	void ApplyDefaultAttributes();
 	virtual void PossessedBy(AController* NewController) override;
 
 private:
-	UPROPERTY()
-	UWolfAttributeSet* AtSet;
-
 	UPROPERTY()
 	TMap<TSubclassOf<UGameplayAbility>, FGameplayAbilitySpecHandle> GrantedAbilityHandles;
 

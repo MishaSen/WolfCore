@@ -80,7 +80,7 @@ void UWolfAbilitySystemComponent::AddCharacterAbilities(TArray<TSubclassOf<UGame
 		FGameplayAbilitySpec AbilitySpec = FGameplayAbilitySpec(AbilityClass, 1);
 		if (const UBaseCombatAbility* WolfAbility = Cast<UBaseCombatAbility>(AbilitySpec.Ability))
 		{
-			AbilitySpec.DynamicAbilityTags.AddTag(WolfAbility->StartupInputTag);
+			AbilitySpec.GetDynamicSpecSourceTags().AddTag(WolfAbility->StartupInputTag);
 		}
 	}
 }

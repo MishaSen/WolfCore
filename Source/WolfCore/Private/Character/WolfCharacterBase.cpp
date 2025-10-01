@@ -12,8 +12,9 @@
 AWolfCharacterBase::AWolfCharacterBase()
 {
 	PrimaryActorTick.bCanEverTick = true;
-	ASC = CreateDefaultSubobject<UWolfAbilitySystemComponent>(TEXT("Ability System Component"));
-	AtSet = CreateDefaultSubobject<UWolfAttributeSet>(TEXT("Attribute Set"));
+
+	AbilitySystemComponentClass = UWolfAbilitySystemComponent::StaticClass();
+	AttributeSet = CreateDefaultSubobject<UWolfAttributeSet>("AttributeSet");
 
 	bUseControllerRotationPitch = false;
 	bUseControllerRotationYaw = true;
@@ -25,7 +26,7 @@ AWolfCharacterBase::AWolfCharacterBase()
 
 UAbilitySystemComponent* AWolfCharacterBase::GetAbilitySystemComponent() const
 {
-	return ASC;
+	return ASC.Get();
 }
 
 FGameplayAbilitySpecHandle AWolfCharacterBase::GetAbilitySpecHandle(
@@ -41,7 +42,7 @@ FGameplayAbilitySpecHandle AWolfCharacterBase::GetAbilitySpecHandle(
 void AWolfCharacterBase::QueueAbility(const FGameplayAbilitySpecHandle SpecHandle, const float ScheduledTime,
                                       const FGameplayTag AbilityTag)
 {
-	if (!ASC) return;
+	if (!IsValid(ASC)) return;
 
 	const FGameplayAbilitySpec* Spec = ASC->FindAbilitySpecFromHandle(SpecHandle);
 	if (!Spec || !Spec->Ability)
@@ -67,16 +68,9 @@ void AWolfCharacterBase::BeginPlay()
 {
 	Super::BeginPlay();
 
-	if (ASC && DefaultAttributes)
+	if (HasAuthority() && !IsValid(ASC))
 	{
-		FGameplayEffectContextHandle EffectContext = ASC->MakeEffectContext();
-		EffectContext.AddSourceObject(this);
-
-		FGameplayEffectSpecHandle SpecHandle = ASC->MakeOutgoingSpec(DefaultAttributes, 1, EffectContext);
-		if (SpecHandle.IsValid())
-		{
-			ASC->ApplyGameplayEffectSpecToTarget(*SpecHandle.Data.Get(), ASC);
-		}
+		SetupAbilitySystem();
 	}
 }
 
@@ -90,15 +84,68 @@ void AWolfCharacterBase::SetupPlayerInputComponent(UInputComponent* PlayerInputC
 	Super::SetupPlayerInputComponent(PlayerInputComponent);
 }
 
+void AWolfCharacterBase::SetupAbilitySystem()
+{
+	if (!AbilitySystemComponentClass)
+	{
+		UE_LOG(LogTemp, Error, TEXT("No AbilitySystemComponentClass set for %s"), *GetName());
+		return;
+	}
+
+	ASC = NewObject<UWolfAbilitySystemComponent>(this, AbilitySystemComponentClass, TEXT("ASC"));
+	if (ASC)
+	{
+		ASC->SetIsReplicated(false);
+		ASC->RegisterComponent();
+	}
+	else
+	{
+		UE_LOG(LogTemp, Error, TEXT("Failed to create AbilitySystemComponent for %s"), *GetName());
+	}
+}
+
+void AWolfCharacterBase::ApplyDefaultAttributes()
+{
+	if (IsValid(ASC) && DefaultAttributes)
+	{
+		FGameplayEffectContextHandle EffectContext = ASC->MakeEffectContext();
+		EffectContext.AddSourceObject(this);
+
+		if (const FGameplayEffectSpecHandle SpecHandle = ASC->MakeOutgoingSpec(
+			DefaultAttributes,
+			1,
+			EffectContext
+		); SpecHandle.IsValid())
+		{
+			ASC->ApplyGameplayEffectSpecToSelf(*SpecHandle.Data.Get());
+			UE_LOG(LogTemp, Log, TEXT("Applied DefaultAttributes to character: %s"), *GetName());
+		}
+	}
+}
+
 void AWolfCharacterBase::PossessedBy(AController* NewController)
 {
 	Super::PossessedBy(NewController);
-	AddCharacterAbilities();
+
+	if (HasAuthority())
+	{
+		if (!IsValid(ASC))
+		{
+			SetupAbilitySystem();
+		}
+		if (IsValid(ASC))
+		{
+			ASC->InitAbilityActorInfo(this, this);
+			ApplyDefaultAttributes();
+			AddCharacterAbilities();
+			UE_LOG(LogTemp, Log, TEXT("Character %s possessed and GAS initialized."), *GetName());
+		}
+	}
 }
 
 void AWolfCharacterBase::AddCharacterAbilities()
 {
-	UWolfAbilitySystemComponent* WolfASC = CastChecked<UWolfAbilitySystemComponent>(ASC);
+	UWolfAbilitySystemComponent* WolfASC = Cast<UWolfAbilitySystemComponent>(ASC);
 	if (!HasAuthority()) return;
 
 	WolfASC->AddCharacterAbilities(StartupAbilities);
