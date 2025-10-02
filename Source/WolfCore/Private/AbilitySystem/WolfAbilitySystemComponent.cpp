@@ -11,7 +11,7 @@ void UWolfAbilitySystemComponent::AbilityInputTagPressed(const FGameplayTag& Tag
 
 	const FPredictionKey PredictionKey = FPredictionKey::CreateNewPredictionKey(this);
 	ServerSetInputTagPressed(Tag, PredictionKey);
-	
+
 	FScopedPredictionWindow ScopedPredictionWindow(this, PredictionKey);
 	FScopedAbilityListLock ActiveScopeLock(*this);
 	for (FGameplayAbilitySpec& AbilitySpec : GetActivatableAbilities())
@@ -44,15 +44,14 @@ void UWolfAbilitySystemComponent::AbilityInputTagReleased(const FGameplayTag& Ta
 		{
 			AbilitySpecInputReleased(AbilitySpec);
 			InvokeReplicatedEvent(EAbilityGenericReplicatedEvent::InputReleased,
-								  AbilitySpec.Handle,
-								  PredictionKey);
+			                      AbilitySpec.Handle,
+			                      PredictionKey);
 		}
 	}
 }
 
 void UWolfAbilitySystemComponent::AbilityInputTagHeld(const FGameplayTag& Tag)
 {
-
 	if (!Tag.IsValid()) return;
 
 	const FPredictionKey PredictionKey = FPredictionKey::CreateNewPredictionKey(this);
@@ -85,15 +84,56 @@ void UWolfAbilitySystemComponent::AddCharacterAbilities(TArray<TSubclassOf<UGame
 	}
 }
 
+FPresageAbilityRequest UWolfAbilitySystemComponent::BuildInitialPresageRequest(const FGameplayTag& Tag,
+                                                                               const TArray<TWeakObjectPtr<AActor>>&
+                                                                               Targets)
+{
+	for (const FGameplayAbilitySpec& Spec : GetActivatableAbilities())
+	{
+		if (Spec.DynamicAbilityTags.HasTagExact(Tag))
+		{
+			if (const UTBCombatAbility* TBAbility = Cast<UTBCombatAbility>(Spec.Ability))
+			{
+				return FPresageAbilityRequest(
+					this,
+					Tag,
+					0.f,
+					TBAbility->AbilitySequence,
+					Targets
+				);
+			}
+		}
+	}
+	return FPresageAbilityRequest();
+}
+
 // --- Server RPCs --- (Get key from client)
-void UWolfAbilitySystemComponent::ServerSetInputTagPressed_Implementation(FGameplayTag Tag, FPredictionKey PredictionKey) {}
-void UWolfAbilitySystemComponent::ServerSetInputTagReleased_Implementation(FGameplayTag Tag, FPredictionKey PredictionKey) {}
-void UWolfAbilitySystemComponent::ServerSetInputTagHeld_Implementation(FGameplayTag Tag, FPredictionKey PredictionKey) {}
+void UWolfAbilitySystemComponent::ServerSetInputTagPressed_Implementation(
+	FGameplayTag Tag, FPredictionKey PredictionKey)
+{
+}
+
+void UWolfAbilitySystemComponent::ServerSetInputTagReleased_Implementation(
+	FGameplayTag Tag, FPredictionKey PredictionKey)
+{
+}
+
+void UWolfAbilitySystemComponent::ServerSetInputTagHeld_Implementation(FGameplayTag Tag, FPredictionKey PredictionKey)
+{
+}
 
 // --- Validation Functions ---
-bool UWolfAbilitySystemComponent::ServerSetInputTagPressed_Validate(FGameplayTag Tag, FPredictionKey PredictionKey) { return true; }
-bool UWolfAbilitySystemComponent::ServerSetInputTagReleased_Validate(FGameplayTag Tag, FPredictionKey PredictionKey) { return true; }
-bool UWolfAbilitySystemComponent::ServerSetInputTagHeld_Validate(FGameplayTag Tag, FPredictionKey PredictionKey) { return true; }
+bool UWolfAbilitySystemComponent::ServerSetInputTagPressed_Validate(FGameplayTag Tag, FPredictionKey PredictionKey)
+{
+	return true;
+}
 
+bool UWolfAbilitySystemComponent::ServerSetInputTagReleased_Validate(FGameplayTag Tag, FPredictionKey PredictionKey)
+{
+	return true;
+}
 
-
+bool UWolfAbilitySystemComponent::ServerSetInputTagHeld_Validate(FGameplayTag Tag, FPredictionKey PredictionKey)
+{
+	return true;
+}

@@ -4,6 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "AbilitySystemComponent.h"
+#include "Presage/PresageAbilityRequest.h"
 #include "WolfAbilitySystemComponent.generated.h"
 
 /**
@@ -19,7 +20,8 @@ public:
 	void AbilityInputTagReleased(const FGameplayTag& Tag);
 	void AbilityInputTagHeld(const FGameplayTag& Tag);
 	void AddCharacterAbilities(TArray<TSubclassOf<UGameplayAbility>> StartupAbilities);
-
+	FPresageAbilityRequest BuildInitialPresageRequest(const FGameplayTag& Tag, const TArray<TWeakObjectPtr<AActor>>& Targets);
+	
 protected:
 	// --- UE Prediction Key Stuff ---
 	UFUNCTION(Server, Reliable, WithValidation)
