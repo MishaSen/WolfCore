@@ -23,7 +23,7 @@ void AWolfPlayerController::PlayerTick(float DeltaTime)
 void AWolfPlayerController::BeginPlay()
 {
 	Super::BeginPlay();
-	UpdateInputContext(EInputContext::InCombatRT);
+	UpdateInputContext(EInputContext::InCombatTB);
 
 	if (UPresageSubsystem* PresageSubsystem = UPresageSubsystem::Get(GetWorld()))
 	{
