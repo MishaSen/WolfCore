@@ -3,10 +3,10 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "GameplayAbilitySpecHandle.h"
-#include "Abilities/GameplayAbility.h"
+#include "Abilities/TBCombatAbility.h"
 
 #include "PresageAbilityRequest.generated.h"
+
 
 /**
  * 
@@ -16,25 +16,41 @@ struct FPresageAbilityRequest
 {
 	GENERATED_BODY()
 
+	FPresageAbilityRequest(){}
+
+	FPresageAbilityRequest(
+		const TObjectPtr<UAbilitySystemComponent>& InASC,
+		FGameplayTag InInputTag,
+		float InRequestedTime,
+		const TArray<FPeriod>& InAbilitySequence,
+		const TArray<TWeakObjectPtr<AActor>>& InTargets
+	):
+		OwnerASC(InASC),
+		InputTag(InInputTag),
+		ScheduledTime(InRequestedTime),
+		AbilitySequence(InAbilitySequence),
+		Targets(InTargets)
+	{}
+
+	TObjectPtr<UAbilitySystemComponent> GetOwnerASC() const { return OwnerASC; }
+	const FGameplayTag& GetInputTag() const { return InputTag; }
+	float GetRequestedTime() const { return ScheduledTime; }
+	const TArray<FPeriod>& GetAbilitySequence() const { return AbilitySequence; }
+	const TArray<TWeakObjectPtr<AActor>>& GetTargets() const { return Targets; }
+
+private:
 	UPROPERTY()
-	UAbilitySystemComponent* OwnerASC = nullptr;
+	TObjectPtr<UAbilitySystemComponent> OwnerASC = nullptr;
 
 	UPROPERTY()
-	FGameplayAbilitySpecHandle SpecHandle;
+	FGameplayTag InputTag;
 
 	UPROPERTY()
 	float ScheduledTime = 0.f;
 
 	UPROPERTY()
-	FGameplayTag AbilityTag;
-	
-	FPresageAbilityRequest() {}
+	TArray<FPeriod> AbilitySequence;
 
-	FPresageAbilityRequest(
-		UAbilitySystemComponent* InASC,
-		const FGameplayAbilitySpecHandle InSpecHandle,
-		const float InScheduledTime,
-		const FGameplayTag& InTag)
-		: OwnerASC(InASC), SpecHandle(InSpecHandle), ScheduledTime(InScheduledTime), AbilityTag(InTag)
-	{}
+	UPROPERTY()
+	TArray<TWeakObjectPtr<AActor>> Targets;
 };
