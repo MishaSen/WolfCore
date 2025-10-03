@@ -31,11 +31,6 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Abilities")
 	FGameplayAbilitySpecHandle GetAbilitySpecHandle(const TSubclassOf<UGameplayAbility>& AbilityClass) const;
 
-	UFUNCTION(BlueprintCallable, Category = "Abilities")
-	void QueueAbility(const FGameplayAbilitySpecHandle SpecHandle,
-	                  const float ScheduledTime,
-	                  const FGameplayTag AbilityTag);
-
 protected:
 	UPROPERTY(EditDefaultsOnly, Category = "Ability System")
 	TSubclassOf<UWolfAbilitySystemComponent> AbilitySystemComponentClass;

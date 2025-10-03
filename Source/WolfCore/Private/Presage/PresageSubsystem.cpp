@@ -53,11 +53,11 @@ void UPresageSubsystem::Tick(float DeltaTime)
 	for (int32 i = AbilityQueue.Num() - 1; i >= 0; --i)
 	{
 		const FPresageAbilityRequest& Request = AbilityQueue[i];
-		if (Request.ScheduledTime <= CurrentTime)
+		if (Request.GetRequestedTime() <= CurrentTime)
 		{
-			if (Request.OwnerASC)
+			if (auto ASC = Request.GetOwnerASC())
 			{
-				Request.OwnerASC->TryActivateAbility(Request.SpecHandle);
+				// TODO: Send request through interface to character for activation.
 			}
 			AbilityQueue.RemoveAt(i);
 		}

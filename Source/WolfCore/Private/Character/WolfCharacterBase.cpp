@@ -39,31 +39,6 @@ FGameplayAbilitySpecHandle AWolfCharacterBase::GetAbilitySpecHandle(
 	return FGameplayAbilitySpecHandle();
 }
 
-void AWolfCharacterBase::QueueAbility(const FGameplayAbilitySpecHandle SpecHandle, const float ScheduledTime,
-                                      const FGameplayTag AbilityTag)
-{
-	if (!IsValid(ASC)) return;
-
-	const FGameplayAbilitySpec* Spec = ASC->FindAbilitySpecFromHandle(SpecHandle);
-	if (!Spec || !Spec->Ability)
-	{
-		UE_LOG(LogTemp, Error, TEXT("Invalid Ability or Spec Handle"));
-		return;
-	}
-	const FPresageAbilityRequest Request(ASC, SpecHandle, ScheduledTime, AbilityTag);
-
-	if (UWorld* World = GetWorld())
-	{
-		if (UPresageSubsystem* Presage = UPresageSubsystem::Get(World))
-		{
-			Presage->QueueAbilityRequest(Request);
-			UE_LOG(LogTemp, Log, TEXT("Queued ability at %s at time %f"),
-			       *Spec->Ability->GetClass()->GetName(),
-			       ScheduledTime)
-		}
-	}
-}
-
 void AWolfCharacterBase::BeginPlay()
 {
 	Super::BeginPlay();

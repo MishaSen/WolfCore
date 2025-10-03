@@ -21,15 +21,4 @@ public:
 	void AbilityInputTagHeld(const FGameplayTag& Tag);
 	void AddCharacterAbilities(TArray<TSubclassOf<UGameplayAbility>> StartupAbilities);
 	FPresageAbilityRequest BuildInitialPresageRequest(const FGameplayTag& Tag, const TArray<TWeakObjectPtr<AActor>>& Targets);
-	
-protected:
-	// --- UE Prediction Key Stuff ---
-	UFUNCTION(Server, Reliable, WithValidation)
-	void ServerSetInputTagPressed(FGameplayTag Tag, FPredictionKey PredictionKey);
-
-	UFUNCTION(Server, Reliable, WithValidation)
-	void ServerSetInputTagReleased(FGameplayTag Tag, FPredictionKey PredictionKey);
-
-	UFUNCTION(Server, Reliable, WithValidation)
-	void ServerSetInputTagHeld(FGameplayTag Tag, FPredictionKey PredictionKey);
 };
