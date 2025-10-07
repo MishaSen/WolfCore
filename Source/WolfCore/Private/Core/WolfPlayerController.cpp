@@ -13,9 +13,7 @@
 
 AWolfPlayerController::AWolfPlayerController(): CurrentInputContext()
 {
-	InputContextMap.Add(EInputContext::OutOfCombat, OutOfCombatContext);
-	InputContextMap.Add(EInputContext::InCombatRT, InCombatRTContext);
-	InputContextMap.Add(EInputContext::InCombatTB, InCombatTBContext);
+	
 }
 
 void AWolfPlayerController::PlayerTick(float DeltaTime)
@@ -26,11 +24,7 @@ void AWolfPlayerController::PlayerTick(float DeltaTime)
 void AWolfPlayerController::BeginPlay()
 {
 	Super::BeginPlay();
-	UpdateInputContext(EInputContext::InCombatRT);
-	if (CurrentInputContext == EInputContext::InCombatRT)
-	{
-		GEngine->AddOnScreenDebugMessage(0, 3.f, FColor::Yellow, TEXT("CurrentInputContext is TB"));
-	}
+	UpdateInputContext(EInputContext::InCombatTB);
 
 	if (UPresageSubsystem* PresageSubsystem = UPresageSubsystem::Get(GetWorld()))
 	{
@@ -63,6 +57,15 @@ void AWolfPlayerController::SetupInputComponent()
 			);	
 		}
 	}
+}
+
+void AWolfPlayerController::PostInitializeComponents()
+{
+	Super::PostInitializeComponents();
+
+	InputContextMap.Add(EInputContext::OutOfCombat, OutOfCombatContext);
+	InputContextMap.Add(EInputContext::InCombatRT, InCombatRTContext);
+	InputContextMap.Add(EInputContext::InCombatTB, InCombatTBContext);
 }
 
 void AWolfPlayerController::UpdateInputContext(const EInputContext NewInputContext)
