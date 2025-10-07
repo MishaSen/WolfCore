@@ -11,7 +11,7 @@
 #include "WolfCore/Public/Input/WolfInputComponent.h"
 #include "WolfCore/Public/Presage/PresageSubsystem.h"
 
-AWolfPlayerController::AWolfPlayerController()
+AWolfPlayerController::AWolfPlayerController(): CurrentInputContext()
 {
 	InputContextMap.Add(EInputContext::OutOfCombat, OutOfCombatContext);
 	InputContextMap.Add(EInputContext::InCombatRT, InCombatRTContext);
@@ -26,7 +26,11 @@ void AWolfPlayerController::PlayerTick(float DeltaTime)
 void AWolfPlayerController::BeginPlay()
 {
 	Super::BeginPlay();
-	UpdateInputContext(EInputContext::InCombatTB);
+	UpdateInputContext(EInputContext::InCombatRT);
+	if (CurrentInputContext == EInputContext::InCombatRT)
+	{
+		GEngine->AddOnScreenDebugMessage(0, 3.f, FColor::Yellow, TEXT("CurrentInputContext is TB"));
+	}
 
 	if (UPresageSubsystem* PresageSubsystem = UPresageSubsystem::Get(GetWorld()))
 	{
@@ -78,6 +82,12 @@ void AWolfPlayerController::UpdateInputContext(const EInputContext NewInputConte
 	}
 }
 
+void AWolfPlayerController::HandleTBTransition(const bool bIsEnteringTB)
+{
+	const EInputContext NewInputContext = bIsEnteringTB ? EInputContext::InCombatTB : EInputContext::InCombatRT;
+	UpdateInputContext(NewInputContext);
+}
+
 void AWolfPlayerController::AbilityInputTagPressed(const FGameplayTag InputTag)
 {
 	if (GetASC())
@@ -107,18 +117,12 @@ void AWolfPlayerController::AbilityInputTagHeld(const FGameplayTag InputTag)
 
 void AWolfPlayerController::Move(const FInputActionValue& Value)
 {
-	// Get 2D Vector value from Input Action
 	const FVector2D MovementVector = Value.Get<FVector2D>();
-
-	// Find out which way is forward
 	const FRotator Rotation = GetControlRotation();
 	const FRotator YawRotation(0, Rotation.Yaw, 0);
-
-	// Get forward and right vectors
 	const FVector ForwardDirection = FRotationMatrix(YawRotation).GetUnitAxis(EAxis::X);
 	const FVector RightDirection = FRotationMatrix(YawRotation).GetUnitAxis(EAxis::Y);
 
-	// Add movement
 	if (ACharacter* ControlledCharacter = GetCharacter())
 	{
 		ControlledCharacter->AddMovementInput(ForwardDirection, MovementVector.Y);
@@ -128,21 +132,12 @@ void AWolfPlayerController::Move(const FInputActionValue& Value)
 
 void AWolfPlayerController::Look(const FInputActionValue& Value)
 {
-	// Get 2D vector value from Input Action
 	const FVector2D LookVector = Value.Get<FVector2D>();
-
-	// Add yaw and pitch input to the controller
 	if (ACharacter* ControlledCharacter = GetCharacter())
 	{
 		ControlledCharacter->AddControllerYawInput(LookVector.X);
 		ControlledCharacter->AddControllerPitchInput(LookVector.Y);
 	}
-}
-
-void AWolfPlayerController::HandleTBTransition(const bool bIsEnteringTB)
-{
-	const EInputContext NewInputContext = bIsEnteringTB ? EInputContext::InCombatTB : EInputContext::InCombatRT;
-	UpdateInputContext(NewInputContext);
 }
 
 UWolfAbilitySystemComponent* AWolfPlayerController::GetASC()

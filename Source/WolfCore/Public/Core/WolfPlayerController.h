@@ -41,7 +41,12 @@ class WOLFCORE_API AWolfPlayerController : public APlayerController
 
 public:
 	AWolfPlayerController();
+	EInputContext CurrentInputContext;
+	
 	virtual void PlayerTick(float DeltaTime) override;
+	
+	UFUNCTION()
+	void HandleTBTransition(bool bIsEnteringTB);
 
 protected:
 	virtual void BeginPlay() override;
@@ -52,7 +57,7 @@ private:
 	UPROPERTY(EditDefaultsOnly, Category = "Input")
 	TObjectPtr<UWolfInputConfig> InputConfig;
 
-	TMap<EInputContext, TObjectPtr<class UInputMappingContext>> InputContextMap;
+	TMap<EInputContext, TObjectPtr<UInputMappingContext>> InputContextMap;
 	
 	UPROPERTY(EditAnywhere, Category = "Input", meta = (AllowPrivateAccess = "true"))
 	TObjectPtr<UInputMappingContext> OutOfCombatContext;
@@ -69,8 +74,6 @@ private:
 	UPROPERTY(EditAnywhere, Category = "Input")
 	TObjectPtr<UInputAction> LookAction;
 	
-	EInputContext CurrentInputContext = EInputContext::OutOfCombat;
-
 	void AbilityInputTagPressed(const FGameplayTag InputTag);
 	void AbilityInputTagReleased(const FGameplayTag InputTag);
 	void AbilityInputTagHeld(const FGameplayTag InputTag);
@@ -78,8 +81,6 @@ private:
 	void Move(const FInputActionValue& Value);
 	void Look(const FInputActionValue& Value);
 
-	UFUNCTION()
-	void HandleTBTransition(bool bIsEnteringTB);
 	void UpdateInputContext(const EInputContext NewInputContext);
 
 	/* --- Cursor Trace ---
