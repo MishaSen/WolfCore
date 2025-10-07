@@ -13,6 +13,9 @@
 
 AWolfPlayerController::AWolfPlayerController()
 {
+	InputContextMap.Add(EInputContext::OutOfCombat, OutOfCombatContext);
+	InputContextMap.Add(EInputContext::InCombatRT, InCombatRTContext);
+	InputContextMap.Add(EInputContext::InCombatTB, InCombatTBContext);
 }
 
 void AWolfPlayerController::PlayerTick(float DeltaTime)
@@ -60,36 +63,17 @@ void AWolfPlayerController::SetupInputComponent()
 
 void AWolfPlayerController::UpdateInputContext(const EInputContext NewInputContext)
 {
-	if (UEnhancedInputLocalPlayerSubsystem* Subsystem = ULocalPlayer::GetSubsystem<UEnhancedInputLocalPlayerSubsystem>(
-		GetLocalPlayer()))
+	if (const auto Subsystem = ULocalPlayer::GetSubsystem<UEnhancedInputLocalPlayerSubsystem>(GetLocalPlayer()))
 	{
 		Subsystem->ClearAllMappings();
 
-		switch (NewInputContext)
+		if (const auto InputContext = InputContextMap.Find(NewInputContext))
 		{
-		case EInputContext::OutOfCombat:
-			if (OutOfCombatContext)
+			if (*InputContext)
 			{
-				Subsystem->AddMappingContext(OutOfCombatContext, 0);
+				Subsystem->AddMappingContext(*InputContext, 0);
 			}
-			break;
-		case EInputContext::InCombatRT:
-			if (InCombatRTContext)
-			{
-				Subsystem->AddMappingContext(InCombatRTContext, 0);
-			}
-			break;
-		case EInputContext::InCombatTB:
-			if (InCombatTBContext)
-			{
-				Subsystem->AddMappingContext(InCombatTBContext, 0);
-			}
-			break;
-
-		default:
-			break;
 		}
-
 		CurrentInputContext = NewInputContext;
 	}
 }

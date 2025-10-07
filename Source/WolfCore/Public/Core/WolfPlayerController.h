@@ -51,6 +51,8 @@ private:
 	// --- Input ---
 	UPROPERTY(EditDefaultsOnly, Category = "Input")
 	TObjectPtr<UWolfInputConfig> InputConfig;
+
+	TMap<EInputContext, TObjectPtr<class UInputMappingContext>> InputContextMap;
 	
 	UPROPERTY(EditAnywhere, Category = "Input", meta = (AllowPrivateAccess = "true"))
 	TObjectPtr<UInputMappingContext> OutOfCombatContext;
@@ -69,7 +71,6 @@ private:
 	
 	EInputContext CurrentInputContext = EInputContext::OutOfCombat;
 
-	void UpdateInputContext(const EInputContext NewInputContext);
 	void AbilityInputTagPressed(const FGameplayTag InputTag);
 	void AbilityInputTagReleased(const FGameplayTag InputTag);
 	void AbilityInputTagHeld(const FGameplayTag InputTag);
@@ -79,6 +80,7 @@ private:
 
 	UFUNCTION()
 	void HandleTBTransition(bool bIsEnteringTB);
+	void UpdateInputContext(const EInputContext NewInputContext);
 
 	/* --- Cursor Trace ---
 	TObjectPtr<AActor> LastActor;

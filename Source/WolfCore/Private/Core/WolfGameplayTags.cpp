@@ -23,4 +23,8 @@ void FWolfGameplayTags::InitializeNativeGameplayTags()
 	AddNativeTag(GameplayTags.Input_Primary, FName("Input.Primary"), TEXT("Input tag for the primary ability."));
 	AddNativeTag(GameplayTags.Input_Secondary, FName("Input.Secondary"), TEXT("Input tag for the secondary ability."));
 	AddNativeTag(GameplayTags.Input_Switch, FName("Input.Switch"), TEXT("Input tag for the combat mode switch ability."));
+
+	// --- Input State Tags ---
+	AddNativeTag(GameplayTags.InputState_RT, FName("InputState.RT"), TEXT("Input state tag for RT state."));
+	AddNativeTag(GameplayTags.InputState_TB, FName("InputState.TB"), TEXT("Input state tag for TB state."));
 }

@@ -25,6 +25,10 @@ struct FWolfGameplayTags
 	FGameplayTag Input_Secondary;
 	FGameplayTag Input_Switch;
 
+	// --- Input State Tags ---
+	FGameplayTag InputState_RT;
+	FGameplayTag InputState_TB;
+
 	// Future extension: Add TMap<FGameplayTag, FGameplayTag> to link abilities to cooldowns, effects, etc.
 	// e.g. TMap<FGameplayTag, FGameplayTag> AbilityCooldowns;
 
