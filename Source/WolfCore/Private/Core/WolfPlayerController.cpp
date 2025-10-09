@@ -6,14 +6,15 @@
 #include "EnhancedInputSubsystems.h"
 #include "WolfCore/Public/AbilitySystem/WolfAbilitySystemComponent.h"
 #include "Engine/LocalPlayer.h"
+#include "Engine/Engine.h"
 #include "AbilitySystemBlueprintLibrary.h"
+#include "Core/WolfGameplayTags.h"
 #include "GameFramework/Character.h"
 #include "WolfCore/Public/Input/WolfInputComponent.h"
 #include "WolfCore/Public/Presage/PresageSubsystem.h"
 
 AWolfPlayerController::AWolfPlayerController(): CurrentInputContext()
 {
-	
 }
 
 void AWolfPlayerController::PlayerTick(float DeltaTime)
@@ -29,6 +30,19 @@ void AWolfPlayerController::BeginPlay()
 	if (UPresageSubsystem* PresageSubsystem = UPresageSubsystem::Get(GetWorld()))
 	{
 		PresageSubsystem->OnTransitionToTB.AddDynamic(this, &AWolfPlayerController::HandleTBTransition);
+	}
+
+	if (APawn* ControlledPawn = GetPawn())
+	{
+		if (UAbilitySystemComponent* ASC = UAbilitySystemBlueprintLibrary::GetAbilitySystemComponent(ControlledPawn))
+		{
+			const FWolfGameplayTags& Tag = FWolfGameplayTags::Get();
+			FGameplayTagContainer EventTagContainer;
+			EventTagContainer.AddTag(Tag.Event_ModeSwitch);
+			ASC->AddGameplayEventTagContainerDelegate(EventTagContainer,
+			                                          FGameplayEventTagMulticastDelegate::FDelegate::CreateUObject(
+				                                          this, &ThisClass::OnModeSwitchEventReceived));
+		}
 	}
 }
 
@@ -54,7 +68,7 @@ void AWolfPlayerController::SetupInputComponent()
 				&ThisClass::AbilityInputTagPressed,
 				&ThisClass::AbilityInputTagReleased,
 				&ThisClass::AbilityInputTagHeld
-			);	
+			);
 		}
 	}
 }
@@ -66,6 +80,12 @@ void AWolfPlayerController::PostInitializeComponents()
 	InputContextMap.Add(EInputContext::OutOfCombat, OutOfCombatContext);
 	InputContextMap.Add(EInputContext::InCombatRT, InCombatRTContext);
 	InputContextMap.Add(EInputContext::InCombatTB, InCombatTBContext);
+}
+
+void AWolfPlayerController::OnModeSwitchEventReceived(FGameplayTag EventTag, const FGameplayEventData* EventData)
+{
+	const bool bIsEnteringTB = EventData->EventMagnitude > 0.5f;
+	HandleTBTransition(bIsEnteringTB);
 }
 
 void AWolfPlayerController::UpdateInputContext(const EInputContext NewInputContext)

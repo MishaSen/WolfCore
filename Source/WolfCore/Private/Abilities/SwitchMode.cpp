@@ -3,7 +3,9 @@
 
 #include "Abilities/SwitchMode.h"
 
-#include "Core/WolfPlayerController.h"
+#include "AbilitySystemComponent.h"
+#include "Core/WolfGameplayTags.h"
+#include "Engine/Engine.h"
 
 USwitchMode::USwitchMode()
 {
@@ -12,25 +14,40 @@ USwitchMode::USwitchMode()
 }
 
 void USwitchMode::ActivateAbility(const FGameplayAbilitySpecHandle Handle,
-                                     const FGameplayAbilityActorInfo* ActorInfo,
-                                     const FGameplayAbilityActivationInfo ActivationInfo,
-                                     const FGameplayEventData* TriggerEventData)
+                                  const FGameplayAbilityActorInfo* ActorInfo,
+                                  const FGameplayAbilityActivationInfo ActivationInfo,
+                                  const FGameplayEventData* TriggerEventData)
 {
-	if (const auto Controller = ActorInfo->PlayerController.Get())
+	UAbilitySystemComponent* ASC = ActorInfo->AbilitySystemComponent.Get();
+	if (!ASC)
 	{
-		if (const auto WolfPC = Cast<AWolfPlayerController>(Controller))
-		{
-			const EInputContext CurrentContext = WolfPC->CurrentInputContext;
-			const bool bIsEnteringTB = (CurrentContext == EInputContext::InCombatRT);
-			// If it is RT, we are switching to TB
-
-			WolfPC->HandleTBTransition(bIsEnteringTB);
-
-			GEngine->AddOnScreenDebugMessage(4, 3.f, FColor::Yellow,
-			                                 FString::Printf(
-				                                 TEXT("Switched to: %s"),
-				                                 bIsEnteringTB ? TEXT("Turn-Based") : TEXT("Real-Time")));
-		}
+		EndAbility(Handle, ActorInfo, ActivationInfo, true, false);
+		return;
 	}
+
+	const FWolfGameplayTags& Tags = FWolfGameplayTags::Get();
+	const bool bIsInRT = ASC->HasMatchingGameplayTag(Tags.InputState_RT);
+
+	if (const FGameplayTag OldStateTag = bIsInRT ? Tags.InputState_RT : Tags.InputState_TB; OldStateTag.IsValid())
+	{
+		ASC->RemoveLooseGameplayTag(OldStateTag);
+	}
+	if (const FGameplayTag NewStateTag = bIsInRT ? Tags.InputState_TB : Tags.InputState_RT; NewStateTag.IsValid())
+	{
+		ASC->AddLooseGameplayTag(NewStateTag);
+	}
+
+	FGameplayEventData Payload;
+	Payload.EventMagnitude = bIsInRT ? 1.f : 0.f;
+	Payload.Instigator = ActorInfo->OwnerActor.Get();
+	Payload.Target = ActorInfo->OwnerActor.Get();
+	ASC->HandleGameplayEvent(Tags.Event_ModeSwitch, &Payload);
+
+	GEngine->AddOnScreenDebugMessage(
+		4,
+		3.f,
+		FColor::Yellow,
+		bIsInRT ? TEXT("Switched to Turn-Based") : TEXT("Switched to Real-Time")
+	);
 	EndAbility(Handle, ActorInfo, ActivationInfo, true, false);
 }

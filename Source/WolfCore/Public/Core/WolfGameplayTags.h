@@ -29,6 +29,9 @@ struct FWolfGameplayTags
 	FGameplayTag InputState_RT;
 	FGameplayTag InputState_TB;
 
+	// --- Event Tags ---
+	FGameplayTag Event_ModeSwitch;
+
 	// Future extension: Add TMap<FGameplayTag, FGameplayTag> to link abilities to cooldowns, effects, etc.
 	// e.g. TMap<FGameplayTag, FGameplayTag> AbilityCooldowns;
 

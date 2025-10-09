@@ -8,6 +8,7 @@
 
 #include "WolfPlayerController.generated.h"
 
+struct FGameplayEventData;
 struct FInputActionValue;
 struct FGameplayTag;
 class UWolfAbilitySystemComponent;
@@ -52,6 +53,8 @@ protected:
 	virtual void BeginPlay() override;
 	virtual void SetupInputComponent() override;
 	virtual void PostInitializeComponents() override;
+
+	void OnModeSwitchEventReceived(FGameplayTag EventTag, const FGameplayEventData* EventData);
 
 private:
 	// --- Input ---
