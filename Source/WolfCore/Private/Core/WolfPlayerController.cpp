@@ -25,12 +25,7 @@ void AWolfPlayerController::PlayerTick(float DeltaTime)
 void AWolfPlayerController::BeginPlay()
 {
 	Super::BeginPlay();
-	UpdateInputContext(EInputContext::InCombatTB);
-
-	if (UPresageSubsystem* PresageSubsystem = UPresageSubsystem::Get(GetWorld()))
-	{
-		PresageSubsystem->OnTransitionToTB.AddDynamic(this, &AWolfPlayerController::HandleTBTransition);
-	}
+	HandleModeTransition(RT);
 
 	if (APawn* ControlledPawn = GetPawn())
 	{
@@ -84,8 +79,16 @@ void AWolfPlayerController::PostInitializeComponents()
 
 void AWolfPlayerController::OnModeSwitchEventReceived(FGameplayTag EventTag, const FGameplayEventData* EventData)
 {
-	const bool bIsEnteringTB = EventData->EventMagnitude > 0.5f;
-	HandleTBTransition(bIsEnteringTB);
+	ECombatMode NewMode = RT;
+	if (const FWolfGameplayTags& Tag = FWolfGameplayTags::Get(); EventData->TargetTags.HasTag(Tag.InputState_TB))
+	{
+		NewMode = TB;
+	}
+	else if (EventData->TargetTags.HasTag(Tag.InputState_RT))
+	{
+		NewMode = RT;
+	}
+	HandleModeTransition(NewMode);
 }
 
 void AWolfPlayerController::UpdateInputContext(const EInputContext NewInputContext)
@@ -105,10 +108,20 @@ void AWolfPlayerController::UpdateInputContext(const EInputContext NewInputConte
 	}
 }
 
-void AWolfPlayerController::HandleTBTransition(const bool bIsEnteringTB)
+void AWolfPlayerController::HandleModeTransition(ECombatMode NewMode)
 {
-	const EInputContext NewInputContext = bIsEnteringTB ? EInputContext::InCombatTB : EInputContext::InCombatRT;
+	const EInputContext NewInputContext = NewMode == RT ? EInputContext::InCombatRT : EInputContext::InCombatTB;
 	UpdateInputContext(NewInputContext);
+
+	if (UWolfAbilitySystemComponent* ASC = GetASC())
+	{
+		ASC->SetModeStateTags(NewMode);
+		GEngine->AddOnScreenDebugMessage(
+			5,
+			3.f,
+			FColor::Cyan,
+			FString::Printf(TEXT("Player Controller: Switched to %s"), NewMode == RT ? TEXT("RT") : TEXT("TB")));
+	}
 }
 
 void AWolfPlayerController::AbilityInputTagPressed(const FGameplayTag InputTag)

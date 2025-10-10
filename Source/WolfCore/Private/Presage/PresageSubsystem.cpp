@@ -3,6 +3,7 @@
 
 #include "WolfCore/Public/Presage/PresageSubsystem.h"
 
+#include "AbilitySystemBlueprintLibrary.h"
 #include "GameFramework/Character.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "Kismet/GameplayStatics.h"
@@ -11,11 +12,56 @@
 #include "Components/PrimitiveComponent.h"
 #include "Animation/AnimInstance.h"
 #include "Components/SkeletalMeshComponent.h"
+#include "Core/WolfGameplayTags.h"
 #include "WolfCore/Public/AbilitySystem/WolfAbilitySystemComponent.h"
+#include "TimerManager.h"
 
 void UPresageSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {
 	Super::Initialize(Collection);
+
+	if (UWorld* World = GetWorld())
+	{
+		World->GetTimerManager().SetTimerForNextTick(this, &UPresageSubsystem::BindToModeSwitchEvent);
+	}
+}
+
+void UPresageSubsystem::BindToModeSwitchEvent()
+{
+	if (const UWorld* World = GetWorld())
+	{
+		if (auto* PlayerPawn = UGameplayStatics::GetPlayerPawn(World, 0))
+		{
+			if (auto* ASC = UAbilitySystemBlueprintLibrary::GetAbilitySystemComponent(PlayerPawn))
+			{
+				const auto& Tag = FWolfGameplayTags::Get();
+				FGameplayTagContainer EventTagContainer;
+				EventTagContainer.AddTag(Tag.Event_ModeSwitch);
+
+				ASC->AddGameplayEventTagContainerDelegate
+				(
+					EventTagContainer,
+					FGameplayEventTagMulticastDelegate::FDelegate::CreateUObject
+					(
+						this,
+						&ThisClass::OnModeSwitchEventReceived
+					)
+				);
+			}
+		}
+	}
+}
+
+void UPresageSubsystem::OnModeSwitchEventReceived(FGameplayTag GameplayTag, const FGameplayEventData* GameplayEventData)
+{
+	if (const auto& Tag = FWolfGameplayTags::Get(); GameplayEventData->TargetTags.HasTag(Tag.InputState_TB))
+	{
+		StartLoop();
+	}
+	else
+	{
+		StopLoop();
+	}
 }
 
 void UPresageSubsystem::Deinitialize()
@@ -24,7 +70,7 @@ void UPresageSubsystem::Deinitialize()
 	StopLoop();
 }
 
-UPresageSubsystem* UPresageSubsystem::Get(UWorld* World)
+UPresageSubsystem* UPresageSubsystem::Get(const UWorld* World)
 {
 	if (!World)
 	{
@@ -39,7 +85,7 @@ void UPresageSubsystem::Tick(float DeltaTime)
 	{
 		return;
 	}
-	
+
 	AccumulatedTime += DeltaTime;
 	if (AccumulatedTime >= FlowTime)
 	{
@@ -52,8 +98,7 @@ void UPresageSubsystem::Tick(float DeltaTime)
 	// Process queued abilities
 	for (int32 i = AbilityQueue.Num() - 1; i >= 0; --i)
 	{
-		const FPresageAbilityRequest& Request = AbilityQueue[i];
-		if (Request.GetRequestedTime() <= CurrentTime)
+		if (const FPresageAbilityRequest& Request = AbilityQueue[i]; Request.GetRequestedTime() <= CurrentTime)
 		{
 			if (auto ASC = Request.GetOwnerASC())
 			{
@@ -74,8 +119,6 @@ void UPresageSubsystem::StartLoop()
 	bLoopActive = true;
 	AccumulatedTime = 0.f;
 	CaptureCharacterStates();
-	OnTransitionToTB.Broadcast(true);
-	OnTransitionToRT.Broadcast(false);
 }
 
 void UPresageSubsystem::StopLoop()
@@ -87,8 +130,6 @@ void UPresageSubsystem::StopLoop()
 
 	bLoopActive = false;
 	AccumulatedTime = 0.f;
-	OnTransitionToTB.Broadcast(false);
-	OnTransitionToRT.Broadcast(true);
 }
 
 void UPresageSubsystem::OnFlowTimerTick()
@@ -133,7 +174,7 @@ void UPresageSubsystem::CaptureCharacterStates()
 				NewState.MontagePosition = AInst->Montage_GetPosition(Mon);
 			}
 		}
-		
+
 		OriginalCharacterStates.Add(NewState);
 	}
 }

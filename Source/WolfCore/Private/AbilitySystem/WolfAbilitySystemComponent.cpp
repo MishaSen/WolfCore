@@ -4,6 +4,7 @@
 #include "WolfCore/Public/AbilitySystem/WolfAbilitySystemComponent.h"
 
 #include "Abilities/TBCombatAbility.h"
+#include "Core/WolfGameplayTags.h"
 
 void UWolfAbilitySystemComponent::AbilityInputTagPressed(const FGameplayTag& Tag)
 {
@@ -61,6 +62,33 @@ void UWolfAbilitySystemComponent::AddCharacterAbilities(TArray<TSubclassOf<UGame
 			AbilitySpec.GetDynamicSpecSourceTags().AddTag(WolfAbility->StartupInputTag);
 			GiveAbility(AbilitySpec);
 		}
+	}
+}
+
+void UWolfAbilitySystemComponent::SetModeStateTags(ECombatMode NewMode)
+{
+	const FWolfGameplayTags& Tag = FWolfGameplayTags::Get();
+	FGameplayTag TagToAdd; 
+	FGameplayTag TagToRemove; 
+	
+	if (NewMode == RT)
+	{
+		TagToAdd = Tag.InputState_RT;
+		TagToRemove = Tag.InputState_TB;
+	}
+	else
+	{
+		TagToAdd = Tag.InputState_TB;
+		TagToRemove = Tag.InputState_RT;
+	}
+
+	if (TagToRemove.IsValid())
+	{
+		RemoveLooseGameplayTag(TagToRemove);
+	}
+	if (TagToAdd.IsValid())
+	{
+		AddLooseGameplayTag(TagToAdd);
 	}
 }
 

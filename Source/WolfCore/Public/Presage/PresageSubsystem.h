@@ -3,12 +3,11 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "GameplayTagContainer.h"
+#include "Abilities/GameplayAbilityTypes.h"
 #include "Subsystems/WorldSubsystem.h"
 
 #include "PresageSubsystem.generated.h"
-
-DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnTransitionToTB, bool, bIsEnteringTB);
-DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnTransitionToRT, bool, bIsEnteringRT);
 
 struct FPresageAbilityRequest;
 struct FActorState;
@@ -24,12 +23,14 @@ class WOLFCORE_API UPresageSubsystem : public UTickableWorldSubsystem
 	GENERATED_BODY()
 
 public:
+	void OnModeSwitchEventReceived(FGameplayTag GameplayTag, const FGameplayEventData* GameplayEventData);
+	void BindToModeSwitchEvent();
 	// --- Subsystem Lifecyle ---
 	virtual void Initialize(FSubsystemCollectionBase& Collection) override;
 	virtual void Deinitialize() override;
 
 	// --- Global Subsystem Accessor ---
-	static UPresageSubsystem* Get(UWorld* World);
+	static UPresageSubsystem* Get(const UWorld* World);
 	
 	// --- Tickables ---
 	virtual void Tick(float DeltaTime) override;
@@ -44,13 +45,6 @@ public:
 
 	UFUNCTION(BlueprintCallable, Category = "Presage")
 	void StopLoop();
-
-	// -- Delegate Broadcasts --
-	UPROPERTY(BlueprintAssignable)
-	FOnTransitionToTB OnTransitionToTB;
-
-	UPROPERTY(BlueprintAssignable)
-	FOnTransitionToRT OnTransitionToRT;
 	
 	// --- Ability Queue --- 
 	UFUNCTION(BlueprintCallable, Category = "Presage")

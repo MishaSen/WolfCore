@@ -3,6 +3,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "AbilitySystem/WolfAbilitySystemComponent.h"
 #include "GameFramework/PlayerController.h"
 #include "Engine/HitResult.h"
 
@@ -47,7 +48,7 @@ public:
 	virtual void PlayerTick(float DeltaTime) override;
 	
 	UFUNCTION()
-	void HandleTBTransition(bool bIsEnteringTB);
+	void HandleModeTransition(ECombatMode NewMode = RT);
 
 protected:
 	virtual void BeginPlay() override;

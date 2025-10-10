@@ -4,6 +4,7 @@
 #include "Abilities/SwitchMode.h"
 
 #include "AbilitySystemComponent.h"
+#include "AbilitySystem/WolfAbilitySystemComponent.h"
 #include "Core/WolfGameplayTags.h"
 #include "Engine/Engine.h"
 
@@ -26,19 +27,12 @@ void USwitchMode::ActivateAbility(const FGameplayAbilitySpecHandle Handle,
 	}
 
 	const FWolfGameplayTags& Tags = FWolfGameplayTags::Get();
-	const bool bIsInRT = ASC->HasMatchingGameplayTag(Tags.InputState_RT);
-
-	if (const FGameplayTag OldStateTag = bIsInRT ? Tags.InputState_RT : Tags.InputState_TB; OldStateTag.IsValid())
-	{
-		ASC->RemoveLooseGameplayTag(OldStateTag);
-	}
-	if (const FGameplayTag NewStateTag = bIsInRT ? Tags.InputState_TB : Tags.InputState_RT; NewStateTag.IsValid())
-	{
-		ASC->AddLooseGameplayTag(NewStateTag);
-	}
+	const bool bIsCurrentlyInRT = ASC->HasMatchingGameplayTag(Tags.InputState_RT);
+	const ECombatMode TargetMode = bIsCurrentlyInRT ? TB : RT;
+	const FGameplayTag TargetTag = TargetMode == TB ? Tags.InputState_TB : Tags.InputState_RT;
 
 	FGameplayEventData Payload;
-	Payload.EventMagnitude = bIsInRT ? 1.f : 0.f;
+	Payload.TargetTags.AddTag(TargetTag);
 	Payload.Instigator = ActorInfo->OwnerActor.Get();
 	Payload.Target = ActorInfo->OwnerActor.Get();
 	ASC->HandleGameplayEvent(Tags.Event_ModeSwitch, &Payload);
@@ -47,7 +41,7 @@ void USwitchMode::ActivateAbility(const FGameplayAbilitySpecHandle Handle,
 		4,
 		3.f,
 		FColor::Yellow,
-		bIsInRT ? TEXT("Switched to Turn-Based") : TEXT("Switched to Real-Time")
+		FString::Printf(TEXT("Switching Mode to %s"), *TargetTag.ToString())
 	);
 	EndAbility(Handle, ActorInfo, ActivationInfo, true, false);
 }
