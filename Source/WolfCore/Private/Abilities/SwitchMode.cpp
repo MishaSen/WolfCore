@@ -4,7 +4,6 @@
 #include "Abilities/SwitchMode.h"
 
 #include "AbilitySystemComponent.h"
-#include "AbilitySystem/WolfAbilitySystemComponent.h"
 #include "Core/WolfGameplayTags.h"
 #include "Engine/Engine.h"
 
@@ -27,21 +26,66 @@ void USwitchMode::ActivateAbility(const FGameplayAbilitySpecHandle Handle,
 	}
 
 	const FWolfGameplayTags& Tags = FWolfGameplayTags::Get();
-	const bool bIsCurrentlyInRT = ASC->HasMatchingGameplayTag(Tags.InputState_RT);
-	const ECombatMode TargetMode = bIsCurrentlyInRT ? TB : RT;
-	const FGameplayTag TargetTag = TargetMode == TB ? Tags.InputState_TB : Tags.InputState_RT;
+	const FGameplayTag PresageModeTag = Tags.InputState_TB;
 
-	FGameplayEventData Payload;
-	Payload.TargetTags.AddTag(TargetTag);
-	Payload.Instigator = ActorInfo->OwnerActor.Get();
-	Payload.Target = ActorInfo->OwnerActor.Get();
-	ASC->HandleGameplayEvent(Tags.Event_ModeSwitch, &Payload);
+	FActiveGameplayEffectHandle PresageGEHandle;
+	bool bPresageActive = false;
 
-	GEngine->AddOnScreenDebugMessage(
-		4,
-		3.f,
-		FColor::Yellow,
-		FString::Printf(TEXT("Switching Mode to %s"), *TargetTag.ToString())
-	);
+	FGameplayTagContainer PresageTags;
+	PresageTags.AddTag(PresageModeTag);
+
+	for (auto ActiveGEHandles = ASC->GetActiveGameplayEffects().GetAllActiveEffectHandles();
+	     const auto& GEHandle : ActiveGEHandles)
+	{
+		if (const auto* ActiveGE = ASC->GetActiveGameplayEffect(GEHandle))
+		{
+			FGameplayTagContainer GrantedTags;
+			ActiveGE->Spec.GetAllGrantedTags(GrantedTags);
+			if (GrantedTags.HasTag(PresageModeTag))
+			{
+				PresageGEHandle = ActiveGE->Handle;
+				bPresageActive = true;
+				break;
+			}
+		}
+	}
+
+	if (bPresageActive)
+	{
+		ASC->RemoveActiveGameplayEffect(PresageGEHandle);
+		GEngine->AddOnScreenDebugMessage(
+			4,
+			3.f,
+			FColor::Yellow,
+			FString::Printf(TEXT("Switching Mode: TB -> RT"))
+		);
+	}
+	else
+	{
+		if (!PresageModeGEClass)
+		{
+			UE_LOG(LogTemp, Error, TEXT("PresageModeGEClass not set on the SwitchMode Ability."))
+			EndAbility(Handle, ActorInfo, ActivationInfo, true, false);
+			return;
+		}
+		FGameplayEffectContextHandle ContextHandle = ASC->MakeEffectContext();
+		FActiveGameplayEffectHandle NewHandle = ASC->ApplyGameplayEffectToSelf(
+			PresageModeGEClass.GetDefaultObject(),
+			1.f,
+			ContextHandle
+		);
+		if (!NewHandle.IsValid())
+		{
+			UE_LOG(LogTemp, Error, TEXT("Failed to apply GE to self."))
+			EndAbility(Handle, ActorInfo, ActivationInfo, true, false);
+			return;
+		}
+		GEngine->AddOnScreenDebugMessage(
+			4,
+			3.f,
+			FColor::Yellow,
+			FString::Printf(TEXT("Switching Mode: RT -> TB"))
+		);
+	}
 	EndAbility(Handle, ActorInfo, ActivationInfo, true, false);
 }

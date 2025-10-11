@@ -17,6 +17,8 @@ class WOLFCORE_API USwitchMode : public UBaseCombatAbility
 
 public:
 	USwitchMode();
+	UPROPERTY(EditDefaultsOnly, Category = "Config|Presage")
+	TSubclassOf<UGameplayEffect> PresageModeGEClass;
 
 	virtual void ActivateAbility(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo,
 	                             const FGameplayAbilityActivationInfo ActivationInfo,
