@@ -55,7 +55,8 @@ protected:
 	virtual void SetupInputComponent() override;
 	virtual void PostInitializeComponents() override;
 
-	void OnModeSwitchEventReceived(FGameplayTag EventTag, const FGameplayEventData* EventData);
+	UFUNCTION()
+	void OnPresageModeTagChanged(const FGameplayTag CallbackTag, int32 NewCount);
 
 private:
 	// --- Input ---

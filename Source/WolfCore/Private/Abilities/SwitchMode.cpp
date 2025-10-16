@@ -25,34 +25,9 @@ void USwitchMode::ActivateAbility(const FGameplayAbilitySpecHandle Handle,
 		return;
 	}
 
-	const FWolfGameplayTags& Tags = FWolfGameplayTags::Get();
-	const FGameplayTag PresageModeTag = Tags.InputState_TB;
-
-	FActiveGameplayEffectHandle PresageGEHandle;
-	bool bPresageActive = false;
-
-	FGameplayTagContainer PresageTags;
-	PresageTags.AddTag(PresageModeTag);
-
-	for (auto ActiveGEHandles = ASC->GetActiveGameplayEffects().GetAllActiveEffectHandles();
-	     const auto& GEHandle : ActiveGEHandles)
+	if (ASC->HasMatchingGameplayTag(FWolfGameplayTags::Get().InputState_TB))
 	{
-		if (const auto* ActiveGE = ASC->GetActiveGameplayEffect(GEHandle))
-		{
-			FGameplayTagContainer GrantedTags;
-			ActiveGE->Spec.GetAllGrantedTags(GrantedTags);
-			if (GrantedTags.HasTag(PresageModeTag))
-			{
-				PresageGEHandle = ActiveGE->Handle;
-				bPresageActive = true;
-				break;
-			}
-		}
-	}
-
-	if (bPresageActive)
-	{
-		ASC->RemoveActiveGameplayEffect(PresageGEHandle);
+		ASC->RemoveActiveEffectsWithGrantedTags(FGameplayTagContainer(FWolfGameplayTags::Get().InputState_TB));
 		GEngine->AddOnScreenDebugMessage(
 			4,
 			3.f,
@@ -68,10 +43,10 @@ void USwitchMode::ActivateAbility(const FGameplayAbilitySpecHandle Handle,
 			EndAbility(Handle, ActorInfo, ActivationInfo, true, false);
 			return;
 		}
-		FGameplayEffectContextHandle ContextHandle = ASC->MakeEffectContext();
-		FActiveGameplayEffectHandle NewHandle = ASC->ApplyGameplayEffectToSelf(
+		const FGameplayEffectContextHandle ContextHandle = ASC->MakeEffectContext();
+		const FActiveGameplayEffectHandle NewHandle = ASC->ApplyGameplayEffectToSelf(
 			PresageModeGEClass.GetDefaultObject(),
-			1.f,
+			1.f, // TODO: Make GetAbilityLevel()
 			ContextHandle
 		);
 		if (!NewHandle.IsValid())

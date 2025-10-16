@@ -77,18 +77,16 @@ void AWolfPlayerController::PostInitializeComponents()
 	InputContextMap.Add(EInputContext::InCombatTB, InCombatTBContext);
 }
 
-void AWolfPlayerController::OnModeSwitchEventReceived(FGameplayTag EventTag, const FGameplayEventData* EventData)
+void AWolfPlayerController::OnPresageModeTagChanged(const FGameplayTag CallbackTag, int32 NewCount)
 {
-	ECombatMode NewMode = RT;
-	if (const FWolfGameplayTags& Tag = FWolfGameplayTags::Get(); EventData->TargetTags.HasTag(Tag.InputState_TB))
+	if (NewCount > 0)
 	{
-		NewMode = TB;
+		HandleModeTransition(RT);
 	}
-	else if (EventData->TargetTags.HasTag(Tag.InputState_RT))
+	else
 	{
-		NewMode = RT;
+		HandleModeTransition(TB);
 	}
-	HandleModeTransition(NewMode);
 }
 
 void AWolfPlayerController::UpdateInputContext(const EInputContext NewInputContext)
