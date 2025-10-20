@@ -32,11 +32,8 @@ void AWolfPlayerController::BeginPlay()
 		if (UAbilitySystemComponent* ASC = UAbilitySystemBlueprintLibrary::GetAbilitySystemComponent(ControlledPawn))
 		{
 			const FWolfGameplayTags& Tag = FWolfGameplayTags::Get();
-			FGameplayTagContainer EventTagContainer;
-			EventTagContainer.AddTag(Tag.Event_ModeSwitch);
-			ASC->AddGameplayEventTagContainerDelegate(EventTagContainer,
-			                                          FGameplayEventTagMulticastDelegate::FDelegate::CreateUObject(
-				                                          this, &ThisClass::OnModeSwitchEventReceived));
+			ASC->RegisterGameplayTagEvent(Tag.InputState_TB, EGameplayTagEventType::NewOrRemoved).AddUObject(
+				this, &ThisClass::OnPresageModeTagChanged);
 		}
 	}
 }
@@ -81,11 +78,11 @@ void AWolfPlayerController::OnPresageModeTagChanged(const FGameplayTag CallbackT
 {
 	if (NewCount > 0)
 	{
-		HandleModeTransition(RT);
+		HandleModeTransition(TB);
 	}
 	else
 	{
-		HandleModeTransition(TB);
+		HandleModeTransition(RT);
 	}
 }
 
@@ -111,7 +108,7 @@ void AWolfPlayerController::HandleModeTransition(ECombatMode NewMode)
 	const EInputContext NewInputContext = NewMode == RT ? EInputContext::InCombatRT : EInputContext::InCombatTB;
 	UpdateInputContext(NewInputContext);
 
-	if (UWolfAbilitySystemComponent* ASC = GetASC())
+	/*if (UWolfAbilitySystemComponent* ASC = GetASC())
 	{
 		ASC->SetModeStateTags(NewMode);
 		GEngine->AddOnScreenDebugMessage(
@@ -119,7 +116,7 @@ void AWolfPlayerController::HandleModeTransition(ECombatMode NewMode)
 			3.f,
 			FColor::Cyan,
 			FString::Printf(TEXT("Player Controller: Switched to %s"), NewMode == RT ? TEXT("RT") : TEXT("TB")));
-	}
+	}*/
 }
 
 void AWolfPlayerController::AbilityInputTagPressed(const FGameplayTag InputTag)

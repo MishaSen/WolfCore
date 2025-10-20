@@ -46,7 +46,7 @@ void USwitchMode::ActivateAbility(const FGameplayAbilitySpecHandle Handle,
 		const FGameplayEffectContextHandle ContextHandle = ASC->MakeEffectContext();
 		const FActiveGameplayEffectHandle NewHandle = ASC->ApplyGameplayEffectToSelf(
 			PresageModeGEClass.GetDefaultObject(),
-			1.f, // TODO: Make GetAbilityLevel()
+			1.f,
 			ContextHandle
 		);
 		if (!NewHandle.IsValid())
