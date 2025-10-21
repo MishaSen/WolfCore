@@ -4,3 +4,4 @@
 #include "Modules/ModuleManager.h"
 
 IMPLEMENT_PRIMARY_GAME_MODULE( FDefaultGameModuleImpl, WolfCore, "WolfCore" );
+DEFINE_LOG_CATEGORY(LogWolf);

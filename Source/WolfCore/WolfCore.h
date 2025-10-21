@@ -4,4 +4,4 @@
 
 #include "CoreMinimal.h"
 
-#include "Character/WolfChar.h"
+DECLARE_LOG_CATEGORY_EXTERN(LogWolf, Log, All);
