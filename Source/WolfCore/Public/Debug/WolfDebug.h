@@ -20,7 +20,7 @@ DECLARE_LOG_CATEGORY_EXTERN(LogWolf, Log, All)
 	FString::Printf(TEXT("[Wolf][%s:%d] " Format), TEXT(__FUNCTION__), __LINE__, ##__VA_ARGS__)
 
 #define WOLF_LOG(Verbosity, Format, ...) \
-	UE_LOG(LogWolf, Verbosity, TEXT("[%s] " *WOLF_FORMAT_MESSAGE(Format, ##__VA_ARGS__))
+	UE_LOG(LogWolf, Verbosity, TEXT("%s "), *WOLF_FORMAT_MESSAGE(Format, ##__VA_ARGS__))
 
 #define WOLF_INFO(Format, ...) \
 	do { \
