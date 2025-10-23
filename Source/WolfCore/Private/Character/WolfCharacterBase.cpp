@@ -3,6 +3,7 @@
 #include "WolfCore/Public/Character/WolfCharacterBase.h"
 
 #include "Abilities/AbilityConfig.h"
+#include "Debug/WolfDebug.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "WolfCore/Public/AbilitySystem/WolfAbilitySystemComponent.h"
 #include "WolfCore/Public/AbilitySystem/WolfAttributeSet.h"
@@ -63,7 +64,7 @@ void AWolfCharacterBase::SetupAbilitySystem()
 {
 	if (!AbilitySystemComponentClass)
 	{
-		UE_LOG(LogTemp, Error, TEXT("No AbilitySystemComponentClass set for %s"), *GetName());
+		WOLF_ERROR(TEXT("No AbilitySystemComponent set for %s"), *GetName());
 		return;
 	}
 
@@ -72,10 +73,11 @@ void AWolfCharacterBase::SetupAbilitySystem()
 	{
 		ASC->SetIsReplicated(false);
 		ASC->RegisterComponent();
+		WOLF_LOG(Log, TEXT("Created AbilitySystemComponent for %s"), *GetName());
 	}
 	else
 	{
-		UE_LOG(LogTemp, Error, TEXT("Failed to create AbilitySystemComponent for %s"), *GetName());
+		WOLF_ERROR(TEXT("Failed to create AbilitySystemComponent for %s"), *GetName());
 	}
 }
 
@@ -86,15 +88,20 @@ void AWolfCharacterBase::ApplyDefaultAttributes()
 		FGameplayEffectContextHandle EffectContext = ASC->MakeEffectContext();
 		EffectContext.AddSourceObject(this);
 
-		if (const FGameplayEffectSpecHandle SpecHandle = ASC->MakeOutgoingSpec(
-			DefaultAttributes,
-			1,
-			EffectContext
-		); SpecHandle.IsValid())
+		if (const FGameplayEffectSpecHandle SpecHandle = ASC->MakeOutgoingSpec(DefaultAttributes, 1, EffectContext);
+			SpecHandle.IsValid())
 		{
 			ASC->ApplyGameplayEffectSpecToSelf(*SpecHandle.Data.Get());
-			UE_LOG(LogTemp, Log, TEXT("Applied DefaultAttributes to character: %s"), *GetName());
+			WOLF_LOG(Log, TEXT("Applied DefaultAttributesSpec to %s"), *GetName());
 		}
+		else
+		{
+			WOLF_WARN(TEXT("Failed to apply DefaultAttributesSpec to %s"), *GetName());
+		}
+	}
+	else
+	{
+		WOLF_WARN(TEXT("ApplyDefaultAttributes called on %s but ASC or DefaultAttributes invalid."), *GetName());
 	}
 }
 
@@ -113,15 +120,25 @@ void AWolfCharacterBase::PossessedBy(AController* NewController)
 			ASC->InitAbilityActorInfo(this, this);
 			ApplyDefaultAttributes();
 			AddCharacterAbilities();
-			UE_LOG(LogTemp, Log, TEXT("Character %s possessed and GAS initialized."), *GetName());
+			WOLF_INFO(TEXT("Character %s possessed and GAS initialized."), *GetName());
+		}
+		else
+		{
+			WOLF_ERROR(TEXT("PossessedBy failed: ASC invalid for %s"), *GetName());
 		}
 	}
 }
 
 void AWolfCharacterBase::AddCharacterAbilities()
 {
-	UWolfAbilitySystemComponent* WolfASC = Cast<UWolfAbilitySystemComponent>(ASC);
 	if (!HasAuthority()) return;
-
-	WolfASC->AddCharacterAbilities(StartupAbilities);
+	if (auto* WolfASC = Cast<UWolfAbilitySystemComponent>(ASC))
+	{
+		WolfASC->AddCharacterAbilities(StartupAbilities);
+		WOLF_LOG(Log, TEXT("Added %d startup abilities to %s"), StartupAbilities.Num(), *GetName());
+	}
+	else
+	{
+		WOLF_WARN(TEXT("AddCharacterAbilities failed: ASC missing or not a WolfASC for %s"), *GetName());
+	}
 }

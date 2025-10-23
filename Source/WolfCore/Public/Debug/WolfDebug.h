@@ -2,25 +2,25 @@
 
 #include "CoreMinimal.h"
 #include "Engine/Engine.h"
-
-DECLARE_LOG_CATEGORY_EXTERN(LogWolf, Log, All) 
+#include "WolfCore/WolfCore.h"
 
 #define WOLF_DEBUG_ENABLED 1
 
 #if UE_BUILD_SHIPPING
-	#undef WOLF_DEBUG_ENABLED
+	#undef  WOLF_DEBUG_ENABLED
 	#define WOLF_DEBUG_ENABLED 0
 #endif
 
-// --- Debug macros ---
 #if WOLF_DEBUG_ENABLED
 
-// Formats the message with function name + line number
 #define WOLF_FORMAT_MESSAGE(Format, ...) \
 	FString::Printf(TEXT("[Wolf][%s:%d] " Format), TEXT(__FUNCTION__), __LINE__, ##__VA_ARGS__)
 
 #define WOLF_LOG(Verbosity, Format, ...) \
-	UE_LOG(LogWolf, Verbosity, TEXT("%s "), *WOLF_FORMAT_MESSAGE(Format, ##__VA_ARGS__))
+	do { \
+		const FString Message = WOLF_FORMAT_MESSAGE(Format, ##__VA_ARGS__); \
+		UE_LOG(LogWolf, Verbosity, TEXT("%s"), *Message); \
+	} while (0)
 
 #define WOLF_INFO(Format, ...) \
 	do { \
