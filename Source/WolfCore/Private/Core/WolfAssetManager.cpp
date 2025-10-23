@@ -4,6 +4,7 @@
 #include "WolfCore/Public/Core/WolfAssetManager.h"
 
 #include "AbilitySystemGlobals.h"
+#include "Debug/WolfDebug.h"
 #include "WolfCore/Public/Core/WolfGameplayTags.h"
 
 UWolfAssetManager& UWolfAssetManager::Get()
@@ -11,12 +12,12 @@ UWolfAssetManager& UWolfAssetManager::Get()
 	check(GEngine)
 	if (UWolfAssetManager* AssetManager = Cast<UWolfAssetManager>(GEngine->AssetManager))
 	{
+		WOLF_LOG(Log, TEXT("WolfAssetManager singleton obtained."));
 		return *AssetManager;
 	}
 
-	UE_LOG(LogTemp, Fatal, TEXT(
-		       "Error: Asset Manager not found. You had ONE job... "
-		       "Set 'AssetManagerClassName' in DefaultEngine.ini to '/Script/Wolf.WolfAssetManager'."));
+	WOLF_ERROR(TEXT("Error: Asset Manager not found. You had one job... "
+				 "Set 'AssetManagerClassName' in DefaultEngine.ini to '/Script/WolfCore.WolfAssetManager'."));
 	return *NewObject<UWolfAssetManager>();
 }
 

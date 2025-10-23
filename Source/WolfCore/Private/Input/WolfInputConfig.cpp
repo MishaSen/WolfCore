@@ -4,6 +4,7 @@
 #include "WolfCore/Public/Input/WolfInputConfig.h"
 
 #include "InputAction.h"
+#include "Debug/WolfDebug.h"
 
 const UInputAction* UWolfInputConfig::FindAbilityInputActionForTag(const FGameplayTag& Tag,
                                                                    const bool bLogNotFound) const
@@ -12,16 +13,14 @@ const UInputAction* UWolfInputConfig::FindAbilityInputActionForTag(const FGamepl
 	{
 		if (InputAction && InputTag.MatchesTagExact(Tag))
 		{
+			WOLF_LOG(Log, TEXT("Found AbilityInputAction for InputTag [%s]"), *Tag.ToString());
 			return InputAction;
 		}
 	}
 
 	if (bLogNotFound)
 	{
-		UE_LOG(LogTemp, Error, TEXT(
-			       "Can't find AbilityInputAction for InputTag [%s], on InputConfig [%s]"),
-		       *Tag.ToString(),
-		       *GetNameSafe(this));
+		WOLF_WARN(TEXT("No AbilityInputAction found for InputTag [%s]"), *Tag.ToString());
 	}
 
 	return nullptr;

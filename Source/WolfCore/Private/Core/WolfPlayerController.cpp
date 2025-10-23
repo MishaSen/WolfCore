@@ -107,8 +107,11 @@ void AWolfPlayerController::HandleModeTransition(ECombatMode NewMode)
 {
 	const EInputContext NewInputContext = NewMode == RT ? EInputContext::InCombatRT : EInputContext::InCombatTB;
 	UpdateInputContext(NewInputContext);
+	WOLF_INFO(TEXT("Switched to %s mode"), NewMode == RT ? TEXT("RT") : TEXT("TB"));
 
-	/*if (UWolfAbilitySystemComponent* ASC = GetASC())
+	/* TODO: Figure out if ASC function SetModeStateTags is actually needed
+
+	 if (UWolfAbilitySystemComponent* ASC = GetASC())
 	{
 		ASC->SetModeStateTags(NewMode);
 		GEngine->AddOnScreenDebugMessage(
@@ -124,7 +127,7 @@ void AWolfPlayerController::AbilityInputTagPressed(const FGameplayTag InputTag)
 	if (GetASC())
 	{
 		GetASC()->AbilityInputTagPressed(InputTag);
-		GEngine->AddOnScreenDebugMessage(1, 3.f, FColor::Red, *InputTag.ToString());
+		WOLF_INFO(TEXT("Ability Input Tag Pressed: %s"), *InputTag.ToString());
 	}
 }
 
@@ -133,7 +136,7 @@ void AWolfPlayerController::AbilityInputTagReleased(const FGameplayTag InputTag)
 	if (GetASC())
 	{
 		GetASC()->AbilityInputTagReleased(InputTag);
-		GEngine->AddOnScreenDebugMessage(2, 3.f, FColor::Blue, *InputTag.ToString());
+		WOLF_LOG(Log, TEXT("Ability Input Tag Released: %s"), *InputTag.ToString());
 	}
 }
 
@@ -142,7 +145,7 @@ void AWolfPlayerController::AbilityInputTagHeld(const FGameplayTag InputTag)
 	if (GetASC())
 	{
 		GetASC()->AbilityInputTagHeld(InputTag);
-		GEngine->AddOnScreenDebugMessage(3, 3.f, FColor::Green, *InputTag.ToString());
+		WOLF_LOG(Log, TEXT("Ability Input Tag Held: %s"), *InputTag.ToString());
 	}
 }
 

@@ -5,6 +5,7 @@
 
 #include "Abilities/TBCombatAbility.h"
 #include "Core/WolfGameplayTags.h"
+#include "Debug/WolfDebug.h"
 
 void UWolfAbilitySystemComponent::AbilityInputTagPressed(const FGameplayTag& Tag)
 {
@@ -61,6 +62,7 @@ void UWolfAbilitySystemComponent::AddCharacterAbilities(TArray<TSubclassOf<UGame
 		{
 			AbilitySpec.GetDynamicSpecSourceTags().AddTag(WolfAbility->StartupInputTag);
 			GiveAbility(AbilitySpec);
+			WOLF_LOG(Log, TEXT("Added ability %s for tag %s"), *AbilitySpec.Ability->GetName(), *WolfAbility->StartupInputTag.ToString());
 		}
 	}
 }
