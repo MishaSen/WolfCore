@@ -19,6 +19,11 @@ class UInputAction;
 /**
  * 
  */
+UENUM()
+enum ECombatMode
+{
+	RT, TB
+};
 
 UENUM(BlueprintType)
 enum class EInputContext : uint8

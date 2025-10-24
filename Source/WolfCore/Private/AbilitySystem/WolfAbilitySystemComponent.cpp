@@ -67,33 +67,6 @@ void UWolfAbilitySystemComponent::AddCharacterAbilities(TArray<TSubclassOf<UGame
 	}
 }
 
-void UWolfAbilitySystemComponent::SetModeStateTags(ECombatMode NewMode)
-{
-	const FWolfGameplayTags& Tag = FWolfGameplayTags::Get();
-	FGameplayTag TagToAdd; 
-	FGameplayTag TagToRemove; 
-	
-	if (NewMode == RT)
-	{
-		TagToAdd = Tag.InputState_RT;
-		TagToRemove = Tag.InputState_TB;
-	}
-	else
-	{
-		TagToAdd = Tag.InputState_TB;
-		TagToRemove = Tag.InputState_RT;
-	}
-
-	if (TagToRemove.IsValid())
-	{
-		RemoveLooseGameplayTag(TagToRemove);
-	}
-	if (TagToAdd.IsValid())
-	{
-		AddLooseGameplayTag(TagToAdd);
-	}
-}
-
 FPresageAbilityRequest UWolfAbilitySystemComponent::BuildInitialPresageRequest(const FGameplayTag& Tag,
                                                                                const TArray<TWeakObjectPtr<AActor>>&
                                                                                Targets)

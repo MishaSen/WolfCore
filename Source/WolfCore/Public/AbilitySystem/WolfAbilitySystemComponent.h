@@ -7,11 +7,6 @@
 #include "Presage/PresageAbilityRequest.h"
 #include "WolfAbilitySystemComponent.generated.h"
 
-UENUM()
-enum ECombatMode
-{
-	RT, TB
-};
 /**
  * 
  */
@@ -25,6 +20,5 @@ public:
 	void AbilityInputTagReleased(const FGameplayTag& Tag);
 	void AbilityInputTagHeld(const FGameplayTag& Tag);
 	void AddCharacterAbilities(TArray<TSubclassOf<UGameplayAbility>> StartupAbilities);
-	void SetModeStateTags(ECombatMode NewMode);
 	FPresageAbilityRequest BuildInitialPresageRequest(const FGameplayTag& Tag, const TArray<TWeakObjectPtr<AActor>>& Targets);
 };

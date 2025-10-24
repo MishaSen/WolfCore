@@ -108,18 +108,6 @@ void AWolfPlayerController::HandleModeTransition(ECombatMode NewMode)
 	const EInputContext NewInputContext = NewMode == RT ? EInputContext::InCombatRT : EInputContext::InCombatTB;
 	UpdateInputContext(NewInputContext);
 	WOLF_INFO(TEXT("Switched to %s mode"), NewMode == RT ? TEXT("RT") : TEXT("TB"));
-
-	/* TODO: Figure out if ASC function SetModeStateTags is actually needed
-
-	 if (UWolfAbilitySystemComponent* ASC = GetASC())
-	{
-		ASC->SetModeStateTags(NewMode);
-		GEngine->AddOnScreenDebugMessage(
-			5,
-			3.f,
-			FColor::Cyan,
-			FString::Printf(TEXT("Player Controller: Switched to %s"), NewMode == RT ? TEXT("RT") : TEXT("TB")));
-	}*/
 }
 
 void AWolfPlayerController::AbilityInputTagPressed(const FGameplayTag InputTag)
