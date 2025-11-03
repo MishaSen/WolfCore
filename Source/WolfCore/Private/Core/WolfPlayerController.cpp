@@ -14,6 +14,15 @@
 #include "WolfCore/Public/Input/WolfInputComponent.h"
 #include "CombatMode.h"
 
+namespace
+{
+	const TArray<TPair<FGameplayTag, ECombatMode>> TagToCombatModePairs = {
+		{FWolfGameplayTags::Get().InputState_RT, ECombatMode::RT},
+		{FWolfGameplayTags::Get().InputState_TB, ECombatMode::TB},
+		{FWolfGameplayTags::Get().InputState_OOC, ECombatMode::OOC}
+	};
+}
+
 AWolfPlayerController::AWolfPlayerController(): CurrentInputContext()
 {
 }
@@ -26,18 +35,18 @@ void AWolfPlayerController::PlayerTick(float DeltaTime)
 void AWolfPlayerController::BeginPlay()
 {
 	Super::BeginPlay();
-	HandleModeTransition();
+	HandleModeTransition(ECombatMode::OOC);
 
-	// NOTE: Only start in RT or TB for testing. The default start should be Out of Combat.
-
-	if (APawn* ControlledPawn = GetPawn())
+	if (auto* ASC = GetASC())
 	{
-		if (UAbilitySystemComponent* ASC = UAbilitySystemBlueprintLibrary::GetAbilitySystemComponent(ControlledPawn))
-		{
-			const FWolfGameplayTags& Tag = FWolfGameplayTags::Get();
-			ASC->RegisterGameplayTagEvent(Tag.InputState_TB, EGameplayTagEventType::NewOrRemoved).AddUObject(
-				this, &ThisClass::OnPresageModeTagChanged);
-		}
+		const FWolfGameplayTags& WolfTags = FWolfGameplayTags::Get();
+
+		ASC->RegisterGameplayTagEvent(WolfTags.InputState_RT, EGameplayTagEventType::NewOrRemoved).AddUObject(
+			this, &ThisClass::OnCombatTagChanged);
+		ASC->RegisterGameplayTagEvent(WolfTags.InputState_TB, EGameplayTagEventType::NewOrRemoved).AddUObject(
+			this, &ThisClass::OnCombatTagChanged);
+		ASC->RegisterGameplayTagEvent(WolfTags.InputState_OOC, EGameplayTagEventType::NewOrRemoved).AddUObject(
+			this, &ThisClass::OnCombatTagChanged);
 	}
 }
 
@@ -75,42 +84,58 @@ void AWolfPlayerController::PostInitializeComponents()
 	InputContextMap.Add(EInputContext::OutOfCombat, OutOfCombatContext);
 	InputContextMap.Add(EInputContext::InCombatRT, InCombatRTContext);
 	InputContextMap.Add(EInputContext::InCombatTB, InCombatTBContext);
-}
 
-void AWolfPlayerController::OnPresageModeTagChanged(const FGameplayTag CallbackTag, int32 NewCount)
-{
-	if (NewCount > 0)
-	{
-		HandleModeTransition();
-	}
-	else
-	{
-		HandleModeTransition();
-	}
+	CombatModeToInputContext.Add(ECombatMode::RT, EInputContext::InCombatRT);
+	CombatModeToInputContext.Add(ECombatMode::TB, EInputContext::InCombatTB);
+	CombatModeToInputContext.Add(ECombatMode::OOC, EInputContext::OutOfCombat);
 }
 
 void AWolfPlayerController::UpdateInputContext(const EInputContext NewInputContext)
 {
-	if (const auto Subsystem = ULocalPlayer::GetSubsystem<UEnhancedInputLocalPlayerSubsystem>(GetLocalPlayer()))
-	{
-		Subsystem->ClearAllMappings();
+	auto* EnhancedInputSubsystem = ULocalPlayer::GetSubsystem<UEnhancedInputLocalPlayerSubsystem>(GetLocalPlayer());
+	if (!EnhancedInputSubsystem) return;
 
-		if (const auto InputContext = InputContextMap.Find(NewInputContext))
+	EnhancedInputSubsystem->ClearAllMappings();
+
+	if (const auto InputContext = InputContextMap.Find(NewInputContext); InputContext && *InputContext)
+	{
+		EnhancedInputSubsystem->AddMappingContext(*InputContext, 0);
+	}
+	
+	CurrentInputContext = NewInputContext;
+	WOLF_INFO(TEXT("Updated Input Context to %s"), *UEnum::GetValueAsString(CurrentInputContext));
+}
+
+void AWolfPlayerController::OnCombatTagChanged(const FGameplayTag Tag, int32 NewCount)
+{
+	if (NewCount <= 0)
+	{
+		WOLF_WARN(TEXT("Tag %s not found on ASC"), *Tag.ToString());
+		return;
+	}
+
+	for (const auto& [TagToCheck, Mode] : TagToCombatModePairs)
+	{
+		if (Tag.MatchesTag(TagToCheck))
 		{
-			if (*InputContext)
-			{
-				Subsystem->AddMappingContext(*InputContext, 0);
-			}
+			WOLF_LOG(Log, TEXT("Mode transition to %s"), *UEnum::GetValueAsString(Mode));
+			HandleModeTransition(Mode);
+			return;
 		}
-		CurrentInputContext = NewInputContext;
 	}
 }
 
 void AWolfPlayerController::HandleModeTransition(ECombatMode NewMode)
 {
-	const EInputContext NewInputContext = NewMode == ECombatMode::RT ? EInputContext::InCombatRT : EInputContext::InCombatTB;
-	UpdateInputContext(NewInputContext);
-	WOLF_INFO(TEXT("Switched to %s mode"), NewMode == ECombatMode::RT ? TEXT("RT") : TEXT("TB"));
+	if (const auto NewContext = CombatModeToInputContext.Find(NewMode))
+	{
+		UpdateInputContext(*NewContext);
+		WOLF_INFO(TEXT("Switched to %s mode"), *UEnum::GetValueAsString(NewMode));
+	}
+	else
+	{
+		WOLF_WARN(TEXT("No InputContext mapped for CombatMode %s"), *UEnum::GetValueAsString(NewMode));
+	}
 }
 
 void AWolfPlayerController::AbilityInputTagPressed(const FGameplayTag InputTag)

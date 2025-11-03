@@ -6,6 +6,7 @@
 #include "AbilitySystem/WolfAbilitySystemComponent.h"
 #include "GameFramework/PlayerController.h"
 #include "Engine/HitResult.h"
+#include "Interaction/CombatModeListener.h"
 
 #include "WolfPlayerController.generated.h"
 
@@ -55,15 +56,13 @@ protected:
 	virtual void SetupInputComponent() override;
 	virtual void PostInitializeComponents() override;
 
-	UFUNCTION()
-	void OnPresageModeTagChanged(const FGameplayTag CallbackTag, int32 NewCount);
-
 private:
 	// --- Input ---
 	UPROPERTY(EditDefaultsOnly, Category = "Input")
 	TObjectPtr<UWolfInputConfig> InputConfig;
 
 	TMap<EInputContext, TObjectPtr<UInputMappingContext>> InputContextMap;
+	TMap<ECombatMode, EInputContext> CombatModeToInputContext;
 	
 	UPROPERTY(EditAnywhere, Category = "Input", meta = (AllowPrivateAccess = "true"))
 	TObjectPtr<UInputMappingContext> OutOfCombatContext;
@@ -88,6 +87,8 @@ private:
 	void Look(const FInputActionValue& Value);
 
 	void UpdateInputContext(const EInputContext NewInputContext);
+
+	void OnCombatTagChanged(const FGameplayTag Tag, int32 NewCount);
 
 	/* --- Cursor Trace ---
 	TObjectPtr<AActor> LastActor;
