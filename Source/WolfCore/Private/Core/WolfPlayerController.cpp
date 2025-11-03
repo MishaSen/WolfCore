@@ -27,6 +27,8 @@ void AWolfPlayerController::BeginPlay()
 	Super::BeginPlay();
 	HandleModeTransition(RT);
 
+	// NOTE: Only start in RT or TB for testing. The default start should be Out of Combat.
+
 	if (APawn* ControlledPawn = GetPawn())
 	{
 		if (UAbilitySystemComponent* ASC = UAbilitySystemBlueprintLibrary::GetAbilitySystemComponent(ControlledPawn))

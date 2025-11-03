@@ -28,6 +28,7 @@ struct FWolfGameplayTags
 	// --- Input State Tags ---
 	FGameplayTag InputState_RT;
 	FGameplayTag InputState_TB;
+	FGameplayTag InputState_OOC;
 
 	// --- Event Tags ---
 	FGameplayTag Event_ModeSwitch;

@@ -25,7 +25,7 @@ class WOLFCORE_API UPresageSubsystem : public UTickableWorldSubsystem
 public:
 	void OnModeSwitchEventReceived(FGameplayTag GameplayTag, const FGameplayEventData* GameplayEventData);
 	void BindToModeSwitchEvent();
-	// --- Subsystem Lifecyle ---
+	// --- Subsystem Lifecycle ---
 	virtual void Initialize(FSubsystemCollectionBase& Collection) override;
 	virtual void Deinitialize() override;
 
