@@ -9,6 +9,7 @@
 
 #include "WolfPlayerController.generated.h"
 
+enum class ECombatMode : uint8;
 struct FGameplayEventData;
 struct FInputActionValue;
 struct FGameplayTag;
@@ -19,12 +20,6 @@ class UInputAction;
 /**
  * 
  */
-UENUM()
-enum ECombatMode
-{
-	RT, TB
-};
-
 UENUM(BlueprintType)
 enum class EInputContext : uint8
 {
@@ -53,7 +48,7 @@ public:
 	virtual void PlayerTick(float DeltaTime) override;
 	
 	UFUNCTION()
-	void HandleModeTransition(ECombatMode NewMode = RT);
+	void HandleModeTransition(ECombatMode NewMode);
 
 protected:
 	virtual void BeginPlay() override;

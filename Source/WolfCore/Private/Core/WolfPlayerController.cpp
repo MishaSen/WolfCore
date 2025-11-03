@@ -12,6 +12,7 @@
 #include "Debug/WolfDebug.h"
 #include "GameFramework/Character.h"
 #include "WolfCore/Public/Input/WolfInputComponent.h"
+#include "CombatMode.h"
 
 AWolfPlayerController::AWolfPlayerController(): CurrentInputContext()
 {
@@ -25,7 +26,7 @@ void AWolfPlayerController::PlayerTick(float DeltaTime)
 void AWolfPlayerController::BeginPlay()
 {
 	Super::BeginPlay();
-	HandleModeTransition(RT);
+	HandleModeTransition();
 
 	// NOTE: Only start in RT or TB for testing. The default start should be Out of Combat.
 
@@ -80,11 +81,11 @@ void AWolfPlayerController::OnPresageModeTagChanged(const FGameplayTag CallbackT
 {
 	if (NewCount > 0)
 	{
-		HandleModeTransition(TB);
+		HandleModeTransition();
 	}
 	else
 	{
-		HandleModeTransition(RT);
+		HandleModeTransition();
 	}
 }
 
@@ -107,9 +108,9 @@ void AWolfPlayerController::UpdateInputContext(const EInputContext NewInputConte
 
 void AWolfPlayerController::HandleModeTransition(ECombatMode NewMode)
 {
-	const EInputContext NewInputContext = NewMode == RT ? EInputContext::InCombatRT : EInputContext::InCombatTB;
+	const EInputContext NewInputContext = NewMode == ECombatMode::RT ? EInputContext::InCombatRT : EInputContext::InCombatTB;
 	UpdateInputContext(NewInputContext);
-	WOLF_INFO(TEXT("Switched to %s mode"), NewMode == RT ? TEXT("RT") : TEXT("TB"));
+	WOLF_INFO(TEXT("Switched to %s mode"), NewMode == ECombatMode::RT ? TEXT("RT") : TEXT("TB"));
 }
 
 void AWolfPlayerController::AbilityInputTagPressed(const FGameplayTag InputTag)
