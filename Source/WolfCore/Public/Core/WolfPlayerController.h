@@ -51,6 +51,8 @@ public:
 	UFUNCTION()
 	void HandleModeTransition(ECombatMode NewMode);
 
+	UWolfAbilitySystemComponent* GetASC();
+	
 protected:
 	virtual void BeginPlay() override;
 	virtual void SetupInputComponent() override;
@@ -63,6 +65,7 @@ private:
 
 	TMap<EInputContext, TObjectPtr<UInputMappingContext>> InputContextMap;
 	TMap<ECombatMode, EInputContext> CombatModeToInputContext;
+	TArray<TPair<FGameplayTag, ECombatMode>> TagToCombatModePairs;
 	
 	UPROPERTY(EditAnywhere, Category = "Input", meta = (AllowPrivateAccess = "true"))
 	TObjectPtr<UInputMappingContext> OutOfCombatContext;
@@ -101,5 +104,4 @@ private:
 	// --- Ability System ---
 	UPROPERTY()
 	TObjectPtr<UWolfAbilitySystemComponent> WolfASC;
-	UWolfAbilitySystemComponent* GetASC();
 };

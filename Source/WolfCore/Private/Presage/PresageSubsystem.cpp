@@ -36,7 +36,7 @@ void UPresageSubsystem::BindToModeSwitchEvent()
 			{
 				const auto& Tag = FWolfGameplayTags::Get();
 				FGameplayTagContainer EventTagContainer;
-				EventTagContainer.AddTag(Tag.Event_ModeSwitch);
+				EventTagContainer.AddTag(Tag.Event_ModeSwitchReady);
 
 				ASC->AddGameplayEventTagContainerDelegate
 				(

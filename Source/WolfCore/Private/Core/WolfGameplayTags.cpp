@@ -30,5 +30,5 @@ void FWolfGameplayTags::InitializeNativeGameplayTags()
 	AddNativeTag(GameplayTags.InputState_OOC, FName("InputState.OOC"), TEXT("Input state tag for OOC state."));
 
 	// --- Event Tags ---
-	AddNativeTag(GameplayTags.Event_ModeSwitch, FName("Event.ModeSwitch"), TEXT("Event tag for mode switching."));
+	AddNativeTag(GameplayTags.Event_ModeSwitchReady, FName("Event.ModeSwitch"), TEXT("Event tag for mode switching."));
 }

@@ -14,15 +14,6 @@
 #include "WolfCore/Public/Input/WolfInputComponent.h"
 #include "CombatMode.h"
 
-namespace
-{
-	const TArray<TPair<FGameplayTag, ECombatMode>> TagToCombatModePairs = {
-		{FWolfGameplayTags::Get().InputState_RT, ECombatMode::RT},
-		{FWolfGameplayTags::Get().InputState_TB, ECombatMode::TB},
-		{FWolfGameplayTags::Get().InputState_OOC, ECombatMode::OOC}
-	};
-}
-
 AWolfPlayerController::AWolfPlayerController(): CurrentInputContext()
 {
 }
@@ -35,7 +26,6 @@ void AWolfPlayerController::PlayerTick(float DeltaTime)
 void AWolfPlayerController::BeginPlay()
 {
 	Super::BeginPlay();
-	HandleModeTransition(ECombatMode::OOC);
 
 	if (auto* ASC = GetASC())
 	{
@@ -47,6 +37,8 @@ void AWolfPlayerController::BeginPlay()
 			this, &ThisClass::OnCombatTagChanged);
 		ASC->RegisterGameplayTagEvent(WolfTags.InputState_OOC, EGameplayTagEventType::NewOrRemoved).AddUObject(
 			this, &ThisClass::OnCombatTagChanged);
+
+		ASC->AddLooseGameplayTag(WolfTags.Event_ModeSwitchReady);
 	}
 }
 
@@ -88,6 +80,12 @@ void AWolfPlayerController::PostInitializeComponents()
 	CombatModeToInputContext.Add(ECombatMode::RT, EInputContext::InCombatRT);
 	CombatModeToInputContext.Add(ECombatMode::TB, EInputContext::InCombatTB);
 	CombatModeToInputContext.Add(ECombatMode::OOC, EInputContext::OutOfCombat);
+
+	TagToCombatModePairs = {
+		{ FWolfGameplayTags::Get().InputState_RT, ECombatMode::RT },
+		{ FWolfGameplayTags::Get().InputState_TB, ECombatMode::TB },
+		{ FWolfGameplayTags::Get().InputState_OOC, ECombatMode::OOC }
+	};
 }
 
 void AWolfPlayerController::UpdateInputContext(const EInputContext NewInputContext)
@@ -110,13 +108,15 @@ void AWolfPlayerController::OnCombatTagChanged(const FGameplayTag Tag, int32 New
 {
 	if (NewCount <= 0)
 	{
-		WOLF_WARN(TEXT("Tag %s not found on ASC"), *Tag.ToString());
+		WOLF_LOG(Log, TEXT("Tag %s no longer on ASC"), *Tag.ToString());
 		return;
 	}
 
 	for (const auto& [TagToCheck, Mode] : TagToCombatModePairs)
 	{
-		if (Tag.MatchesTag(TagToCheck))
+		WOLF_LOG(Log, TEXT("TagToCheck is %s"), *TagToCheck.ToString());
+		WOLF_LOG(Log, TEXT("Checking if ASC tag %s is tag %s"), *Tag.ToString(), *TagToCheck.ToString());
+		if (Tag.MatchesTagExact(TagToCheck))
 		{
 			WOLF_LOG(Log, TEXT("Mode transition to %s"), *UEnum::GetValueAsString(Mode));
 			HandleModeTransition(Mode);
