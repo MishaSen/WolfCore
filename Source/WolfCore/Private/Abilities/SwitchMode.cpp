@@ -4,9 +4,9 @@
 #include "Abilities/SwitchMode.h"
 
 #include "AbilitySystemComponent.h"
-#include "Core/WolfGameplayTags.h"
 #include "Debug/WolfDebug.h"
 #include "Engine/Engine.h"
+#include "Systems/CombatModeSubsystem.h"
 
 USwitchMode::USwitchMode()
 {
@@ -26,49 +26,28 @@ void USwitchMode::ActivateAbility(const FGameplayAbilitySpecHandle Handle,
 		return;
 	}
 
-	UAbilitySystemComponent* ASC = ActorInfo->AbilitySystemComponent.Get();
-	const bool bIsCurrentlyTB = ASC->HasMatchingGameplayTag(FWolfGameplayTags::Get().InputState_TB);
-	
-	if (bIsCurrentlyTB)
+	const auto* World = ActorInfo->AbilitySystemComponent->GetWorld();
+	if (!World)
 	{
-		SwitchToRT(ASC);
+		WOLF_ERROR(TEXT("Invalid World during SwitchMode activation."));
+		EndAbility(Handle, ActorInfo, ActivationInfo, true, false);
+		return;
+	}
+
+	if (auto* CombatModeSubsystem = World->GetSubsystem<UCombatModeSubsystem>())
+	{
+		const auto CurrentMode = CombatModeSubsystem->GetCombatMode();
+		const auto NewMode = CurrentMode == ECombatMode::RT ? ECombatMode::TB : ECombatMode::RT;
+
+		CombatModeSubsystem->SetCombatMode(NewMode);
+
+		WOLF_LOG(Log, TEXT("SwitchMode ability triggered: %s -> %s"),
+			*UEnum::GetValueAsString(CurrentMode),
+			*UEnum::GetValueAsString(NewMode));
 	}
 	else
 	{
-		SwitchToTB(ASC, Handle, ActorInfo, ActivationInfo);
+		WOLF_ERROR(TEXT("Failed to get CombatModeSubsystem from world %s"), *GetWorld()->GetName());
 	}
 	EndAbility(Handle, ActorInfo, ActivationInfo, true, false);
-}
-
-void USwitchMode::SwitchToRT(UAbilitySystemComponent* ASC)
-{
-	ASC->RemoveActiveEffectsWithGrantedTags(FGameplayTagContainer(FWolfGameplayTags::Get().InputState_TB));
-	WOLF_LOG(Log, TEXT("Switching Mode: TB -> RT"));
-}
-
-void USwitchMode::SwitchToTB(UAbilitySystemComponent* ASC,
-                             const FGameplayAbilitySpecHandle Handle,
-                             const FGameplayAbilityActorInfo* ActorInfo,
-                             const FGameplayAbilityActivationInfo& ActivationInfo)
-{
-	if (!PresageModeGEClass)
-	{
-		WOLF_ERROR(TEXT("PresageModeGEClass not set on SwitchMode ability."));
-		return;
-	}
-
-	const FGameplayEffectContextHandle ContextHandle = ASC->MakeEffectContext();
-	const FActiveGameplayEffectHandle GEHandle = ASC->ApplyGameplayEffectToSelf(
-		PresageModeGEClass.GetDefaultObject(),
-		 1.f,
-		ContextHandle
-	);
-	
-	if (!GEHandle.IsValid())
-	{
-		WOLF_ERROR(TEXT("Failed to apply PresageMode GE to self"));
-		return;
-	}
-
-	WOLF_LOG(Log, TEXT("Switching Mode: RT -> TB"));
 }

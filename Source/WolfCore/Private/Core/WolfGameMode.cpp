@@ -53,7 +53,7 @@ void AWolfGameMode::InitialModeSet()
 		if (LevelCombatMode)
 		{
 			CombatModeSystem->SetCombatMode(LevelCombatMode->DefaultMode);
-			WOLF_INFO(TEXT("Set CombatMode to default level mode: %s"), *UEnum::GetValueAsString(LevelCombatMode->DefaultMode));
+			WOLF_INFO(TEXT("SetCombatMode successful"));
 		}
 		else
 		{

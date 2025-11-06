@@ -20,8 +20,6 @@ public:
 	UPROPERTY(EditDefaultsOnly, Category = "Config|Presage")
 	TSubclassOf<UGameplayEffect> PresageModeGEClass;
 
-	static void SwitchToRT(UAbilitySystemComponent* ASC);
-	void SwitchToTB(UAbilitySystemComponent* ASC, FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo, const FGameplayAbilityActivationInfo& ActivationInfo);
 	virtual void ActivateAbility(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo,
 	                             const FGameplayAbilityActivationInfo ActivationInfo,
 	                             const FGameplayEventData* TriggerEventData) override;

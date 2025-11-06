@@ -22,7 +22,7 @@ public:
 	ECombatMode GetCombatMode() const { return CurrentMode; }
 
 private:
-	ECombatMode CurrentMode = ECombatMode::OOC;
+	ECombatMode CurrentMode = ECombatMode::RT;
 	TArray<TScriptInterface<ICombatModeListener>> RegisteredListeners;
 	
 	void ApplyModeToASC(ECombatMode Mode);

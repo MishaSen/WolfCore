@@ -13,7 +13,6 @@ void UCombatModeSubsystem::SetCombatMode(ECombatMode NewMode)
 	if (NewMode == CurrentMode)
 	{
 		WOLF_INFO(TEXT("CombatMode already set to %s"), *UEnum::GetValueAsString(NewMode));
-		return;
 	}
 
 	CurrentMode = NewMode;
