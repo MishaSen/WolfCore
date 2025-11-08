@@ -7,6 +7,7 @@
 #include "RTCombatAbility.generated.h"
 
 class UAbilityFrameData;
+
 /**
  * 
  */
@@ -19,18 +20,26 @@ public:
 	UPROPERTY(EditDefaultsOnly, Category = "Timing")
 	TObjectPtr<UAbilityFrameData> FrameData;
 
-	virtual void ActivateAbility(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo, const FGameplayAbilityActivationInfo ActivationInfo, const FGameplayEventData* TriggerEventData) override;
-	
-	void EnterActivePhase();
-	void EnterRecoveryPhase();
-	void EndAbilityPhase();
+	virtual void ActivateAbility(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo,
+	                             const FGameplayAbilityActivationInfo ActivationInfo,
+	                             const FGameplayEventData* TriggerEventData) override;
 
 protected:
-	virtual void OnStartupPhase();
-	virtual void OnActivePhase();
-	virtual void OnRecoveryPhase();
+	void ScheduleNextPhase(FTimerHandle& Handle, void (URTCombatAbility::*NextFunc)(), float PhaseDuration);
+	
+	void StartupPhase();
+	void ActivePhase();
+	void RecoveryPhase();
+	
+	void ClearTimers();
+	void EndPhase();
+	virtual void CancelAbility(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo,
+	                           const FGameplayAbilityActivationInfo ActivationInfo, bool bReplicateCancelAbility) override;
 
 private:
+	UPROPERTY()
+	UWorld* CachedWorld;
+	
 	FTimerHandle StartupTimerHandle;
 	FTimerHandle ActiveTimerHandle;
 	FTimerHandle RecoveryTimerHandle;
