@@ -6,6 +6,7 @@
 #include "Abilities/AbilityFrameData.h"
 #include "Debug/WolfDebug.h"
 #include "TimerManager.h"
+#include "Abilities/Tasks/AbilityTask_PlayMontageAndWait.h"
 #include "Systems/CombatModeSubsystem.h"
 
 void URTCombatAbility::ActivateAbility(const FGameplayAbilitySpecHandle Handle,
@@ -16,66 +17,71 @@ void URTCombatAbility::ActivateAbility(const FGameplayAbilitySpecHandle Handle,
 	Super::ActivateAbility(Handle, ActorInfo, ActivationInfo, TriggerEventData);
 
 	CachedWorld = GetWorld();
-	if (const auto* CombatModeSubsystem = GetWorld()->GetSubsystem<UCombatModeSubsystem>();
+	if (const auto* CombatModeSubsystem = CachedWorld->GetSubsystem<UCombatModeSubsystem>();
 		!CachedWorld || !CombatModeSubsystem || CombatModeSubsystem->GetCombatMode() != ECombatMode::RT)
 	{
 		EndAbility(Handle, ActorInfo, ActivationInfo, true, true);
 		return;
 	}
 
-	WOLF_INFO(TEXT("Entering RT ability startup."));
-	StartupPhase();
+	if (AttackMontage)
+	{
+		auto* MontageTask = UAbilityTask_PlayMontageAndWait::CreatePlayMontageAndWaitProxy(
+			this,
+			NAME_None,
+			AttackMontage,
+			1.f,
+			NAME_None,
+			false,
+			1.f,
+			0.f,
+			false
+		);
+
+		MontageTask->OnCompleted.AddDynamic(this, &ThisClass::EndPhase);
+		MontageTask->OnInterrupted.AddDynamic(this, &ThisClass::EndPhase);
+		MontageTask->OnCancelled.AddDynamic(this, &ThisClass::EndPhase);
+
+		MontageTask->ReadyForActivation();
+		StartupPhase();
+		WOLF_INFO(TEXT("RTCombatAbility: Started montage %s"), *AttackMontage.GetName());
+	}
+	else
+	{
+		WOLF_WARN(TEXT("No AttackMontage set, skipping playback."));
+		StartupPhase();
+	}
 }
 
-void URTCombatAbility::ScheduleNextPhase(FTimerHandle& Handle, void(URTCombatAbility::*NextPhase)(),
-	float PhaseDuration)
+void URTCombatAbility::OnNotifyReceived(FName NotifyName)
 {
-	if (!CachedWorld) return;
-	
-	CachedWorld->GetTimerManager().SetTimer(
-		Handle,
-		this,
-		NextPhase,
-		PhaseDuration,
-		false
-	);
+	if (NotifyName == "Notify_StartupEnd") ActivePhase();
+	else if (NotifyName == "Notify_ActiveEnd") RecoveryPhase();
+	else if (NotifyName == "Notify_RecoveryEnd") EndPhase();
 }
 
 void URTCombatAbility::StartupPhase()
 {
-	ScheduleNextPhase(StartupTimerHandle, &ThisClass::ActivePhase, FrameData->StartupTime);
 }
 
 void URTCombatAbility::ActivePhase()
 {
-	ScheduleNextPhase(ActiveTimerHandle, &ThisClass::RecoveryPhase, FrameData->ActiveTime);
 }
 
 void URTCombatAbility::RecoveryPhase()
 {
-	ScheduleNextPhase(RecoveryTimerHandle, &ThisClass::EndPhase, FrameData->RecoveryTime);
-}
-
-void URTCombatAbility::ClearTimers()
-{
-	if (!CachedWorld) return;
-	
-	CachedWorld->GetTimerManager().ClearTimer(StartupTimerHandle);
-	CachedWorld->GetTimerManager().ClearTimer(ActiveTimerHandle);
-	CachedWorld->GetTimerManager().ClearTimer(RecoveryTimerHandle);
 }
 
 void URTCombatAbility::EndPhase()
 {
-	ClearTimers();
 	EndAbility(CurrentSpecHandle, CurrentActorInfo, CurrentActivationInfo, true, false);
 }
 
 void URTCombatAbility::CancelAbility(const FGameplayAbilitySpecHandle Handle,
-	const FGameplayAbilityActorInfo* ActorInfo, const FGameplayAbilityActivationInfo ActivationInfo,
-	bool bReplicateCancelAbility)
+                                     const FGameplayAbilityActorInfo* ActorInfo,
+                                     const FGameplayAbilityActivationInfo ActivationInfo,
+                                     bool bReplicateCancelAbility)
 {
 	WOLF_INFO(TEXT("Ability cancelled early."));
-	ClearTimers();
 	Super::CancelAbility(Handle, ActorInfo, ActivationInfo, bReplicateCancelAbility);
 }

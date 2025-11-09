@@ -92,7 +92,6 @@ void AWolfPlayerController::UpdateInputContext(const EInputContext NewInputConte
 {
 	auto* EnhancedInputSubsystem = ULocalPlayer::GetSubsystem<UEnhancedInputLocalPlayerSubsystem>(GetLocalPlayer());
 	if (!EnhancedInputSubsystem) return;
-	check()
 
 	EnhancedInputSubsystem->ClearAllMappings();
 

@@ -17,30 +17,34 @@ class WOLFCORE_API URTCombatAbility : public UBaseCombatAbility
 	GENERATED_BODY()
 
 public:
+	UPROPERTY(EditDefaultsOnly, Category = "Animation")
+	TObjectPtr<UAnimMontage> AttackMontage;
+	
 	UPROPERTY(EditDefaultsOnly, Category = "Timing")
 	TObjectPtr<UAbilityFrameData> FrameData;
 
 	virtual void ActivateAbility(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo,
 	                             const FGameplayAbilityActivationInfo ActivationInfo,
 	                             const FGameplayEventData* TriggerEventData) override;
+	void OnNotifyReceived(FName NotifyName);
 
 protected:
-	void ScheduleNextPhase(FTimerHandle& Handle, void (URTCombatAbility::*NextFunc)(), float PhaseDuration);
-	
+	UFUNCTION()
 	void StartupPhase();
+
+	UFUNCTION()
 	void ActivePhase();
+
+	UFUNCTION()
 	void RecoveryPhase();
-	
-	void ClearTimers();
+
+	UFUNCTION()
 	void EndPhase();
+	
 	virtual void CancelAbility(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo,
 	                           const FGameplayAbilityActivationInfo ActivationInfo, bool bReplicateCancelAbility) override;
 
 private:
 	UPROPERTY()
 	UWorld* CachedWorld;
-	
-	FTimerHandle StartupTimerHandle;
-	FTimerHandle ActiveTimerHandle;
-	FTimerHandle RecoveryTimerHandle;
 };
