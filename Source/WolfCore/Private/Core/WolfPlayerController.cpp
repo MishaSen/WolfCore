@@ -13,8 +13,9 @@
 #include "GameFramework/Character.h"
 #include "WolfCore/Public/Input/WolfInputComponent.h"
 #include "CombatMode.h"
+#include "Core/CombatModeData.h"
 
-AWolfPlayerController::AWolfPlayerController(): CurrentInputContext()
+AWolfPlayerController::AWolfPlayerController(): CurrentInputContext(EInputContext::OutOfCombat)
 {
 }
 
@@ -46,7 +47,7 @@ void AWolfPlayerController::SetupInputComponent()
 {
 	Super::SetupInputComponent();
 
-	if (UWolfInputComponent* WolfInputComponent = CastChecked<UWolfInputComponent>(InputComponent))
+	if (auto* WolfInputComponent = CastChecked<UWolfInputComponent>(InputComponent))
 	{
 		if (MoveAction)
 		{
@@ -73,19 +74,23 @@ void AWolfPlayerController::PostInitializeComponents()
 {
 	Super::PostInitializeComponents();
 
-	InputContextMap.Add(EInputContext::OutOfCombat, OutOfCombatContext);
-	InputContextMap.Add(EInputContext::InCombatRT, InCombatRTContext);
-	InputContextMap.Add(EInputContext::InCombatTB, InCombatTBContext);
+	if (!CombatModeDataTable)
+	{
+		WOLF_WARN(TEXT("No CombatModeDataTable set for %s"), *GetWorld()->GetName());
+		return;
+	}
 
-	CombatModeToInputContext.Add(ECombatMode::RT, EInputContext::InCombatRT);
-	CombatModeToInputContext.Add(ECombatMode::TB, EInputContext::InCombatTB);
-	CombatModeToInputContext.Add(ECombatMode::OOC, EInputContext::OutOfCombat);
+	static const FString Context(TEXT("CombatModeTable"));
+	TArray<FCombatModeInfo*> AllRows;
+	CombatModeDataTable->GetAllRows(Context, AllRows);
 
-	TagToCombatModePairs = {
-		{ FWolfGameplayTags::Get().InputState_RT, ECombatMode::RT },
-		{ FWolfGameplayTags::Get().InputState_TB, ECombatMode::TB },
-		{ FWolfGameplayTags::Get().InputState_OOC, ECombatMode::OOC }
-	};
+	for (const auto* Row : AllRows)
+	{
+		if (!Row) continue;
+		CombatModeToInputContext.Add(Row->Mode, Row->InputContext);
+		InputContextMap.Add(Row->InputContext, Row->InputMapping);
+		TagToCombatMode.Add(Row->Tag, Row->Mode);
+	}
 }
 
 void AWolfPlayerController::UpdateInputContext(const EInputContext NewInputContext)
@@ -99,29 +104,22 @@ void AWolfPlayerController::UpdateInputContext(const EInputContext NewInputConte
 	{
 		EnhancedInputSubsystem->AddMappingContext(*InputContext, 0);
 	}
-	
+
 	CurrentInputContext = NewInputContext;
 	WOLF_INFO(TEXT("Updated Input Context to %s"), *UEnum::GetValueAsString(CurrentInputContext));
 }
 
 void AWolfPlayerController::OnCombatTagChanged(const FGameplayTag Tag, int32 NewCount)
 {
-	if (NewCount <= 0)
-	{
-		WOLF_LOG(Log, TEXT("Tag %s no longer on ASC"), *Tag.ToString());
-		return;
-	}
+	if (NewCount <= 0) return;
 
-	for (const auto& [TagToCheck, Mode] : TagToCombatModePairs)
+	if (const auto* CombatMode = TagToCombatMode.Find(Tag))
 	{
-		WOLF_LOG(Log, TEXT("TagToCheck is %s"), *TagToCheck.ToString());
-		WOLF_LOG(Log, TEXT("Checking if ASC tag %s is tag %s"), *Tag.ToString(), *TagToCheck.ToString());
-		if (Tag.MatchesTagExact(TagToCheck))
-		{
-			WOLF_LOG(Log, TEXT("Mode transition to %s"), *UEnum::GetValueAsString(Mode));
-			HandleModeTransition(Mode);
-			return;
-		}
+		HandleModeTransition(*CombatMode);
+	}
+	else
+	{
+		WOLF_WARN(TEXT("No CombatMode mapped for GameplayTag %s"), *Tag.ToString());
 	}
 }
 
@@ -140,29 +138,20 @@ void AWolfPlayerController::HandleModeTransition(ECombatMode NewMode)
 
 void AWolfPlayerController::AbilityInputTagPressed(const FGameplayTag InputTag)
 {
-	if (GetASC())
-	{
-		GetASC()->AbilityInputTagPressed(InputTag);
-		WOLF_INFO(TEXT("Ability Input Tag Pressed: %s"), *InputTag.ToString());
-	}
+	WolfASC->AbilityInputTagPressed(InputTag);
+	WOLF_INFO(TEXT("Ability Input Tag Pressed: %s"), *InputTag.ToString());
 }
 
 void AWolfPlayerController::AbilityInputTagReleased(const FGameplayTag InputTag)
 {
-	if (GetASC())
-	{
-		GetASC()->AbilityInputTagReleased(InputTag);
-		WOLF_LOG(Log, TEXT("Ability Input Tag Released: %s"), *InputTag.ToString());
-	}
+	WolfASC->AbilityInputTagReleased(InputTag);
+	WOLF_LOG(Log, TEXT("Ability Input Tag Released: %s"), *InputTag.ToString());
 }
 
 void AWolfPlayerController::AbilityInputTagHeld(const FGameplayTag InputTag)
 {
-	if (GetASC())
-	{
-		GetASC()->AbilityInputTagHeld(InputTag);
-		WOLF_LOG(Log, TEXT("Ability Input Tag Held: %s"), *InputTag.ToString());
-	}
+	WolfASC->AbilityInputTagHeld(InputTag);
+	WOLF_LOG(Log, TEXT("Ability Input Tag Held: %s"), *InputTag.ToString());
 }
 
 void AWolfPlayerController::Move(const FInputActionValue& Value)

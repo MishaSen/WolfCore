@@ -3,6 +3,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "CombatMode.h"
 #include "AbilitySystem/WolfAbilitySystemComponent.h"
 #include "GameFramework/PlayerController.h"
 #include "Engine/HitResult.h"
@@ -63,19 +64,13 @@ private:
 	UPROPERTY(EditDefaultsOnly, Category = "Input")
 	TObjectPtr<UWolfInputConfig> InputConfig;
 
+	UPROPERTY(EditDefaultsOnly, Category = "Combat Mode")
+	TObjectPtr<UDataTable> CombatModeDataTable;
+
 	TMap<EInputContext, TObjectPtr<UInputMappingContext>> InputContextMap;
 	TMap<ECombatMode, EInputContext> CombatModeToInputContext;
-	TArray<TPair<FGameplayTag, ECombatMode>> TagToCombatModePairs;
+	TMap<FGameplayTag, ECombatMode> TagToCombatMode;
 	
-	UPROPERTY(EditAnywhere, Category = "Input", meta = (AllowPrivateAccess = "true"))
-	TObjectPtr<UInputMappingContext> OutOfCombatContext;
-
-	UPROPERTY(EditAnywhere, Category = "Input", meta = (AllowPrivateAccess = "true"))
-	TObjectPtr<UInputMappingContext> InCombatRTContext;
-
-	UPROPERTY(EditAnywhere, Category = "Input", meta = (AllowPrivateAccess = "true"))
-	TObjectPtr<UInputMappingContext> InCombatTBContext;
-
 	UPROPERTY(EditAnywhere, Category = "Input")
 	TObjectPtr<UInputAction> MoveAction;
 
