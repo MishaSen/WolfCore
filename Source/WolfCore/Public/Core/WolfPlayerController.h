@@ -7,7 +7,6 @@
 #include "AbilitySystem/WolfAbilitySystemComponent.h"
 #include "GameFramework/PlayerController.h"
 #include "Engine/HitResult.h"
-#include "Interaction/CombatModeListener.h"
 
 #include "WolfPlayerController.generated.h"
 
@@ -28,14 +27,6 @@ enum class EInputContext : uint8
 	OutOfCombat,
 	InCombatRT,
 	InCombatTB
-};
-
-UENUM(BlueprintType)
-enum class ETargetingStatus : uint8
-{
-	TargetingEnemy,
-	TargetingNonEnemy,
-	None
 };
 
 UCLASS()
@@ -87,14 +78,6 @@ private:
 	void UpdateInputContext(const EInputContext NewInputContext);
 
 	void OnCombatTagChanged(const FGameplayTag Tag, int32 NewCount);
-
-	/* --- Cursor Trace ---
-	TObjectPtr<AActor> LastActor;
-	TObjectPtr<AActor> ThisActor;
-	FHitResult CursorTraceHit;
-	void CursorTrace();
-	static void HighlightActor(AActor* InActor);
-	static void UnhighlightActor(AActor* InActor);*/
 
 	// --- Ability System ---
 	UPROPERTY()
