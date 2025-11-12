@@ -10,7 +10,8 @@
 
 #include "WolfPlayerController.generated.h"
 
-enum class ECombatMode : uint8;
+struct FCombatModeInfo;
+class UEnhancedInputLocalPlayerSubsystem;
 struct FGameplayEventData;
 struct FInputActionValue;
 struct FGameplayTag;
@@ -36,6 +37,7 @@ class WOLFCORE_API AWolfPlayerController : public APlayerController
 
 public:
 	AWolfPlayerController();
+	
 	EInputContext CurrentInputContext;
 	
 	virtual void PlayerTick(float DeltaTime) override;
@@ -45,6 +47,9 @@ public:
 
 	UWolfAbilitySystemComponent* GetASC();
 	
+	template <class T>
+	const FCombatModeInfo* FindCombatModeInfo(const T& MatchValue) const;
+
 protected:
 	virtual void BeginPlay() override;
 	virtual void SetupInputComponent() override;
@@ -52,16 +57,16 @@ protected:
 
 private:
 	// --- Input ---
+	UPROPERTY()
+	TObjectPtr<UEnhancedInputLocalPlayerSubsystem> EnhancedInputSubsystem;
+	
 	UPROPERTY(EditDefaultsOnly, Category = "Input")
 	TObjectPtr<UWolfInputConfig> InputConfig;
 
 	UPROPERTY(EditDefaultsOnly, Category = "Combat Mode")
 	TObjectPtr<UDataTable> CombatModeDataTable;
+	TArray<FCombatModeInfo*> CachedCombatModeRows;
 
-	TMap<EInputContext, TObjectPtr<UInputMappingContext>> InputContextMap;
-	TMap<ECombatMode, EInputContext> CombatModeToInputContext;
-	TMap<FGameplayTag, ECombatMode> TagToCombatMode;
-	
 	UPROPERTY(EditAnywhere, Category = "Input")
 	TObjectPtr<UInputAction> MoveAction;
 

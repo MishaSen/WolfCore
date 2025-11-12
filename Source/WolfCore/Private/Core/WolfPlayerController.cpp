@@ -28,16 +28,18 @@ void AWolfPlayerController::BeginPlay()
 {
 	Super::BeginPlay();
 
+	EnhancedInputSubsystem = ULocalPlayer::GetSubsystem<UEnhancedInputLocalPlayerSubsystem>(GetLocalPlayer());
+
 	if (auto* ASC = GetASC())
 	{
 		const FWolfGameplayTags& WolfTags = FWolfGameplayTags::Get();
 
-		ASC->RegisterGameplayTagEvent(WolfTags.InputState_RT, EGameplayTagEventType::NewOrRemoved).AddUObject(
-			this, &ThisClass::OnCombatTagChanged);
-		ASC->RegisterGameplayTagEvent(WolfTags.InputState_TB, EGameplayTagEventType::NewOrRemoved).AddUObject(
-			this, &ThisClass::OnCombatTagChanged);
-		ASC->RegisterGameplayTagEvent(WolfTags.InputState_OOC, EGameplayTagEventType::NewOrRemoved).AddUObject(
-			this, &ThisClass::OnCombatTagChanged);
+		for (const auto InputStateTags = {WolfTags.InputState_RT, WolfTags.InputState_TB, WolfTags.InputState_OOC};
+		     const auto& Tag : InputStateTags)
+		{
+			ASC->RegisterGameplayTagEvent(Tag, EGameplayTagEventType::NewOrRemoved).AddUObject(
+				this, &ThisClass::OnCombatTagChanged);
+		}
 
 		ASC->AddLooseGameplayTag(WolfTags.Event_ModeSwitchReady);
 	}
@@ -81,28 +83,28 @@ void AWolfPlayerController::PostInitializeComponents()
 	}
 
 	static const FString Context(TEXT("CombatModeTable"));
-	TArray<FCombatModeInfo*> AllRows;
-	CombatModeDataTable->GetAllRows(Context, AllRows);
+	TArray<FCombatModeInfo*> Rows;
+	CombatModeDataTable->GetAllRows(Context, Rows);
 
-	for (const auto* Row : AllRows)
+	if (Rows.IsEmpty())
 	{
-		if (!Row) continue;
-		CombatModeToInputContext.Add(Row->Mode, Row->InputContext);
-		InputContextMap.Add(Row->InputContext, Row->InputMapping);
-		TagToCombatMode.Add(Row->Tag, Row->Mode);
+		WOLF_WARN(TEXT("CombatModeTable empty"));
+		return;
 	}
+
+	CachedCombatModeRows = Rows;
+	WOLF_LOG(Log, TEXT("CombatModeTable loaded with %d rows"), CachedCombatModeRows.Num());
 }
 
 void AWolfPlayerController::UpdateInputContext(const EInputContext NewInputContext)
 {
-	auto* EnhancedInputSubsystem = ULocalPlayer::GetSubsystem<UEnhancedInputLocalPlayerSubsystem>(GetLocalPlayer());
 	if (!EnhancedInputSubsystem) return;
 
 	EnhancedInputSubsystem->ClearAllMappings();
 
-	if (const auto InputContext = InputContextMap.Find(NewInputContext); InputContext && *InputContext)
+	if (const auto* Info = FindCombatModeInfo(NewInputContext))
 	{
-		EnhancedInputSubsystem->AddMappingContext(*InputContext, 0);
+		EnhancedInputSubsystem->AddMappingContext(Info->InputMapping, 0);
 	}
 
 	CurrentInputContext = NewInputContext;
@@ -113,9 +115,9 @@ void AWolfPlayerController::OnCombatTagChanged(const FGameplayTag Tag, int32 New
 {
 	if (NewCount <= 0) return;
 
-	if (const auto* CombatMode = TagToCombatMode.Find(Tag))
+	if (const auto* Info = FindCombatModeInfo(Tag))
 	{
-		HandleModeTransition(*CombatMode);
+		HandleModeTransition(Info->Mode);
 	}
 	else
 	{
@@ -125,9 +127,9 @@ void AWolfPlayerController::OnCombatTagChanged(const FGameplayTag Tag, int32 New
 
 void AWolfPlayerController::HandleModeTransition(ECombatMode NewMode)
 {
-	if (const auto NewContext = CombatModeToInputContext.Find(NewMode))
+	if (const auto* Info = FindCombatModeInfo(NewMode))
 	{
-		UpdateInputContext(*NewContext);
+		UpdateInputContext(Info->InputContext);
 		WOLF_INFO(TEXT("Switched to %s mode"), *UEnum::GetValueAsString(NewMode));
 	}
 	else
@@ -156,13 +158,15 @@ void AWolfPlayerController::AbilityInputTagHeld(const FGameplayTag InputTag)
 
 void AWolfPlayerController::Move(const FInputActionValue& Value)
 {
-	const FVector2D MovementVector = Value.Get<FVector2D>();
-	const FRotator Rotation = GetControlRotation();
-	const FRotator YawRotation(0, Rotation.Yaw, 0);
-	const FVector ForwardDirection = FRotationMatrix(YawRotation).GetUnitAxis(EAxis::X);
-	const FVector RightDirection = FRotationMatrix(YawRotation).GetUnitAxis(EAxis::Y);
+	const FRotator YawRotation(0, GetControlRotation().Yaw, 0);
+	const FRotationMatrix RotationMatrix(YawRotation);
 
-	if (ACharacter* ControlledCharacter = GetCharacter())
+	const auto ForwardDirection = RotationMatrix.GetUnitAxis(EAxis::X);
+	const auto RightDirection = RotationMatrix.GetUnitAxis(EAxis::Y);
+
+	const auto MovementVector = Value.Get<FVector2D>();
+
+	if (auto* ControlledCharacter = GetCharacter())
 	{
 		ControlledCharacter->AddMovementInput(ForwardDirection, MovementVector.Y);
 		ControlledCharacter->AddMovementInput(RightDirection, MovementVector.X);
@@ -171,8 +175,8 @@ void AWolfPlayerController::Move(const FInputActionValue& Value)
 
 void AWolfPlayerController::Look(const FInputActionValue& Value)
 {
-	const FVector2D LookVector = Value.Get<FVector2D>();
-	if (ACharacter* ControlledCharacter = GetCharacter())
+	const auto LookVector = Value.Get<FVector2D>();
+	if (auto* ControlledCharacter = GetCharacter())
 	{
 		ControlledCharacter->AddControllerYawInput(LookVector.X);
 		ControlledCharacter->AddControllerPitchInput(LookVector.Y);
@@ -190,4 +194,38 @@ UWolfAbilitySystemComponent* AWolfPlayerController::GetASC()
 		}
 	}
 	return WolfASC;
+}
+
+template<typename T>
+const FCombatModeInfo* AWolfPlayerController::FindCombatModeInfo(const T& MatchValue) const
+{
+	if (!CombatModeDataTable) return nullptr;
+
+	static const FString Context (TEXT("CombatModeLookup"));
+	TArray<FCombatModeInfo*> Rows;
+	CombatModeDataTable->GetAllRows(Context, Rows);
+
+	for (const auto* Row : Rows)
+	{
+		if (!Row) continue;
+
+		if constexpr (std::is_same_v<T, FGameplayTag>)
+		{
+			if (Row->Tag == MatchValue) return Row;
+		}
+		else if constexpr (std::is_same_v<T, ECombatMode>)
+		{
+			if (Row->Mode == MatchValue) return Row;
+		}
+		else if constexpr (std::is_same_v<T, EInputContext>)
+		{
+			if (Row->InputContext == MatchValue) return Row;
+		}
+		else if constexpr (std::is_same_v<T, TObjectPtr<UInputMappingContext>>)
+		{
+			if (Row->InputMapping == MatchValue) return Row;
+		}
+	}
+	
+	return nullptr;
 }
