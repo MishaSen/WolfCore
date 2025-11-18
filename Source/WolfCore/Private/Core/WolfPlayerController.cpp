@@ -196,36 +196,40 @@ UWolfAbilitySystemComponent* AWolfPlayerController::GetASC()
 	return WolfASC;
 }
 
-template<typename T>
+template <typename T>
 const FCombatModeInfo* AWolfPlayerController::FindCombatModeInfo(const T& MatchValue) const
 {
 	if (!CombatModeDataTable) return nullptr;
+	if (CachedCombatModeRows.IsEmpty()) return nullptr;
 
-	static const FString Context (TEXT("CombatModeLookup"));
-	TArray<FCombatModeInfo*> Rows;
-	CombatModeDataTable->GetAllRows(Context, Rows);
-
-	for (const auto* Row : Rows)
+	auto Matches = [&](const FCombatModeInfo* Row)
 	{
-		if (!Row) continue;
-
 		if constexpr (std::is_same_v<T, FGameplayTag>)
 		{
-			if (Row->Tag == MatchValue) return Row;
+			return Row->Tag == MatchValue;
 		}
 		else if constexpr (std::is_same_v<T, ECombatMode>)
 		{
-			if (Row->Mode == MatchValue) return Row;
+			return Row->Mode == MatchValue;
 		}
 		else if constexpr (std::is_same_v<T, EInputContext>)
 		{
-			if (Row->InputContext == MatchValue) return Row;
+			return Row->InputContext == MatchValue;
 		}
 		else if constexpr (std::is_same_v<T, TObjectPtr<UInputMappingContext>>)
 		{
-			if (Row->InputMapping == MatchValue) return Row;
+			return Row->InputMapping == MatchValue;
 		}
+		else
+		{
+			return false;
+		}
+	};
+
+	for (const auto* Row : CachedCombatModeRows)
+	{
+		if (Row && Matches(Row)) return Row;
 	}
-	
+
 	return nullptr;
 }

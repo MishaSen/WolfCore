@@ -23,6 +23,6 @@ struct FCombatModeInfo : public FTableRowBase
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly)
 	FGameplayTag Tag;
 
-	UPROPERTY(EditAnywhere, BlueprintReadOnly)
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly)
 	TObjectPtr<UInputMappingContext> InputMapping;
 };
