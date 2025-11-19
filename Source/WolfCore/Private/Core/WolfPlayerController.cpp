@@ -26,10 +26,8 @@ void AWolfPlayerController::BeginPlay()
 {
 	Super::BeginPlay();
 
-	EnhancedInputSubsystem = ULocalPlayer::GetSubsystem<UEnhancedInputLocalPlayerSubsystem>(GetLocalPlayer());
-
+	if (!EnhancedInputSubsystem) EnhancedInputSubsystem = GetEnhancedInputSubsystem();
 	if (!WolfASC) WolfASC = GetASC();
-	if (!WolfASC) return;
 
 	const FWolfGameplayTags& WolfTags = FWolfGameplayTags::Get();
 
@@ -78,7 +76,6 @@ void AWolfPlayerController::PostInitializeComponents()
 void AWolfPlayerController::OnCombatTagChanged(const FGameplayTag Tag, int32 NewCount)
 {
 	if (NewCount <= 0) return;
-	if (!EnhancedInputSubsystem) return;
 
 	const auto TagName = Tag.ToString();
 
@@ -150,4 +147,18 @@ UWolfAbilitySystemComponent* AWolfPlayerController::GetASC()
 	}
 
 	return WolfASC;
+}
+
+UEnhancedInputLocalPlayerSubsystem* AWolfPlayerController::GetEnhancedInputSubsystem()
+{
+	if (EnhancedInputSubsystem) return EnhancedInputSubsystem;
+	
+	EnhancedInputSubsystem = ULocalPlayer::GetSubsystem<UEnhancedInputLocalPlayerSubsystem>(GetLocalPlayer());
+
+	if (!EnhancedInputSubsystem)
+	{
+		WOLF_ERROR(TEXT("Failed to get EnhancedInputSubsystem from local player %s"), *GetLocalPlayer()->GetName());
+	}
+
+	return EnhancedInputSubsystem;
 }

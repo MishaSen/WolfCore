@@ -66,6 +66,9 @@ private:
 public:
 	UWolfAbilitySystemComponent* GetASC();
 
+private:
+	UEnhancedInputLocalPlayerSubsystem* GetEnhancedInputSubsystem();
+
 #pragma endregion
 	
 #pragma region Variables
