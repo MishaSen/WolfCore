@@ -22,13 +22,6 @@ class UInputAction;
 /**
  * 
  */
-UENUM(BlueprintType)
-enum class EInputContext : uint8
-{
-	OutOfCombat,
-	InCombatRT,
-	InCombatTB
-};
 
 UCLASS()
 class WOLFCORE_API AWolfPlayerController : public APlayerController
@@ -66,9 +59,6 @@ private:
 private:
 	void OnCombatTagChanged(const FGameplayTag Tag, int32 NewCount);
 
-	template <class T>
-	const FCombatModeInfo* FindCombatModeInfo(const T& MatchValue) const;
-
 #pragma endregion
 
 #pragma region Accessors / Helpers
@@ -89,6 +79,9 @@ private:
 	UPROPERTY(EditDefaultsOnly, Category = "Input")
 	TObjectPtr<UWolfInputConfig> InputConfig;
 
+	UPROPERTY(EditDefaultsOnly, Category = "Input")
+	TMap<FGameplayTag, TObjectPtr<UInputMappingContext>> CombatModeMappings;
+
 	// Input Actions
 
 	UPROPERTY(EditAnywhere, Category = "Input")
@@ -97,17 +90,6 @@ private:
 	UPROPERTY(EditAnywhere, Category = "Input")
 	TObjectPtr<UInputAction> LookAction;
 	
-	// Combat Mode Data / Mapping
-
-public:
-	EInputContext CurrentInputContext;
-
-private:
-	UPROPERTY(EditDefaultsOnly, Category = "Combat Mode")
-	TObjectPtr<UDataTable> CombatModeDataTable;
-	
-	TArray<FCombatModeInfo*> CachedCombatModeRows;
-
 	// Ability System
 	
 	UPROPERTY()

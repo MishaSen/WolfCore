@@ -12,11 +12,8 @@
 #include "Debug/WolfDebug.h"
 #include "GameFramework/Character.h"
 #include "WolfCore/Public/Input/WolfInputComponent.h"
-#include "CombatMode.h"
-#include "Core/CombatModeData.h"
-#include "Core/CombatModeData.h"
 
-AWolfPlayerController::AWolfPlayerController(): CurrentInputContext(EInputContext::OutOfCombat)
+AWolfPlayerController::AWolfPlayerController()
 {
 }
 
@@ -76,53 +73,25 @@ void AWolfPlayerController::SetupInputComponent()
 void AWolfPlayerController::PostInitializeComponents()
 {
 	Super::PostInitializeComponents();
-
-	if (!CombatModeDataTable)
-	{
-		WOLF_WARN(TEXT("No CombatModeDataTable set for %s"), *GetWorld()->GetName());
-		return;
-	}
-
-	static const FString Context(TEXT("CombatModeTable"));
-	TArray<FCombatModeInfo*> Rows;
-	CombatModeDataTable->GetAllRows(Context, Rows);
-
-	if (Rows.IsEmpty())
-	{
-		WOLF_WARN(TEXT("CombatModeTable empty"));
-		return;
-	}
-
-	CachedCombatModeRows = Rows;
-	WOLF_LOG(Log, TEXT("CombatModeTable loaded with %d rows"), CachedCombatModeRows.Num());
 }
 
 void AWolfPlayerController::OnCombatTagChanged(const FGameplayTag Tag, int32 NewCount)
 {
 	if (NewCount <= 0) return;
-
-	const auto TagName = Tag.ToString();
-	const auto* Info = FindCombatModeInfo(Tag);
-	if (!Info)
-	{
-		WOLF_WARN(TEXT("No InputContext mapped for CombatMode %s"), *TagName);
-		return;
-	}
-
 	if (!EnhancedInputSubsystem) return;
 
-	EnhancedInputSubsystem->ClearAllMappings();
+	const auto TagName = Tag.ToString();
 
-	if (const auto IMC = Info->InputMapping)
+	if (const auto* IMC = CombatModeMappings.Find(Tag))
 	{
-		EnhancedInputSubsystem->AddMappingContext(IMC, 0);
+		EnhancedInputSubsystem->ClearAllMappings();
+		EnhancedInputSubsystem->AddMappingContext(*IMC, 0);
+		WOLF_INFO(TEXT("Switched to %s mode"), *TagName);
 	}
 	else
 	{
-		WOLF_WARN(TEXT("No InputMapping set for CombatMode %s"), *TagName);
+		WOLF_WARN(TEXT("No InputMapping set for CombatModeTag %s"), *TagName);
 	}
-
-	WOLF_INFO(TEXT("Switched to %s mode"), *TagName);
 }
 
 void AWolfPlayerController::AbilityInputTagPressed(const FGameplayTag InputTag)
@@ -181,42 +150,4 @@ UWolfAbilitySystemComponent* AWolfPlayerController::GetASC()
 	}
 
 	return WolfASC;
-}
-
-template <typename T>
-const FCombatModeInfo* AWolfPlayerController::FindCombatModeInfo(const T& MatchValue) const
-{
-	if (!CombatModeDataTable) return nullptr;
-	if (CachedCombatModeRows.IsEmpty()) return nullptr;
-
-	auto Matches = [&](const FCombatModeInfo* Row)
-	{
-		if constexpr (std::is_same_v<T, FGameplayTag>)
-		{
-			return Row->Tag == MatchValue;
-		}
-		else if constexpr (std::is_same_v<T, ECombatMode>)
-		{
-			return Row->Mode == MatchValue;
-		}
-		else if constexpr (std::is_same_v<T, EInputContext>)
-		{
-			return Row->InputContext == MatchValue;
-		}
-		else if constexpr (std::is_same_v<T, UInputMappingContext*>)
-		{
-			return Row->InputMapping == MatchValue;
-		}
-		else
-		{
-			return false;
-		}
-	};
-
-	for (const auto* Row : CachedCombatModeRows)
-	{
-		if (Row && Matches(Row)) return Row;
-	}
-
-	return nullptr;
 }
