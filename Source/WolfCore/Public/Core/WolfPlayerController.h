@@ -64,11 +64,7 @@ private:
 #pragma region Combat Mode / Input Context Logic
 
 private:
-	void UpdateInputContext(const EInputContext NewInputContext);
 	void OnCombatTagChanged(const FGameplayTag Tag, int32 NewCount);
-	
-	UFUNCTION()
-	void ApplyCombatMode(ECombatMode NewMode);
 
 	template <class T>
 	const FCombatModeInfo* FindCombatModeInfo(const T& MatchValue) const;

@@ -97,46 +97,32 @@ void AWolfPlayerController::PostInitializeComponents()
 	WOLF_LOG(Log, TEXT("CombatModeTable loaded with %d rows"), CachedCombatModeRows.Num());
 }
 
-void AWolfPlayerController::UpdateInputContext(const EInputContext NewInputContext)
-{
-	if (!EnhancedInputSubsystem) return;
-
-	EnhancedInputSubsystem->ClearAllMappings();
-
-	if (const auto* Info = FindCombatModeInfo(NewInputContext))
-	{
-		EnhancedInputSubsystem->AddMappingContext(Info->InputMapping, 0);
-	}
-
-	CurrentInputContext = NewInputContext;
-	WOLF_INFO(TEXT("Updated Input Context to %s"), *UEnum::GetValueAsString(CurrentInputContext));
-}
-
 void AWolfPlayerController::OnCombatTagChanged(const FGameplayTag Tag, int32 NewCount)
 {
 	if (NewCount <= 0) return;
 
-	if (const auto* Info = FindCombatModeInfo(Tag))
+	const auto TagName = Tag.ToString();
+	const auto* Info = FindCombatModeInfo(Tag);
+	if (!Info)
 	{
-		ApplyCombatMode(Info->Mode);
+		WOLF_WARN(TEXT("No InputContext mapped for CombatMode %s"), *TagName);
+		return;
 	}
-	else
-	{
-		WOLF_WARN(TEXT("No CombatMode mapped for GameplayTag %s"), *Tag.ToString());
-	}
-}
 
-void AWolfPlayerController::ApplyCombatMode(ECombatMode NewMode)
-{
-	if (const auto* Info = FindCombatModeInfo(NewMode))
+	if (!EnhancedInputSubsystem) return;
+
+	EnhancedInputSubsystem->ClearAllMappings();
+
+	if (const auto IMC = Info->InputMapping)
 	{
-		UpdateInputContext(Info->InputContext);
-		WOLF_INFO(TEXT("Switched to %s mode"), *UEnum::GetValueAsString(NewMode));
+		EnhancedInputSubsystem->AddMappingContext(IMC, 0);
 	}
 	else
 	{
-		WOLF_WARN(TEXT("No InputContext mapped for CombatMode %s"), *UEnum::GetValueAsString(NewMode));
+		WOLF_WARN(TEXT("No InputMapping set for CombatMode %s"), *TagName);
 	}
+
+	WOLF_INFO(TEXT("Switched to %s mode"), *TagName);
 }
 
 void AWolfPlayerController::AbilityInputTagPressed(const FGameplayTag InputTag)
