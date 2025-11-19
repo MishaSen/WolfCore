@@ -14,6 +14,7 @@
 #include "WolfCore/Public/Input/WolfInputComponent.h"
 #include "CombatMode.h"
 #include "Core/CombatModeData.h"
+#include "Core/CombatModeData.h"
 
 AWolfPlayerController::AWolfPlayerController(): CurrentInputContext(EInputContext::OutOfCombat)
 {
@@ -30,45 +31,45 @@ void AWolfPlayerController::BeginPlay()
 
 	EnhancedInputSubsystem = ULocalPlayer::GetSubsystem<UEnhancedInputLocalPlayerSubsystem>(GetLocalPlayer());
 
-	if (auto* ASC = GetASC())
+	if (!WolfASC) WolfASC = GetASC();
+	if (!WolfASC) return;
+
+	const FWolfGameplayTags& WolfTags = FWolfGameplayTags::Get();
+
+	for (const auto InputStateTags = {WolfTags.InputState_RT, WolfTags.InputState_TB, WolfTags.InputState_OOC};
+	     const auto& Tag : InputStateTags)
 	{
-		const FWolfGameplayTags& WolfTags = FWolfGameplayTags::Get();
-
-		for (const auto InputStateTags = {WolfTags.InputState_RT, WolfTags.InputState_TB, WolfTags.InputState_OOC};
-		     const auto& Tag : InputStateTags)
-		{
-			ASC->RegisterGameplayTagEvent(Tag, EGameplayTagEventType::NewOrRemoved).AddUObject(
-				this, &ThisClass::OnCombatTagChanged);
-		}
-
-		ASC->AddLooseGameplayTag(WolfTags.Event_ModeSwitchReady);
+		WolfASC->RegisterGameplayTagEvent(Tag, EGameplayTagEventType::NewOrRemoved).AddUObject(
+			this, &ThisClass::OnCombatTagChanged);
 	}
+
+	WolfASC->AddLooseGameplayTag(WolfTags.Event_ModeSwitchReady);
 }
 
 void AWolfPlayerController::SetupInputComponent()
 {
 	Super::SetupInputComponent();
 
-	if (auto* WolfInputComponent = CastChecked<UWolfInputComponent>(InputComponent))
+	auto* WolfInputComponent = CastChecked<UWolfInputComponent>(InputComponent);
+	if (!WolfInputComponent) return;
+
+	auto BindInputAction = [&](UInputAction* Action, auto Method)
 	{
-		if (MoveAction)
-		{
-			WolfInputComponent->BindAction(MoveAction, ETriggerEvent::Triggered, this, &ThisClass::Move);
-		}
-		if (LookAction)
-		{
-			WolfInputComponent->BindAction(LookAction, ETriggerEvent::Triggered, this, &ThisClass::Look);
-		}
-		if (InputConfig)
-		{
-			WolfInputComponent->BindAbilityActions(
-				InputConfig,
-				this,
-				&ThisClass::AbilityInputTagPressed,
-				&ThisClass::AbilityInputTagReleased,
-				&ThisClass::AbilityInputTagHeld
-			);
-		}
+		if (Action) WolfInputComponent->BindAction(Action, ETriggerEvent::Triggered, this, Method);
+	};
+
+	BindInputAction(MoveAction, &ThisClass::Move);
+	BindInputAction(LookAction, &ThisClass::Look);
+
+	if (InputConfig)
+	{
+		WolfInputComponent->BindAbilityActions(
+			InputConfig,
+			this,
+			&ThisClass::AbilityInputTagPressed,
+			&ThisClass::AbilityInputTagReleased,
+			&ThisClass::AbilityInputTagHeld
+		);
 	}
 }
 
@@ -117,7 +118,7 @@ void AWolfPlayerController::OnCombatTagChanged(const FGameplayTag Tag, int32 New
 
 	if (const auto* Info = FindCombatModeInfo(Tag))
 	{
-		HandleModeTransition(Info->Mode);
+		ApplyCombatMode(Info->Mode);
 	}
 	else
 	{
@@ -125,7 +126,7 @@ void AWolfPlayerController::OnCombatTagChanged(const FGameplayTag Tag, int32 New
 	}
 }
 
-void AWolfPlayerController::HandleModeTransition(ECombatMode NewMode)
+void AWolfPlayerController::ApplyCombatMode(ECombatMode NewMode)
 {
 	if (const auto* Info = FindCombatModeInfo(NewMode))
 	{
@@ -185,14 +186,14 @@ void AWolfPlayerController::Look(const FInputActionValue& Value)
 
 UWolfAbilitySystemComponent* AWolfPlayerController::GetASC()
 {
-	if (WolfASC == nullptr)
+	if (WolfASC) return WolfASC;
+
+	if (ACharacter* ControlledCharacter = GetCharacter())
 	{
-		if (ACharacter* ControlledCharacter = GetCharacter())
-		{
-			WolfASC = Cast<UWolfAbilitySystemComponent>(
-				UAbilitySystemBlueprintLibrary::GetAbilitySystemComponent(ControlledCharacter));
-		}
+		WolfASC = Cast<UWolfAbilitySystemComponent>(
+			UAbilitySystemBlueprintLibrary::GetAbilitySystemComponent(ControlledCharacter));
 	}
+
 	return WolfASC;
 }
 
@@ -216,7 +217,7 @@ const FCombatModeInfo* AWolfPlayerController::FindCombatModeInfo(const T& MatchV
 		{
 			return Row->InputContext == MatchValue;
 		}
-		else if constexpr (std::is_same_v<T, TObjectPtr<UInputMappingContext>>)
+		else if constexpr (std::is_same_v<T, UInputMappingContext*>)
 		{
 			return Row->InputMapping == MatchValue;
 		}
