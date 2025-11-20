@@ -152,7 +152,7 @@ UWolfAbilitySystemComponent* AWolfPlayerController::GetASC()
 UEnhancedInputLocalPlayerSubsystem* AWolfPlayerController::GetEnhancedInputSubsystem()
 {
 	if (EnhancedInputSubsystem) return EnhancedInputSubsystem;
-	
+
 	EnhancedInputSubsystem = ULocalPlayer::GetSubsystem<UEnhancedInputLocalPlayerSubsystem>(GetLocalPlayer());
 
 	if (!EnhancedInputSubsystem)
