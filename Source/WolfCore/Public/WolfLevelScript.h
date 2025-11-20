@@ -3,20 +3,20 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "CombatMode.h"
-#include "Engine/DataAsset.h"
-#include "LevelCombatMode.generated.h"
+#include "GameplayTagContainer.h"
+#include "Engine/LevelScriptActor.h"
+#include "WolfLevelScript.generated.h"
 
 enum class ECombatMode : uint8;
 /**
  * 
  */
 UCLASS()
-class WOLFCORE_API ULevelCombatMode : public UDataAsset
+class WOLFCORE_API AWolfLevelScript : public ALevelScriptActor
 {
 	GENERATED_BODY()
 
 public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Combat Mode")
-	ECombatMode DefaultMode = ECombatMode::OOC;
+	FGameplayTag StartingCombatTag;
 };

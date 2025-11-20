@@ -4,7 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "AbilitySystemComponent.h"
-#include "CombatMode.h"
+#include "Core/WolfGameplayTags.h"
 #include "Subsystems/WorldSubsystem.h"
 #include "CombatModeSubsystem.generated.h"
 
@@ -18,15 +18,22 @@ class WOLFCORE_API UCombatModeSubsystem : public UWorldSubsystem
 	GENERATED_BODY()
 
 public:
-	void SetCombatMode(ECombatMode NewMode);
-	ECombatMode GetCombatMode() const { return CurrentMode; }
+	void SetMode(FGameplayTag NewMode);
+	void SwitchCombatMode();
+	
+	FGameplayTag GetCombatMode() const { return CurrentMode; }
+
+	virtual void OnWorldBeginPlay(UWorld& InWorld) override;
 
 private:
-	ECombatMode CurrentMode = ECombatMode::RT;
+	FGameplayTag CurrentMode;
+
+	FWolfGameplayTags WolfTag;
+
+	UPROPERTY()
+	UAbilitySystemComponent* PlayerASC;
+	
 	TArray<TScriptInterface<ICombatModeListener>> RegisteredListeners;
-	
-	void ApplyModeToASC(ECombatMode Mode);
-	
+
 	UAbilitySystemComponent* GetPlayerASC() const;
-	FGameplayTag GetTagForMode(ECombatMode Mode) const;
 };

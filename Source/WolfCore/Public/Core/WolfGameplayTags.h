@@ -26,6 +26,7 @@ struct FWolfGameplayTags
 	FGameplayTag Input_Switch;
 
 	// --- Input State Tags ---
+	FGameplayTag InputState;
 	FGameplayTag InputState_RT;
 	FGameplayTag InputState_TB;
 	FGameplayTag InputState_OOC;

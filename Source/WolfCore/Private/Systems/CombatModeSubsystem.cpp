@@ -4,72 +4,86 @@
 #include "Systems/CombatModeSubsystem.h"
 
 #include "AbilitySystemBlueprintLibrary.h"
+#include "GameFramework/PlayerController.h"
+#include "GameFramework/Pawn.h"
 #include "AbilitySystemComponent.h"
+#include "WolfLevelScript.h"
 #include "Core/WolfGameplayTags.h"
 #include "Debug/WolfDebug.h"
 
-void UCombatModeSubsystem::SetCombatMode(ECombatMode NewMode)
+void UCombatModeSubsystem::SetMode(FGameplayTag NewMode)
 {
-	if (NewMode == CurrentMode)
+	if (CurrentMode == NewMode)
 	{
-		WOLF_INFO(TEXT("CombatMode already set to %s"), *UEnum::GetValueAsString(NewMode));
-	}
-
-	CurrentMode = NewMode;
-	ApplyModeToASC(NewMode);
-
-	WOLF_INFO(TEXT("CombatMode set to %s"), *UEnum::GetValueAsString(NewMode));
-}
-
-void UCombatModeSubsystem::ApplyModeToASC(ECombatMode Mode)
-{
-	auto* ASC = GetPlayerASC();
-	if (!ASC)
-	{
-		WOLF_WARN(TEXT("No ASC found for player"));
+		WOLF_LOG(Log, TEXT("Current Mode is already set to %s"), *NewMode.ToString());
 		return;
 	}
+	
+	CurrentMode = NewMode;
+	WOLF_LOG(Log, TEXT("Current Mode set to %s"), *NewMode.ToString());
 
-	for (const auto& Tags = FWolfGameplayTags::Get();
-	     const auto& TagToRemove : {Tags.InputState_RT, Tags.InputState_TB, Tags.InputState_OOC})
+	if (PlayerASC)
 	{
-		ASC->RemoveLooseGameplayTag(TagToRemove);
+		WOLF_LOG(Log, TEXT("PlayerASC found, clearing old tags"));
 	}
 
-	if (const auto TagToAdd = GetTagForMode(Mode); TagToAdd.IsValid())
+	FGameplayTagContainer TagsToRemove;
+	TagsToRemove.AddTag(WolfTag.InputState_RT);
+	TagsToRemove.AddTag(WolfTag.InputState_TB);
+	TagsToRemove.AddTag(WolfTag.InputState_OOC);
+
+	for (const auto& Tag : TagsToRemove)
 	{
-		ASC->AddLooseGameplayTag(TagToAdd);
-		WOLF_LOG(Log, TEXT("Applied mode tag %s to ASC"), *TagToAdd.ToString());
+		if (!Tag.MatchesTag(WolfTag.InputState)) continue;
+
+		if (PlayerASC->HasMatchingGameplayTag(Tag))
+		{
+			PlayerASC->RemoveLooseGameplayTag(Tag);
+			
+			WOLF_INFO(TEXT("CombatMode cleared from %s"), *Tag.ToString());
+		}
+	}
+
+	PlayerASC->AddLooseGameplayTag(NewMode);
+	WOLF_INFO(TEXT("CombatMode set to %s"), *NewMode.ToString());
+}
+
+void UCombatModeSubsystem::SwitchCombatMode()
+{
+	const auto NewMode = CurrentMode == WolfTag.InputState_RT
+		                     ? WolfTag.InputState_TB
+		                     : WolfTag.InputState_RT;
+
+	SetMode(NewMode);
+}
+
+void UCombatModeSubsystem::OnWorldBeginPlay(UWorld& InWorld)
+{
+	Super::OnWorldBeginPlay(InWorld);
+
+	WolfTag = FWolfGameplayTags::Get();
+	PlayerASC = GetPlayerASC();
+
+	const auto* LevelScript = Cast<AWolfLevelScript>(InWorld.GetLevelScriptActor());
+	if (!LevelScript)
+	{
+		WOLF_ERROR(TEXT("Error: LevelScript not found."));
+		return;
+	}
+	else
+	{
+		WOLF_INFO( TEXT( "LevelScript found: %s" ), *LevelScript->GetName());
+		SetMode(LevelScript->StartingCombatTag);
 	}
 }
 
 UAbilitySystemComponent* UCombatModeSubsystem::GetPlayerASC() const
 {
-	if (!GetWorld())
-	{
-		WOLF_WARN(TEXT("Invalid World"));
-		return nullptr;
-	}
+	const auto* PC = GetWorld()->GetFirstPlayerController();
+	if (!PC) return nullptr;
 
-	if (const auto* PC = GetWorld()->GetFirstPlayerController())
-	{
-		if (APawn* Pawn = PC->GetPawn())
-		{
-			return UAbilitySystemBlueprintLibrary::GetAbilitySystemComponent(Pawn);
-		}
-	}
-	WOLF_WARN(TEXT("GetPlayerASC returned nullptr"));
-	return nullptr;
-}
+	APawn* Pawn = PC->GetPawn();
+	if (!Pawn) return nullptr;
 
-FGameplayTag UCombatModeSubsystem::GetTagForMode(ECombatMode Mode) const
-{
-	const FWolfGameplayTags& Tags = FWolfGameplayTags::Get();
-	switch (Mode)
-	{
-	case ECombatMode::RT: return Tags.InputState_RT;
-	case ECombatMode::TB: return Tags.InputState_TB;
-	case ECombatMode::OOC: return Tags.InputState_OOC;
-	default: return FGameplayTag();
-	}
+	return UAbilitySystemBlueprintLibrary::GetAbilitySystemComponent(Pawn);
 }

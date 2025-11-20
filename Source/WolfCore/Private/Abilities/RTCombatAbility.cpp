@@ -17,12 +17,6 @@ void URTCombatAbility::ActivateAbility(const FGameplayAbilitySpecHandle Handle,
 	Super::ActivateAbility(Handle, ActorInfo, ActivationInfo, TriggerEventData);
 
 	CachedWorld = GetWorld();
-	if (const auto* CombatModeSubsystem = CachedWorld->GetSubsystem<UCombatModeSubsystem>();
-		!CachedWorld || !CombatModeSubsystem || CombatModeSubsystem->GetCombatMode() != ECombatMode::RT)
-	{
-		EndAbility(Handle, ActorInfo, ActivationInfo, true, true);
-		return;
-	}
 
 	if (AttackMontage)
 	{
