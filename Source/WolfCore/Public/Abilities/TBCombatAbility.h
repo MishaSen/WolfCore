@@ -6,7 +6,7 @@
 #include "BaseCombatAbility.h"
 #include "TBCombatAbility.generated.h"
 
-UENUM()
+UENUM(meta = (ScriptName = "CombatPeriodEnum"))
 enum class EPeriod : uint8
 {
 	MoveTo,
@@ -15,7 +15,7 @@ enum class EPeriod : uint8
 	Recovery
 };
 
-USTRUCT(BlueprintType)
+USTRUCT(BlueprintType, meta = (ScriptName = "CombatPeriodStruct"))
 struct FPeriod
 {
 	GENERATED_BODY()
