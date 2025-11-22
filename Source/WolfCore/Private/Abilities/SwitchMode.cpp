@@ -22,4 +22,5 @@ void USwitchMode::ActivateAbility(const FGameplayAbilitySpecHandle Handle,
 	if (!CombatModeSubsystem) return;
 
 	CombatModeSubsystem->SwitchCombatMode();
+	EndAbility(Handle, ActorInfo, ActivationInfo, true, false);
 }
