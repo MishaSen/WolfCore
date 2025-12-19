@@ -1,5 +1,4 @@
 // Fill out your copyright notice in the Description page of Project Settings.
 
 
-#include "WolfCore/Public/Presage/ActorState.h"
-
+#include "AbilitySystem/WolfPlayerAttributeSet.h"

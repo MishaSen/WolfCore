@@ -16,7 +16,7 @@ AWolfCharacterBase::AWolfCharacterBase()
 	PrimaryActorTick.bCanEverTick = true;
 
 	AbilitySystemComponentClass = UWolfAbilitySystemComponent::StaticClass();
-	AttributeSet = CreateDefaultSubobject<UWolfAttributeSet>("AttributeSet");
+	AttributeSet = CreateDefaultSubobject<UWolfAttributeSetBase>("AttributeSet");
 
 	bUseControllerRotationPitch = false;
 	bUseControllerRotationYaw = true;

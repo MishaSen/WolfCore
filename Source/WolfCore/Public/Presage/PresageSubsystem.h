@@ -11,7 +11,7 @@
 
 class AWolfCharacterBase;
 struct FPresageAbilityRequest;
-struct FActorState;
+struct FActorSnapshot;
 struct FGameplayAbilitySpecHandle;
 class UGameplayAbility;
 class UAbilitySystemComponent;
@@ -20,22 +20,28 @@ USTRUCT(BlueprintType)
 struct FPresageTimelineEvent
 {
 	GENERATED_BODY()
+	
+	FPresageTimelineEvent() = default;
+	
+	FPresageTimelineEvent(AActor* InInstigator, AActor* InTarget, float InTimeOffset, FGameplayTag InAbilityTag)
+		: Instigator(InInstigator)
+		, Target(InTarget)
+		, TimeOffset(InTimeOffset)
+		, AbilityTag(InAbilityTag)
+	{}
 
 	UPROPERTY(BlueprintReadOnly, Category = "Presage")
-	TObjectPtr<AActor> Instigator = nullptr;
+	TObjectPtr<AActor> Instigator;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Presage")
-	TObjectPtr<AActor> Target = nullptr;
+	TObjectPtr<AActor> Target;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Presage")
-	float TimeOffset = 0.f;
+	float TimeOffset;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Presage")
 	FGameplayTag AbilityTag;
 
-	FPresageTimelineEvent() {}
-	FPresageTimelineEvent(AActor* InInstigator, AActor* InTarget, float InTimeOffset, FGameplayTag InAbilityTag)
-		: Instigator(InInstigator), Target(InTarget), TimeOffset(InTimeOffset), AbilityTag(InAbilityTag) {}
 };
 /**
  *
@@ -78,7 +84,7 @@ public:
 
 protected:
 	UPROPERTY(BlueprintReadOnly, Category = "Presage")
-	TArray<FActorState> OriginalCharacterStates;
+	TArray<FActorSnapshot> OriginalCharacterStates;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Presage", meta=(ClampMin = "0.0", UIMin = "0.0"))
 	float FlowTime = 3.f;
@@ -91,7 +97,7 @@ private:
 	float AccumulatedTime = 0.f;
 
 	void OnFlowTimerTick();
-	void CaptureCharacterStates();
+	void CharacterSnapshot();
 	void RevertCharacterStates();
 	void UpdateTimelinePrediction();
 	bool CheckFutureCollision(AWolfCharacterBase* Attacker, AWolfCharacterBase* Victim, float FutureTime);

@@ -13,7 +13,7 @@
 class UAbilityConfig;
 class UGameplayAbility;
 class UWolfAbilitySystemComponent;
-class UWolfAttributeSet;
+class UWolfAttributeSetBase;
 /**
  * 
  */
@@ -55,7 +55,7 @@ protected:
 	TObjectPtr<UWolfAbilitySystemComponent> ASC;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Ability System")
-	TObjectPtr<UWolfAttributeSet> AttributeSet;
+	TObjectPtr<UWolfAttributeSetBase> AttributeSet;
 
 	UPROPERTY(EditDefaultsOnly, Category = "Abilities")
 	TSubclassOf<UGameplayEffect> DefaultAttributes;
