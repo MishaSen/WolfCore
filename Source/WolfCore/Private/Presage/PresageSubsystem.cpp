@@ -15,6 +15,7 @@
 #include "Core/WolfGameplayTags.h"
 #include "WolfCore/Public/AbilitySystem/WolfAbilitySystemComponent.h"
 #include "TimerManager.h"
+#include "Character/WolfCharacterBase.h"
 
 void UPresageSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {
@@ -118,7 +119,10 @@ void UPresageSubsystem::StartLoop()
 
 	bLoopActive = true;
 	AccumulatedTime = 0.f;
-	CaptureCharacterStates();
+	
+	CaptureCharacterStates(); // 1. Save the present
+	UpdateTimelinePrediction(); // 2. Calculate the future
+	// 3. TODO: Update UI to read 'CurrentPredictedTimeline' and draw icons
 }
 
 void UPresageSubsystem::StopLoop()
@@ -229,4 +233,54 @@ void UPresageSubsystem::RevertCharacterStates()
 			}
 		}
 	}
+}
+
+void UPresageSubsystem::UpdateTimelinePrediction()
+{
+	CurrentPredictedTimeline.Empty();
+
+	const auto StepSize = 0.1f; // How far to look ahead. TODO: Replace with Flow Time attribute.
+
+	TArray<AActor*> AllActors;
+	UGameplayStatics::GetAllActorsOfClass(GetWorld(), AWolfCharacterBase::StaticClass(), AllActors);
+
+	for (auto t = 0.f; t <= FlowTime; t += StepSize)
+	{
+		for (auto* AttackerActor : AllActors)
+		{
+			AWolfCharacterBase* Attacker = Cast<AWolfCharacterBase>(AttackerActor);
+			if (!Attacker) continue;
+
+			auto TimeToHit = Attacker->GetTimeToNextHitImpact();
+
+			if (FMath::IsNearlyEqual(TimeToHit, t, StepSize * 0.f))
+			{
+				for (auto* VictimActor : AllActors)
+				{
+					if (Attacker == VictimActor) continue;
+					auto* Victim = Cast<AWolfCharacterBase>(VictimActor);
+
+					if (CheckFutureCollision(Attacker, Victim, t))
+					{
+						FPresageTimelineEvent NewEvent(Attacker, Victim, t, FGameplayTag::EmptyTag);
+						CurrentPredictedTimeline.Add(NewEvent);
+					}
+				}
+			}
+		}
+	}
+}
+
+bool UPresageSubsystem::CheckFutureCollision(AWolfCharacterBase* Attacker, AWolfCharacterBase* Victim, float FutureTime)
+{
+	auto AttackerTransform = Attacker->GetActorTransform();
+	auto VictimTransform = Victim->GetActorTransform();
+
+	float Radius, HalfHeight;
+	Victim->GetPresageCollisionDimensions(Radius, HalfHeight);
+
+	FVector AttackLocation = AttackerTransform.GetLocation() + AttackerTransform.GetRotation().GetForwardVector() * 100.f;
+	auto Distance = FVector::Dist(AttackLocation, VictimTransform.GetLocation());
+
+	return Distance < Radius + 50.f;
 }

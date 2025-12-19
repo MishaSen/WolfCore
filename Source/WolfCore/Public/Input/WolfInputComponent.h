@@ -25,20 +25,19 @@ public:
 
 		for (const auto& [InputAction, InputTag] : InputConfig->InputActions)
 		{
-			if (InputAction && InputTag.IsValid())
+			if (!(InputAction && InputTag.IsValid())) continue;
+			
+			if (Pressed)
 			{
-				if (Pressed)
-				{
-					BindAction(InputAction, ETriggerEvent::Started, Object, Pressed, InputTag);
-				}
-				if (Released)
-				{
-					BindAction(InputAction, ETriggerEvent::Completed, Object, Released, InputTag);
-				}
-				if (Held)
-				{
-					BindAction(InputAction, ETriggerEvent::Triggered, Object, Held, InputTag);
-				}
+				BindAction(InputAction, ETriggerEvent::Started, Object, Pressed, InputTag);
+			}
+			if (Released)
+			{
+				BindAction(InputAction, ETriggerEvent::Completed, Object, Released, InputTag);
+			}
+			if (Held)
+			{
+				BindAction(InputAction, ETriggerEvent::Triggered, Object, Held, InputTag);
 			}
 		}
 	}

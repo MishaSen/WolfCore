@@ -23,4 +23,8 @@ public:
 	UPROPERTY(BlueprintReadOnly, Category = "Attributes")
 	FGameplayAttributeData FlowGauge;
 	ATTRIBUTE_ACCESSORS_BASIC(UWolfAttributeSet, FlowGauge)
+
+	UPROPERTY(BlueprintReadOnly, Category = "Attributes")
+	FGameplayAttributeData Adrenaline;
+	ATTRIBUTE_ACCESSORS_BASIC(UWolfAttributeSet, Adrenaline)
 };

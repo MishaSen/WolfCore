@@ -42,9 +42,9 @@ void AWolfPlayerController::BeginPlay()
 	WolfASC->AddLooseGameplayTag(WolfTags.Event_ModeSwitchReady);
 	WOLF_LOG(Log, TEXT("Player Controller ready to switch modes"));
 
-	if (auto* CMS = GetWorld()->GetSubsystem<UCombatModeSubsystem>())
+	if (const auto* CMS = GetWorld()->GetSubsystem<UCombatModeSubsystem>())
 	{
-		FGameplayTag CurrentModeTag = CMS->GetCombatMode();
+		const auto CurrentModeTag = CMS->GetCombatMode();
 		OnCombatTagChanged(CurrentModeTag, 1);
 	}
 }

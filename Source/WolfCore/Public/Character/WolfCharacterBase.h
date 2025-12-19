@@ -24,6 +24,22 @@ class WOLFCORE_API AWolfCharacterBase : public ACharacter, public IAbilitySystem
 {
 	GENERATED_BODY()
 
+#pragma region Presage System
+	
+public:
+	UFUNCTION(BlueprintPure, Category = "Wolf|Presage")
+	FTransform GetProjectedTransform(float FutureTimeDelta) const;
+
+	UFUNCTION(BlueprintPure, Category = "Wolf|Presage")
+	float GetTimeToNextHitImpact() const;
+
+	void GetPresageCollisionDimensions(float& OutRadius, float& OutHalfHeight) const;
+
+protected:
+	FTransform ExtractRootMotionAtTime(UAnimMontage* Montage, float Time) const;
+	
+#pragma endregion
+
 public:
 	AWolfCharacterBase();
 	virtual UAbilitySystemComponent* GetAbilitySystemComponent() const override;
