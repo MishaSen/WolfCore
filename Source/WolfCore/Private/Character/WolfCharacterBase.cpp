@@ -3,11 +3,14 @@
 #include "WolfCore/Public/Character/WolfCharacterBase.h"
 
 #include "Abilities/AbilityConfig.h"
+#include "AbilitySystem/WolfAttributeSetBase.h"
 #include "Components/CapsuleComponent.h"
+#include "Core/WolfGameplayTags.h"
 #include "Debug/WolfDebug.h"
 #include "GameFramework/CharacterMovementComponent.h"
+#include "Kismet/GameplayStatics.h"
+#include "Presage/ActorSnapshot.h"
 #include "WolfCore/Public/AbilitySystem/WolfAbilitySystemComponent.h"
-#include "WolfCore/Public/AbilitySystem/WolfAttributeSet.h"
 #include "WolfCore/Public/Presage/PresageAbilityRequest.h"
 #include "WolfCore/Public/Presage/PresageSubsystem.h"
 
@@ -151,7 +154,7 @@ FTransform AWolfCharacterBase::GetProjectedTransform(float FutureTimeDelta) cons
 	FVector ProjectedLocation;
 	auto CurrentTransform = GetActorTransform();
 	auto* AnimInstance = GetMesh() ? GetMesh()->GetAnimInstance() : nullptr;
-	
+
 	if (!AnimInstance || !AnimInstance->IsAnyMontagePlaying())
 	{
 		ProjectedLocation = GetActorLocation() + GetVelocity() * FutureTimeDelta;
@@ -191,7 +194,7 @@ float AWolfCharacterBase::GetTimeToNextHitImpact() const
 			return NotifyEvent.GetTriggerTime() - CurrentMontagePosition;
 		}
 	}
-	
+
 	return -1.f;
 }
 
@@ -214,6 +217,125 @@ FTransform AWolfCharacterBase::ExtractRootMotionAtTime(UAnimMontage* Montage, fl
 	if (!Montage) return FTransform::Identity;
 
 	return Montage->ExtractRootMotionFromRange(0.f, Time);
+}
+
+void AWolfCharacterBase::CreateSnapshot_Implementation(FActorSnapshot& OutSnapshot)
+{
+	// --- 1. Physics Snapshot ---
+	OutSnapshot.Location = GetActorLocation();
+	OutSnapshot.Rotation = GetActorRotation();
+	OutSnapshot.Velocity = GetVelocity();
+
+	if (!GetCharacterMovement()) return;
+	OutSnapshot.MovementMode = GetCharacterMovement()->MovementMode;
+	OutSnapshot.CustomMovementMode = GetCharacterMovement()->CustomMovementMode;
+
+	// --- 2. GAS Snapshot ---
+	if (!ASC) return;
+
+	TArray<FGameplayAttribute> CharAttributes;
+	ASC->GetAllAttributes(CharAttributes);
+	for (const auto& Attribute : CharAttributes)
+	{
+		OutSnapshot.Attributes.Add(Attribute, ASC->GetNumericAttributeBase(Attribute));
+	}
+
+	for (auto ActiveHandles = ASC->GetActiveEffects(FGameplayEffectQuery());
+	     const auto& Handle : ActiveHandles)
+	{
+		if (const auto* Effect = ASC->GetActiveGameplayEffect(Handle))
+		{
+			FStoredEffect StoredEffect;
+			StoredEffect.EffectClass = Effect->Spec.Def.GetClass();
+			StoredEffect.Level = Effect->Spec.GetLevel();
+			StoredEffect.Stacks = Effect->Spec.GetStackCount();
+			StoredEffect.RemainingDuration = Effect->GetDuration() > 0.f
+				                                 ? Effect->GetTimeRemaining(GetWorld()->GetTimeSeconds())
+				                                 : -1.f;
+
+			OutSnapshot.ActiveEffects.Add(StoredEffect);
+		}
+	}
+
+	// --- 3. Animation Snapshot ---
+	const auto* AnimInst = GetMesh()->GetAnimInstance();
+	if (!AnimInst) return;
+
+	if (auto* AnimMontage = AnimInst->GetCurrentActiveMontage())
+	{
+		OutSnapshot.CurrentMontage = AnimMontage;
+		OutSnapshot.MontagePosition = AnimInst->Montage_GetPosition(AnimMontage);
+	}
+}
+
+void AWolfCharacterBase::RestoreSnapshot_Implementation(const FActorSnapshot& InSnapshot)
+{
+	// --- 1. Physics Revert ---
+	SetActorLocationAndRotation
+	(
+		InSnapshot.Location,
+		InSnapshot.Rotation,
+		false,
+		nullptr,
+		ETeleportType::TeleportPhysics
+	);
+
+	if (auto* MoveComp = GetCharacterMovement())
+	{
+		MoveComp->SetMovementMode(InSnapshot.MovementMode, InSnapshot.CustomMovementMode);
+		MoveComp->Velocity = InSnapshot.Velocity;
+		MoveComp->UpdateComponentVelocity();
+	}
+
+	if (auto* PrimitiveComp = Cast<UPrimitiveComponent>(GetRootComponent()))
+	{
+		if (!PrimitiveComp->IsSimulatingPhysics()) return;
+		PrimitiveComp->SetPhysicsLinearVelocity(InSnapshot.Velocity);
+	}
+
+	// --- 2. GAS Revert ---
+	auto* ASC = GetAbilitySystemComponent();
+	if (!ASC) return;
+
+	for (auto& [Attr, AttrValue] : InSnapshot.Attributes)
+	{
+		const auto& Attribute = Attr;
+		const auto AttributeValue = AttrValue;
+
+		if (FMath::IsNearlyEqual(ASC->GetNumericAttributeBase(Attribute), AttributeValue)) continue;
+		ASC->SetNumericAttributeBase(Attribute, AttributeValue);
+	}
+
+	ASC->RemoveActiveEffects(FGameplayEffectQuery());
+	for (const auto& [EffectClass, Level, Stacks, RemainingDuration]
+	     : InSnapshot.ActiveEffects)
+	{
+		if (!EffectClass) continue;
+
+		const auto Context = ASC->MakeEffectContext();
+		auto SpecHandle = ASC->MakeOutgoingSpec(EffectClass, Level, Context);
+
+		if (!SpecHandle.IsValid()) continue;
+
+		SpecHandle.Data->SetStackCount(Stacks);
+
+		if (RemainingDuration > 0.f)
+		{
+			SpecHandle.Data->Duration = RemainingDuration;
+		}
+
+		ASC->ApplyGameplayEffectSpecToSelf(*SpecHandle.Data.Get());
+	}
+
+	// --- 3. Animation Revert ---
+	if (auto* AnimInst = GetMesh()->GetAnimInstance())
+	{
+		AnimInst->StopAllMontages(0.f);
+		if (!InSnapshot.CurrentMontage.IsValid()) return;
+		
+		AnimInst->Montage_Play(InSnapshot.CurrentMontage.Get(), 1.f);
+		AnimInst->Montage_SetPosition(InSnapshot.CurrentMontage.Get(), InSnapshot.MontagePosition);
+	}
 }
 
 #pragma endregion Presage System

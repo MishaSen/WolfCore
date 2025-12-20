@@ -4,6 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "GameplayTagContainer.h"
+#include "Snapshot.h"
 #include "Abilities/GameplayAbilityTypes.h"
 #include "Subsystems/WorldSubsystem.h"
 
@@ -47,7 +48,7 @@ struct FPresageTimelineEvent
  *
  */
 UCLASS()
-class WOLFCORE_API UPresageSubsystem : public UTickableWorldSubsystem
+class WOLFCORE_API UPresageSubsystem : public UTickableWorldSubsystem, public ISnapshot
 {
 	GENERATED_BODY()
 

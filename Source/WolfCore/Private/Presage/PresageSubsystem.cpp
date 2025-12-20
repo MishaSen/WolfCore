@@ -152,178 +152,26 @@ void UPresageSubsystem::CharacterSnapshot()
 {
 	OriginalCharacterStates.Empty();
 
-	TArray<AActor*> Characters;
-	UGameplayStatics::GetAllActorsOfClass(GetWorld(), AWolfCharacterBase::StaticClass(), Characters);
+	TArray<AActor*> Actors;
+	UGameplayStatics::GetAllActorsWithInterface(GetWorld(), USnapshot::StaticClass(), Actors);
 
-	for (AActor* Actor : Characters)
+	for (auto* Actor : Actors)
 	{
-		AWolfCharacterBase* Char = Cast<AWolfCharacterBase>(Actor);
-		if (!Char) continue;
-
 		FActorSnapshot NewSnapshot;
-		NewSnapshot.ActorRef = Char;
 
-		// --- 1. Physics Snapshot ---
-		NewSnapshot.Location = Char->GetActorLocation();
-		NewSnapshot.Rotation = Char->GetActorRotation();
-		NewSnapshot.Velocity = Char->GetVelocity();
+		Execute_CreateSnapshot(Actor, NewSnapshot);
 
-		if (const UCharacterMovementComponent* MoveComp = Char->GetCharacterMovement())
-		{
-			NewSnapshot.MovementMode = MoveComp->MovementMode;
-			NewSnapshot.CustomMovementMode = MoveComp->CustomMovementMode;
-		}
-
-		// --- 2. GAS Snapshot ---
-		auto* ASC = Char->GetAbilitySystemComponent();
-		if (!ASC) continue;
-
-		FGameplayTagContainer CurrentTags;
-		ASC->GetOwnedGameplayTags(CurrentTags);
-		for (const auto& Tag : CurrentTags)
-		{
-			if (Tag.MatchesTag(FWolfGameplayTags::Get().InputState)) continue;
-			NewSnapshot.Tags.AddTag(Tag);
-		}
-
-		TArray<FGameplayAttribute> CharAttributes;
-		ASC->GetAllAttributes(CharAttributes);
-
-		for (const auto& Attribute : CharAttributes)
-		{
-			NewSnapshot.Attributes.Add(Attribute, ASC->GetNumericAttributeBase(Attribute));
-		}
-
-		FGameplayEffectQuery Query;
-
-		for (auto ActiveHandles = ASC->GetActiveEffects(Query);
-		     const auto& Handle : ActiveHandles)
-		{
-			if (const auto* Effect = ASC->GetActiveGameplayEffect(Handle))
-			{
-				FStoredEffect StoredEffect;
-				StoredEffect.EffectClass = Effect->Spec.Def.GetClass();
-				StoredEffect.Level = Effect->Spec.GetLevel();
-				StoredEffect.Stacks = Effect->Spec.GetStackCount();
-				StoredEffect.RemainingDuration = Effect->GetDuration() > 0.f
-					                                 ? Effect->GetTimeRemaining(GetWorld()->GetTimeSeconds())
-					                                 : -1.f;
-
-				NewSnapshot.ActiveEffects.Add(StoredEffect);
-			}
-		}
-
-		// --- 3. Animation Snapshot ---
-		if (const UAnimInstance* AInst = Char->GetMesh()->GetAnimInstance())
-		{
-			if (UAnimMontage* Mon = AInst->GetCurrentActiveMontage())
-			{
-				NewSnapshot.CurrentMontage = Mon;
-				NewSnapshot.MontagePosition = AInst->Montage_GetPosition(Mon);
-			}
-		}
-
+		NewSnapshot.ActorRef = Actor;
 		OriginalCharacterStates.Add(NewSnapshot);
 	}
 }
 
 void UPresageSubsystem::RevertCharacterStates()
 {
-	TArray<AActor*> Characters;
-	UGameplayStatics::GetAllActorsOfClass(GetWorld(), AWolfCharacterBase::StaticClass(), Characters);
-	for (AActor* Actor : Characters)
+	for (const auto& Snapshot : OriginalCharacterStates)
 	{
-		AWolfCharacterBase* Char = Cast<AWolfCharacterBase>(Actor);
-		if (!Char) continue;
-
-		// --- 1. Physics Revert ---
-		const FActorSnapshot* FoundState = OriginalCharacterStates.FindByPredicate([Char](const FActorSnapshot& State)
-		{
-			return State.ActorRef == Char;
-		});
-		if (!FoundState) continue;
-
-		Char->SetActorLocationAndRotation(
-			FoundState->Location,
-			FoundState->Rotation,
-			false,
-			nullptr,
-			ETeleportType::TeleportPhysics
-		);
-
-		if (UCharacterMovementComponent* MoveComp = Char->GetCharacterMovement())
-		{
-			MoveComp->SetMovementMode(FoundState->MovementMode, FoundState->CustomMovementMode);
-			MoveComp->Velocity = FoundState->Velocity;
-			MoveComp->UpdateComponentVelocity();
-		}
-
-		if (UPrimitiveComponent* PrimComp = Cast<UPrimitiveComponent>(Char->GetRootComponent()))
-		{
-			if (PrimComp->IsSimulatingPhysics())
-			{
-				PrimComp->SetPhysicsLinearVelocity(FoundState->Velocity);
-			}
-		}
-
-		// --- 2. GAS Revert ---
-		auto* ASC = Char->GetAbilitySystemComponent();
-		if (!ASC) continue;
-
-		for (auto& [Attr, AttrValue] : FoundState->Attributes)
-		{
-			const auto& Attribute = Attr;
-			const auto AttributeValue = AttrValue;
-
-			if (FMath::IsNearlyEqual(ASC->GetNumericAttributeBase(Attribute), AttributeValue)) continue;
-			ASC->SetNumericAttributeBase(Attribute, AttributeValue);
-		}
-
-		FGameplayTagContainer CurrentTags;
-		ASC->GetOwnedGameplayTags(CurrentTags);
-		for (const auto& Tag : CurrentTags)
-		{
-			if (Tag.MatchesTag(FWolfGameplayTags::Get().InputState)) continue;
-			ASC->RemoveLooseGameplayTag(Tag);
-		}
-
-		ASC->AddLooseGameplayTags(FoundState->Tags);
-
-		ASC->RemoveActiveEffects(FGameplayEffectQuery());
-		for (const auto& [
-			     EffectClass,
-			     Level,
-			     Stacks,
-			     RemainingDuration]
-		     : FoundState->ActiveEffects)
-		{
-			if (!EffectClass) continue;
-
-			const auto Context = ASC->MakeEffectContext();
-			auto SpecHandle = ASC->MakeOutgoingSpec(EffectClass, Level, Context);
-
-			if (!SpecHandle.IsValid()) continue;
-
-			SpecHandle.Data->SetStackCount(Stacks);
-
-			if (RemainingDuration > 0.f)
-			{
-				SpecHandle.Data->Duration = RemainingDuration;
-			}
-
-			ASC->ApplyGameplayEffectSpecToSelf(*SpecHandle.Data.Get());
-		}
-
-		// --- 3. Animation Revert ---
-		if (UAnimInstance* AInst = Char->GetMesh()->GetAnimInstance())
-		{
-			AInst->StopAllMontages(0.f);
-			if (FoundState->CurrentMontage.IsValid())
-			{
-				AInst->Montage_Play(FoundState->CurrentMontage.Get(), 1.f);
-				AInst->Montage_SetPosition(FoundState->CurrentMontage.Get(), FoundState->MontagePosition);
-			}
-		}
+		if (!Snapshot.ActorRef) return;
+		Execute_RestoreSnapshot(Snapshot.ActorRef, Snapshot);
 	}
 }
 
@@ -331,7 +179,7 @@ void UPresageSubsystem::UpdateTimelinePrediction()
 {
 	CurrentPredictedTimeline.Empty();
 
-	const auto StepSize = 0.1f; // How far to look ahead. TODO: Replace with Flow Time attribute.
+	const auto StepSize = 0.1f;
 
 	TArray<AActor*> AllActors;
 	UGameplayStatics::GetAllActorsOfClass(GetWorld(), AWolfCharacterBase::StaticClass(), AllActors);

@@ -7,6 +7,7 @@
 #include "AbilitySystemInterface.h"
 #include "GameplayAbilitySpecHandle.h"
 #include "GameplayTagContainer.h"
+#include "Presage/Snapshot.h"
 
 #include "WolfCharacterBase.generated.h"
 
@@ -20,7 +21,7 @@ class UWolfAttributeSetBase;
 class UGameplayEffect;
 
 UCLASS(Blueprintable, BlueprintType)
-class WOLFCORE_API AWolfCharacterBase : public ACharacter, public IAbilitySystemInterface
+class WOLFCORE_API AWolfCharacterBase : public ACharacter, public IAbilitySystemInterface, public ISnapshot
 {
 	GENERATED_BODY()
 
@@ -37,6 +38,11 @@ public:
 
 protected:
 	FTransform ExtractRootMotionAtTime(UAnimMontage* Montage, float Time) const;
+
+	virtual void CreateSnapshot_Implementation(FActorSnapshot& OutSnapshot) override;
+
+	// NOTE: May need boolean to silence delegates that trigger animations and sounds based on attribute changes
+	virtual void RestoreSnapshot_Implementation(const FActorSnapshot& InSnapshot) override;
 	
 #pragma endregion
 
