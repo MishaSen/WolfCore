@@ -177,7 +177,7 @@ void UPresageSubsystem::UpdateTimelinePrediction()
 {
 	CurrentPredictedTimeline.Empty();
 
-	const auto StepSize = 0.1f;
+	constexpr auto StepSize = 0.1f;
 
 	TArray<AActor*> AllActors;
 	UGameplayStatics::GetAllActorsOfClass(GetWorld(), AWolfCharacterBase::StaticClass(), AllActors);
@@ -191,7 +191,7 @@ void UPresageSubsystem::UpdateTimelinePrediction()
 
 			auto TimeToHit = Attacker->GetTimeToNextHitImpact();
 
-			if (FMath::IsNearlyEqual(TimeToHit, t, StepSize * 0.f))
+			if (FMath::IsNearlyEqual(TimeToHit, t, StepSize * 0.5f))
 			{
 				for (auto* VictimActor : AllActors)
 				{
@@ -211,15 +211,13 @@ void UPresageSubsystem::UpdateTimelinePrediction()
 
 bool UPresageSubsystem::CheckFutureCollision(AWolfCharacterBase* Attacker, AWolfCharacterBase* Victim, float FutureTime)
 {
-	auto AttackerTransform = Attacker->GetActorTransform();
-	auto VictimTransform = Victim->GetActorTransform();
+	const auto AttackerTransform = Attacker->GetProjectedTransform(FutureTime);
 
 	float Radius, HalfHeight;
 	Victim->GetPresageCollisionDimensions(Radius, HalfHeight);
 
-	FVector AttackLocation = AttackerTransform.GetLocation() + AttackerTransform.GetRotation().GetForwardVector() *
-		100.f;
-	auto Distance = FVector::Dist(AttackLocation, VictimTransform.GetLocation());
+	const FVector AttackLocation = AttackerTransform.GetLocation() + AttackerTransform.GetRotation().GetForwardVector() * 100.f;
+	const float Distance = FVector::Dist(AttackLocation, Victim->GetActorLocation());
 
 	return Distance < Radius + 50.f;
 }

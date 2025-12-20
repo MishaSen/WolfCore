@@ -101,5 +101,5 @@ private:
 	void CharacterSnapshot();
 	void RevertCharacterStates();
 	void UpdateTimelinePrediction();
-	bool CheckFutureCollision(AWolfCharacterBase* Attacker, AWolfCharacterBase* Victim, float FutureTime);
+	static bool CheckFutureCollision(AWolfCharacterBase* Attacker, AWolfCharacterBase* Victim, float FutureTime);
 };

@@ -152,7 +152,7 @@ void AWolfCharacterBase::AddCharacterAbilities()
 FTransform AWolfCharacterBase::GetProjectedTransform(float FutureTimeDelta) const
 {
 	FVector ProjectedLocation;
-	auto CurrentTransform = GetActorTransform();
+	const auto CurrentTransform = GetActorTransform();
 	auto* AnimInstance = GetMesh() ? GetMesh()->GetAnimInstance() : nullptr;
 
 	if (!AnimInstance || !AnimInstance->IsAnyMontagePlaying())
@@ -169,12 +169,13 @@ FTransform AWolfCharacterBase::GetProjectedTransform(float FutureTimeDelta) cons
 		return FTransform(GetActorRotation(), ProjectedLocation, GetActorScale3D());
 	}
 
-	auto CurrentMontagePosition = AnimInstance->Montage_GetPosition(CurrentMontage);
-	auto TargetMontagePosition = CurrentMontagePosition + FutureTimeDelta;
+	const auto CurrentMontagePosition = AnimInstance->Montage_GetPosition(CurrentMontage);
+	const auto TargetMontagePosition = CurrentMontagePosition + FutureTimeDelta;
 
-	auto RootOffset = ExtractRootMotionAtTime(CurrentMontage, TargetMontagePosition);
+	const auto RootMotionDelta = CurrentMontage->ExtractRootMotionFromRange(CurrentMontagePosition,
+	                                                                        TargetMontagePosition);
 
-	return RootOffset * CurrentTransform;
+	return RootMotionDelta * CurrentTransform;
 }
 
 float AWolfCharacterBase::GetTimeToNextHitImpact() const
@@ -255,7 +256,7 @@ void AWolfCharacterBase::SnapshotGAS(FActorSnapshot& Snapshot) const
 	}
 
 	for (auto ActiveHandles = ASC->GetActiveEffects(FGameplayEffectQuery());
-		 const auto& Handle : ActiveHandles)
+	     const auto& Handle : ActiveHandles)
 	{
 		if (const auto* Effect = ASC->GetActiveGameplayEffect(Handle))
 		{
@@ -264,8 +265,8 @@ void AWolfCharacterBase::SnapshotGAS(FActorSnapshot& Snapshot) const
 			StoredEffect.Level = Effect->Spec.GetLevel();
 			StoredEffect.Stacks = Effect->Spec.GetStackCount();
 			StoredEffect.RemainingDuration = Effect->GetDuration() > 0.f
-												 ? Effect->GetTimeRemaining(GetWorld()->GetTimeSeconds())
-												 : -1.f;
+				                                 ? Effect->GetTimeRemaining(GetWorld()->GetTimeSeconds())
+				                                 : -1.f;
 
 			Snapshot.ActiveEffects.Add(StoredEffect);
 		}
@@ -325,7 +326,7 @@ void AWolfCharacterBase::RestoreGAS(const FActorSnapshot& Snapshot)
 
 	ASC->RemoveActiveEffects(FGameplayEffectQuery());
 	for (const auto& [EffectClass, Level, Stacks, RemainingDuration]
-		 : Snapshot.ActiveEffects)
+	     : Snapshot.ActiveEffects)
 	{
 		if (!EffectClass) continue;
 
@@ -351,7 +352,7 @@ void AWolfCharacterBase::RestoreAnim(const FActorSnapshot& Snapshot)
 	{
 		AnimInst->StopAllMontages(0.f);
 		if (!Snapshot.CurrentMontage.IsValid()) return;
-		
+
 		AnimInst->Montage_Play(Snapshot.CurrentMontage.Get(), 1.f);
 		AnimInst->Montage_SetPosition(Snapshot.CurrentMontage.Get(), Snapshot.MontagePosition);
 	}
