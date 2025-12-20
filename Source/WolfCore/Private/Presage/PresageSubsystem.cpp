@@ -160,8 +160,6 @@ void UPresageSubsystem::CharacterSnapshot()
 		FActorSnapshot NewSnapshot;
 
 		Execute_CreateSnapshot(Actor, NewSnapshot);
-
-		NewSnapshot.ActorRef = Actor;
 		OriginalCharacterStates.Add(NewSnapshot);
 	}
 }

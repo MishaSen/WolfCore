@@ -43,6 +43,15 @@ protected:
 
 	// NOTE: May need boolean to silence delegates that trigger animations and sounds based on attribute changes
 	virtual void RestoreSnapshot_Implementation(const FActorSnapshot& InSnapshot) override;
+
+	// --- Snapshot Helpers ---
+	void SnapshotPhysics(FActorSnapshot& Snapshot) const;
+	void SnapshotGAS(FActorSnapshot& Snapshot) const;
+	void SnapshotAnim(FActorSnapshot& Snapshot) const;
+
+	void RestorePhysics(const FActorSnapshot& Snapshot);
+	void RestoreGAS(const FActorSnapshot& Snapshot);
+	void RestoreAnim(const FActorSnapshot& Snapshot);
 	
 #pragma endregion
 
