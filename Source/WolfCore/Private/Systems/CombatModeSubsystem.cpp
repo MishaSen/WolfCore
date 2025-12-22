@@ -7,9 +7,11 @@
 #include "GameFramework/PlayerController.h"
 #include "GameFramework/Pawn.h"
 #include "AbilitySystemComponent.h"
+#include "AbilitySystemInterface.h"
 #include "WolfLevelScript.h"
 #include "Core/WolfGameplayTags.h"
 #include "Debug/WolfDebug.h"
+#include "Kismet/GameplayStatics.h"
 
 void UCombatModeSubsystem::SetMode(FGameplayTag NewMode)
 {
@@ -22,30 +24,21 @@ void UCombatModeSubsystem::SetMode(FGameplayTag NewMode)
 	CurrentMode = NewMode;
 	WOLF_LOG(Log, TEXT("Current Mode set to %s"), *NewMode.ToString());
 
-	if (PlayerASC)
+	TArray<AActor*> CombatActors;
+	UGameplayStatics::GetAllActorsWithInterface(GetWorld(), UAbilitySystemInterface::StaticClass(), CombatActors);
+
+	for (auto Actor : CombatActors)
 	{
-		WOLF_LOG(Log, TEXT("PlayerASC found, clearing old tags"));
-	}
-
-	FGameplayTagContainer TagsToRemove;
-	TagsToRemove.AddTag(WolfTag.InputState_RT);
-	TagsToRemove.AddTag(WolfTag.InputState_TB);
-	TagsToRemove.AddTag(WolfTag.InputState_OOC);
-
-	for (const auto& Tag : TagsToRemove)
-	{
-		if (!Tag.MatchesTag(WolfTag.InputState)) continue;
-
-		if (PlayerASC->HasMatchingGameplayTag(Tag))
+		if (auto* ASC = Cast<IAbilitySystemInterface>(Actor)->GetAbilitySystemComponent())
 		{
-			PlayerASC->RemoveLooseGameplayTag(Tag);
-			
-			WOLF_INFO(TEXT("CombatMode cleared from %s"), *Tag.ToString());
+			ASC->RemoveLooseGameplayTag(WolfTag.InputState_RT);
+			ASC->RemoveLooseGameplayTag(WolfTag.InputState_TB);
+			ASC->RemoveLooseGameplayTag(WolfTag.InputState_OOC);
+			ASC->AddLooseGameplayTag(NewMode);
 		}
 	}
 
-	PlayerASC->AddLooseGameplayTag(NewMode);
-	WOLF_INFO(TEXT("CombatMode set to %s"), *NewMode.ToString());
+	WOLF_INFO(TEXT("Global Combat Mode set to %s for %d actors"), *NewMode.ToString(), CombatActors.Num());
 }
 
 void UCombatModeSubsystem::SwitchCombatMode()
