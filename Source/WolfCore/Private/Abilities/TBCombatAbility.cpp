@@ -51,11 +51,11 @@ void UTBCombatAbility::PlayCurrentPeriod(FGameplayAbilitySpecHandle Handle,
 	if (const UEnum* EnumPtr = StaticEnum<EPeriod>()) //
 	{
 		UE_LOG(LogTemp, Log,
-		       TEXT("Current Period: %s | Duration: %.2f | Invulnerability: %s"),
+		       TEXT("Current Period: %s | Duration: %.2f"),
 		       *EnumPtr->GetNameStringByValue(static_cast<uint64>(Period.PeriodType)).RightChop(FString("EPeriod::").Len
 			       ()),
-		       Period.Duration,
-		       Period.bIsInvulnerable ? TEXT("true") : TEXT("false"));
+		       Period.Duration
+		       );
 	}
 
 	if (Period.Montage)
@@ -100,6 +100,38 @@ void UTBCombatAbility::PlayCurrentPeriod(FGameplayAbilitySpecHandle Handle,
 void UTBCombatAbility::HandleGameplayEventHit_Implementation(FGameplayEventData Payload)
 {
 	UE_LOG(LogTemp, Warning, TEXT("TB ability hit detected."))
+}
+
+float UTBCombatAbility::GetProjectedAttackTime() const
+{
+	auto TimeAccumulator = 0.0f;
+	for (const auto& Period : AbilitySequence)
+	{
+		if (Period.PeriodType == EPeriod::Attack)
+		{
+			return TimeAccumulator;
+		}
+		TimeAccumulator += Period.Duration;
+	}
+	
+	return -1.f;
+}
+
+bool UTBCombatAbility::IsInvulnerableAt(float RelativeTime) const
+{
+	auto CurrentTime = 0.0f;
+	for (const auto& Period : AbilitySequence)
+	{
+		auto PeriodEnd = CurrentTime + Period.Duration;
+
+		if (RelativeTime >= CurrentTime && RelativeTime < PeriodEnd)
+		{
+			return Period.PeriodType == EPeriod::Evasion;
+		}
+		CurrentTime = PeriodEnd;
+	}
+	
+	return false;
 }
 
 void UTBCombatAbility::OnDelayFinished()

@@ -16,25 +16,38 @@ struct FPresageAbilityRequest
 {
 	GENERATED_BODY()
 
-	FPresageAbilityRequest(){}
+	FPresageAbilityRequest()
+	{
+	}
 
 	FPresageAbilityRequest(
+		const TSubclassOf<UTBCombatAbility>& InAbilityClass,
 		const TObjectPtr<UAbilitySystemComponent>& InASC,
 		FGameplayTag InInputTag,
 		float InRequestedTime,
 		const TArray<FPeriod>& InAbilitySequence,
 		const TArray<TWeakObjectPtr<AActor>>& InTargets
 	):
+		AbilityClass(InAbilityClass),
 		OwnerASC(InASC),
 		InputTag(InInputTag),
 		ScheduledTime(InRequestedTime),
 		AbilitySequence(InAbilitySequence),
 		Targets(InTargets)
-	{}
+	{
+	}
+
+	UPROPERTY()
+	TSubclassOf<UTBCombatAbility> AbilityClass;
+
+	UTBCombatAbility* GetAbilityCDO() const
+	{
+		return AbilityClass ? AbilityClass->GetDefaultObject<UTBCombatAbility>() : nullptr;
+	}
 
 	TObjectPtr<UAbilitySystemComponent> GetOwnerASC() const { return OwnerASC; }
 	const FGameplayTag& GetInputTag() const { return InputTag; }
-	float GetRequestedTime() const { return ScheduledTime; }
+	float GetScheduledTime() const { return ScheduledTime; }
 	const TArray<FPeriod>& GetAbilitySequence() const { return AbilitySequence; }
 	const TArray<TWeakObjectPtr<AActor>>& GetTargets() const { return Targets; }
 

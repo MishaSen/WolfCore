@@ -220,6 +220,36 @@ FTransform AWolfCharacterBase::ExtractRootMotionAtTime(UAnimMontage* Montage, fl
 	return Montage->ExtractRootMotionFromRange(0.f, Time);
 }
 
+bool AWolfCharacterBase::IsInvulnerableAt(float RelativeTime) const
+{
+	if (auto* CurrentAbility = GetCurrentTBAbility())
+	{
+		return CurrentAbility->IsInvulnerableAt(RelativeTime);
+	}
+
+	return false;
+}
+
+UTBCombatAbility* AWolfCharacterBase::GetCurrentTBAbility() const
+{
+	if (!ASC) return nullptr;
+
+	TArray<FGameplayAbilitySpec> ActiveAbilities = ASC->GetActivatableAbilities();
+
+	for (const auto& Spec : ActiveAbilities)
+	{
+		if (!Spec.IsActive()) continue;
+
+		TArray<UGameplayAbility*> AbilityInstances = Spec.GetAbilityInstances();
+		for (auto* AbilityInstance : AbilityInstances)
+		{
+			if (auto* TBAbility = Cast<UTBCombatAbility>(AbilityInstance)) return TBAbility;
+		}
+	}
+	
+	return nullptr;
+}
+
 void AWolfCharacterBase::CreateSnapshot_Implementation(FActorSnapshot& OutSnapshot)
 {
 	OutSnapshot.ActorRef = this;

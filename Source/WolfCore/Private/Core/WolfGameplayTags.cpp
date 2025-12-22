@@ -32,4 +32,8 @@ void FWolfGameplayTags::InitializeNativeGameplayTags()
 
 	// --- Event Tags ---
 	AddNativeTag(GameplayTags.Event_ModeSwitchReady, FName("Event.ModeSwitch"), TEXT("Event tag for mode switching."));
+
+	// --- Presage Result ---
+	AddNativeTag(GameplayTags.Result_Hit, FName("Result.Hit"), TEXT("Result tag for a hit."));
+	AddNativeTag(GameplayTags.Result_Dodge, FName("Result.Dodge"), TEXT("Result tag for a dodge."));
 }

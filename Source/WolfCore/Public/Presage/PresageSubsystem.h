@@ -10,6 +10,7 @@
 
 #include "PresageSubsystem.generated.h"
 
+struct FPeriod;
 class AWolfCharacterBase;
 struct FPresageAbilityRequest;
 struct FActorSnapshot;
@@ -24,24 +25,24 @@ struct FPresageTimelineEvent
 	
 	FPresageTimelineEvent() = default;
 	
-	FPresageTimelineEvent(AActor* InInstigator, AActor* InTarget, float InTimeOffset, FGameplayTag InAbilityTag)
-		: Instigator(InInstigator)
-		, Target(InTarget)
-		, TimeOffset(InTimeOffset)
-		, AbilityTag(InAbilityTag)
+	FPresageTimelineEvent(AActor* InAttacker, AActor* InVictim, float InTime, FGameplayTag InAbilityTag)
+		: Attacker(InAttacker)
+		, Victim(InVictim)
+		, Time(InTime)
+		, ResultTag(InAbilityTag)
 	{}
 
 	UPROPERTY(BlueprintReadOnly, Category = "Presage")
-	TObjectPtr<AActor> Instigator;
+	TObjectPtr<AActor> Attacker;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Presage")
-	TObjectPtr<AActor> Target;
+	TObjectPtr<AActor> Victim;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Presage")
-	float TimeOffset;
+	float Time;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Presage")
-	FGameplayTag AbilityTag;
+	FGameplayTag ResultTag;
 
 };
 /**
@@ -97,9 +98,14 @@ private:
 	bool bLoopActive = false;
 	float AccumulatedTime = 0.f;
 
+	TArray<TWeakObjectPtr<AWolfCharacterBase>> TBParticipants;
+	TArray<TWeakObjectPtr<AWolfCharacterBase>> RTParticipants;
+	void RefreshParticipants();
+
 	void OnFlowTimerTick();
 	void CharacterSnapshot();
 	void RevertCharacterStates();
 	void UpdateTimelinePrediction();
 	static bool CheckFutureCollision(AWolfCharacterBase* Attacker, AWolfCharacterBase* Victim, float FutureTime);
+	float CalculateImpactFromSequence(const TArray<FPeriod>& Sequence) const;
 };

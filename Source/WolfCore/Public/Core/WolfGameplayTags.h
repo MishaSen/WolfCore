@@ -34,6 +34,10 @@ struct FWolfGameplayTags
 	// --- Event Tags ---
 	FGameplayTag Event_ModeSwitchReady;
 
+	// --- Presage Result ---
+	FGameplayTag Result_Hit;
+	FGameplayTag Result_Dodge;
+	
 	// Future extension: Add TMap<FGameplayTag, FGameplayTag> to link abilities to cooldowns, effects, etc.
 	// e.g. TMap<FGameplayTag, FGameplayTag> AbilityCooldowns;
 

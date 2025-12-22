@@ -23,8 +23,8 @@ class WOLFCORE_API ISnapshot
 
 public:
 	UFUNCTION(BlueprintNativeEvent, BlueprintCallable, Category = "Snapshot")
-	virtual void CreateSnapshot(FActorSnapshot& NewSnapshot);
+	void CreateSnapshot(FActorSnapshot& NewSnapshot);
 
 	UFUNCTION(BlueprintNativeEvent, BlueprintCallable, Category = "Snapshot")
-	virtual void RestoreSnapshot(const FActorSnapshot& StoredSnapshot);
+	void RestoreSnapshot(const FActorSnapshot& StoredSnapshot);
 };

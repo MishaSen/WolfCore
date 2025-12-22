@@ -100,7 +100,7 @@ void UPresageSubsystem::Tick(float DeltaTime)
 	// Process queued abilities
 	for (int32 i = AbilityQueue.Num() - 1; i >= 0; --i)
 	{
-		if (const FPresageAbilityRequest& Request = AbilityQueue[i]; Request.GetRequestedTime() <= CurrentTime)
+		if (const FPresageAbilityRequest& Request = AbilityQueue[i]; Request.GetScheduledTime() <= CurrentTime)
 		{
 			if (auto ASC = Request.GetOwnerASC())
 			{
@@ -135,6 +135,35 @@ void UPresageSubsystem::StopLoop()
 
 	bLoopActive = false;
 	AccumulatedTime = 0.f;
+}
+
+void UPresageSubsystem::RefreshParticipants()
+{
+	TBParticipants.Empty();
+	RTParticipants.Empty();
+
+	TArray<AActor*> AllCharacters;
+	UGameplayStatics::GetAllActorsOfClass(GetWorld(), AWolfCharacterBase::StaticClass(), AllCharacters);
+
+	const auto& Tags = FWolfGameplayTags::Get();
+
+	for (auto* Actor : AllCharacters)
+	{
+		auto* Character = Cast<AWolfCharacterBase>(Actor);
+		if (!Character) continue;
+
+		auto* ASC = Character->GetAbilitySystemComponent();
+		if (!ASC) continue;
+
+		if (ASC->HasMatchingGameplayTag(Tags.InputState_TB))
+		{
+			TBParticipants.Add(Character);
+		}
+		else if (ASC->HasMatchingGameplayTag(Tags.InputState_RT))
+		{
+			RTParticipants.Add(Character);
+		}
+	}
 }
 
 void UPresageSubsystem::OnFlowTimerTick()
@@ -176,36 +205,83 @@ void UPresageSubsystem::RevertCharacterStates()
 void UPresageSubsystem::UpdateTimelinePrediction()
 {
 	CurrentPredictedTimeline.Empty();
+	RefreshParticipants();
 
-	constexpr auto StepSize = 0.1f;
+	const auto& Tags = FWolfGameplayTags::Get();
+	TArray<FPresageTimelineEvent> PotentialEvents;
 
-	TArray<AActor*> AllActors;
-	UGameplayStatics::GetAllActorsOfClass(GetWorld(), AWolfCharacterBase::StaticClass(), AllActors);
-
-	for (auto t = 0.f; t <= FlowTime; t += StepSize)
+	for (auto& RTAttacker : RTParticipants)
 	{
-		for (auto* AttackerActor : AllActors)
+		auto* RTCharacter = RTAttacker.Get();
+		if (!RTCharacter) continue;
+
+		auto ImpactTime = RTCharacter->GetTimeToNextHitImpact();
+		if (ImpactTime < 0.f || ImpactTime > FlowTime) continue;
+
+		for (auto& TBAttacker : TBParticipants)
 		{
-			AWolfCharacterBase* Attacker = Cast<AWolfCharacterBase>(AttackerActor);
-			if (!Attacker) continue;
+			auto* TBCharacter = TBAttacker.Get();
+			if (!TBCharacter) continue;
 
-			auto TimeToHit = Attacker->GetTimeToNextHitImpact();
-
-			if (FMath::IsNearlyEqual(TimeToHit, t, StepSize * 0.5f))
+			if (CheckFutureCollision(RTCharacter, TBCharacter, ImpactTime))
 			{
-				for (auto* VictimActor : AllActors)
-				{
-					if (Attacker == VictimActor) continue;
-					auto* Victim = Cast<AWolfCharacterBase>(VictimActor);
-
-					if (CheckFutureCollision(Attacker, Victim, t))
-					{
-						FPresageTimelineEvent NewEvent(Attacker, Victim, t, FGameplayTag::EmptyTag);
-						CurrentPredictedTimeline.Add(NewEvent);
-					}
-				}
+				PotentialEvents.Add(FPresageTimelineEvent(RTCharacter, TBCharacter, ImpactTime, Tags.Result_Hit));
 			}
 		}
+	}
+
+	for (const auto& Request : AbilityQueue)
+	{
+		auto* AbilityCDO = Request.GetAbilityCDO();
+		if (!AbilityCDO) continue;
+
+		auto* TBAttacker = Cast<AWolfCharacterBase>(Request.GetOwnerASC()->GetAvatarActor());
+		if (!TBAttacker) continue;
+		
+		auto AbilitySequenceImpactTime = CalculateImpactFromSequence(Request.GetAbilitySequence());
+		if (AbilitySequenceImpactTime < 0.f) continue;
+
+		auto PresageSequenceImpactTime = AbilitySequenceImpactTime + Request.GetScheduledTime(); 
+
+		for (auto& TargetActor : Request.GetTargets())
+		{
+			auto* Target = Cast<AWolfCharacterBase>(TargetActor);
+			if (!Target) continue;
+
+			PotentialEvents.Add(FPresageTimelineEvent(TBAttacker, Target, PresageSequenceImpactTime, Tags.Result_Hit));
+		}
+	}
+
+	PotentialEvents.Sort([](const FPresageTimelineEvent& A, const FPresageTimelineEvent& B)
+	{
+		return A.Time < B.Time;
+	});
+
+	TSet<AActor*> InterruptedActors;
+
+	for (auto& Event : PotentialEvents)
+	{
+		if (InterruptedActors.Contains(Event.Attacker)) continue;
+
+		auto* Victim = Cast<AWolfCharacterBase>(Event.Victim);
+
+		bool bIsInvulnerable = false;
+		if (Victim)
+		{
+			bIsInvulnerable = Victim->IsInvulnerableAt(Event.Time);
+		}
+
+		if (bIsInvulnerable)
+		{
+			Event.ResultTag = Tags.Result_Dodge;
+		}
+		else
+		{
+			Event.ResultTag = Tags.Result_Hit;
+			InterruptedActors.Add(Event.Victim);
+		}
+
+		CurrentPredictedTimeline.Add(Event);
 	}
 }
 
@@ -216,8 +292,21 @@ bool UPresageSubsystem::CheckFutureCollision(AWolfCharacterBase* Attacker, AWolf
 	float Radius, HalfHeight;
 	Victim->GetPresageCollisionDimensions(Radius, HalfHeight);
 
-	const FVector AttackLocation = AttackerTransform.GetLocation() + AttackerTransform.GetRotation().GetForwardVector() * 100.f;
+	const FVector AttackLocation = AttackerTransform.GetLocation() + AttackerTransform.GetRotation().GetForwardVector()
+		* 100.f;
 	const float Distance = FVector::Dist(AttackLocation, Victim->GetActorLocation());
 
 	return Distance < Radius + 50.f;
+}
+
+float UPresageSubsystem::CalculateImpactFromSequence(const TArray<FPeriod>& Sequence) const
+{
+	auto TimeAccumulator = 0.f;
+	for (const auto& Period : Sequence)
+	{
+		if (Period.PeriodType == EPeriod::Attack) return TimeAccumulator;
+		
+		TimeAccumulator += Period.Duration;
+	}
+	return -1.f;
 }

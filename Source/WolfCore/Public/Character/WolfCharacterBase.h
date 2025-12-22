@@ -35,7 +35,9 @@ public:
 	float GetTimeToNextHitImpact() const;
 
 	void GetPresageCollisionDimensions(float& OutRadius, float& OutHalfHeight) const;
-
+	bool IsInvulnerableAt(float RelativeTime) const;
+	class UTBCombatAbility* GetCurrentTBAbility() const;
+	
 protected:
 	FTransform ExtractRootMotionAtTime(UAnimMontage* Montage, float Time) const;
 

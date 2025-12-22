@@ -22,7 +22,6 @@ struct FPeriod
 	FPeriod()
 		: PeriodType(EPeriod::MoveTo)
 		, Duration(0.0f)
-		, bIsInvulnerable(false)
 		, Montage(nullptr)
 	{}
 
@@ -31,9 +30,6 @@ struct FPeriod
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
 	float Duration;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite)
-	bool bIsInvulnerable;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
 	TObjectPtr<UAnimMontage> Montage;
@@ -50,6 +46,10 @@ class WOLFCORE_API UTBCombatAbility : public UBaseCombatAbility
 public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Periods")
 	TArray<FPeriod> AbilitySequence;
+
+	float GetProjectedAttackTime() const;
+
+	bool IsInvulnerableAt(float RelativeTime) const;
 
 	UFUNCTION()
 	void OnDelayFinished();
