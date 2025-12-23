@@ -55,7 +55,7 @@ void UTBCombatAbility::PlayCurrentPeriod(FGameplayAbilitySpecHandle Handle,
 		       *EnumPtr->GetNameStringByValue(static_cast<uint64>(Period.PeriodType)).RightChop(FString("EPeriod::").Len
 			       ()),
 		       Period.Duration
-		       );
+		);
 	}
 
 	if (Period.Montage)
@@ -67,7 +67,7 @@ void UTBCombatAbility::PlayCurrentPeriod(FGameplayAbilitySpecHandle Handle,
 				Period.Montage,
 				1.f
 			);
-		MontageTask->OnCompleted.AddDynamic(this, &UTBCombatAbility::OnDelayFinished);
+		MontageTask->OnCompleted.AddDynamic(this, &UTBCombatAbility::OnPeriodFinished);
 		MontageTask->OnInterrupted.AddDynamic(this, &UTBCombatAbility::K2_EndAbility);
 		MontageTask->OnCancelled.AddDynamic(this, &UTBCombatAbility::K2_EndAbility);
 
@@ -77,24 +77,40 @@ void UTBCombatAbility::PlayCurrentPeriod(FGameplayAbilitySpecHandle Handle,
 		 * Listen for the event sent from AnimNotify_Hit
 		 * Define the tag in project settings: Gameplay Tags -> Gameplay Abilities -> Event -> Attack
 		 */
-		const FGameplayTag EventTag = FGameplayTag::RequestGameplayTag("Event.Ability.Attack");
+		if (Period.PeriodType == EPeriod::Attack)
+		{
+			const FGameplayTag EventTag = FGameplayTag::RequestGameplayTag("Event.Ability.Attack");
+			UAbilityTask_WaitGameplayEvent* WaitTask =
+				UAbilityTask_WaitGameplayEvent::WaitGameplayEvent(this, EventTag);
 
-		UAbilityTask_WaitGameplayEvent* WaitTask = UAbilityTask_WaitGameplayEvent::WaitGameplayEvent(this, EventTag);
-		WaitTask->EventReceived.AddDynamic(this, &UTBCombatAbility::HandleGameplayEventHit);
-		WaitTask->ReadyForActivation();
-	}
-	else if (Period.Duration > 0.f)
-	{
-		UAbilityTask_WaitDelay* DelayTask = UAbilityTask_WaitDelay::WaitDelay(this, Period.Duration);
-		DelayTask->OnFinish.AddDynamic(this, &UTBCombatAbility::OnDelayFinished);
-
-		DelayTask->ReadyForActivation();
+			WaitTask->EventReceived.AddDynamic(this, &UTBCombatAbility::HandleGameplayEventHit);
+			WaitTask->ReadyForActivation();
+		}
 	}
 	else
 	{
-		++CurrentPeriodIndex;
-		PlayCurrentPeriod(Handle, ActorInfo, ActivationInfo);
+		if (Period.Duration > 0.f)
+		{
+			UAbilityTask_WaitDelay* DelayTask = UAbilityTask_WaitDelay::WaitDelay(this, Period.Duration);
+			DelayTask->OnFinish.AddDynamic(this, &UTBCombatAbility::OnPeriodFinished);
+
+			DelayTask->ReadyForActivation();
+		}
+		else
+		{
+			OnPeriodFinished();
+		}
 	}
+}
+
+float UTBCombatAbility::GetTruePeriodDuration(const FPeriod& Period)
+{
+	if (Period.bUseMontageLength && Period.Montage)
+	{
+		return Period.Montage->GetPlayLength();
+	}
+
+	return Period.Duration;
 }
 
 void UTBCombatAbility::HandleGameplayEventHit_Implementation(FGameplayEventData Payload)
@@ -107,13 +123,24 @@ float UTBCombatAbility::GetProjectedAttackTime() const
 	auto TimeAccumulator = 0.0f;
 	for (const auto& Period : AbilitySequence)
 	{
-		if (Period.PeriodType == EPeriod::Attack)
+		if (Period.PeriodType != EPeriod::Attack)
 		{
-			return TimeAccumulator;
+			TimeAccumulator += GetTruePeriodDuration(Period);
+			continue;
+		} 
+		
+		if (Period.Montage)
+		{
+			for (const auto& Notify : Period.Montage->Notifies)
+			{
+				if (!Notify.NotifyName.ToString().Contains("Hit")) continue;
+				return TimeAccumulator + Notify.GetTriggerTime();
+			}
 		}
-		TimeAccumulator += Period.Duration;
+
+		return TimeAccumulator + Period.HitDelay;
 	}
-	
+
 	return -1.f;
 }
 
@@ -122,7 +149,7 @@ bool UTBCombatAbility::IsInvulnerableAt(float RelativeTime) const
 	auto CurrentTime = 0.0f;
 	for (const auto& Period : AbilitySequence)
 	{
-		auto PeriodEnd = CurrentTime + Period.Duration;
+		const auto PeriodEnd = CurrentTime + GetTruePeriodDuration(Period);
 
 		if (RelativeTime >= CurrentTime && RelativeTime < PeriodEnd)
 		{
@@ -130,11 +157,11 @@ bool UTBCombatAbility::IsInvulnerableAt(float RelativeTime) const
 		}
 		CurrentTime = PeriodEnd;
 	}
-	
+
 	return false;
 }
 
-void UTBCombatAbility::OnDelayFinished()
+void UTBCombatAbility::OnPeriodFinished()
 {
 	++CurrentPeriodIndex;
 	PlayCurrentPeriod(CachedHandle, CachedActorInfo, CachedActivationInfo);

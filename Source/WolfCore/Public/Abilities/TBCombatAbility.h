@@ -22,14 +22,22 @@ struct FPeriod
 	FPeriod()
 		: PeriodType(EPeriod::MoveTo)
 		, Duration(0.0f)
+		, HitDelay(0.0f)
+		, bUseMontageLength(false)
 		, Montage(nullptr)
 	{}
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
 	EPeriod PeriodType;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, meta=(EditCondition="!bUseMontageLength"))
 	float Duration;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, meta=(EditCondition="PeriodType == EPeriod::Attack"))
+	float HitDelay;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	bool bUseMontageLength;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
 	TObjectPtr<UAnimMontage> Montage;
@@ -52,7 +60,7 @@ public:
 	bool IsInvulnerableAt(float RelativeTime) const;
 
 	UFUNCTION()
-	void OnDelayFinished();
+	void OnPeriodFinished();
 
 	virtual void ActivateAbility(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo,
 	                             const FGameplayAbilityActivationInfo ActivationInfo,
@@ -63,6 +71,8 @@ private:
 
 	void PlayCurrentPeriod(FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo,
 	                       const FGameplayAbilityActivationInfo& ActivationInfo);
+
+	static float GetTruePeriodDuration(const FPeriod& Period);
 
 	virtual void HandleGameplayEventHit_Implementation(FGameplayEventData Payload) override;
 
