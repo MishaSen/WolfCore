@@ -6,6 +6,7 @@
 #include "GameplayTagContainer.h"
 #include "Snapshot.h"
 #include "Abilities/GameplayAbilityTypes.h"
+#include "Core/WolfGameplayTags.h"
 #include "Subsystems/WorldSubsystem.h"
 
 #include "PresageSubsystem.generated.h"
@@ -95,6 +96,7 @@ protected:
 	TArray<FPresageAbilityRequest> AbilityQueue;
 
 private:
+	const FWolfGameplayTags* WolfTags;
 	bool bLoopActive = false;
 	float AccumulatedTime = 0.f;
 
@@ -102,10 +104,14 @@ private:
 	TArray<TWeakObjectPtr<AWolfCharacterBase>> RTParticipants;
 	void RefreshParticipants();
 
+	void GatherRTEvents(TArray<FPresageTimelineEvent>& Events);
+	void GatherTBEvents(TArray<FPresageTimelineEvent>& Events);
+	void OrganizeEventsByTime(TArray<FPresageTimelineEvent>& Events);
+
 	void OnFlowTimerTick();
 	void CharacterSnapshot();
 	void RevertCharacterStates();
 	void UpdateTimelinePrediction();
-	static bool CheckFutureCollision(AWolfCharacterBase* Attacker, AWolfCharacterBase* Victim, float FutureTime);
-	float CalculateImpactFromSequence(const TArray<FPeriod>& Sequence) const;
+	static bool CheckFutureCollision(const AWolfCharacterBase* Attacker, const AWolfCharacterBase* Victim, float FutureTime);
+	static float CalculateImpactFromSequence(const TArray<FPeriod>& Sequence);
 };

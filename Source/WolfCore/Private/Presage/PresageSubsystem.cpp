@@ -4,8 +4,6 @@
 #include "WolfCore/Public/Presage/PresageSubsystem.h"
 
 #include "AbilitySystemBlueprintLibrary.h"
-#include "GameFramework/Character.h"
-#include "GameFramework/CharacterMovementComponent.h"
 #include "Kismet/GameplayStatics.h"
 #include "WolfCore/Public/Presage/ActorSnapshot.h"
 #include "WolfCore/Public/Presage/PresageAbilityRequest.h"
@@ -13,7 +11,6 @@
 #include "Animation/AnimInstance.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "Core/WolfGameplayTags.h"
-#include "WolfCore/Public/AbilitySystem/WolfAbilitySystemComponent.h"
 #include "TimerManager.h"
 #include "AbilitySystem/WolfAttributeSetBase.h"
 #include "Character/WolfCharacterBase.h"
@@ -22,10 +19,12 @@ void UPresageSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {
 	Super::Initialize(Collection);
 
-	if (UWorld* World = GetWorld())
+	if (const UWorld* World = GetWorld())
 	{
 		World->GetTimerManager().SetTimerForNextTick(this, &UPresageSubsystem::BindToModeSwitchEvent);
 	}
+
+	WolfTags = &FWolfGameplayTags::Get();
 }
 
 void UPresageSubsystem::BindToModeSwitchEvent()
@@ -36,9 +35,8 @@ void UPresageSubsystem::BindToModeSwitchEvent()
 		{
 			if (auto* ASC = UAbilitySystemBlueprintLibrary::GetAbilitySystemComponent(PlayerPawn))
 			{
-				const auto& Tag = FWolfGameplayTags::Get();
 				FGameplayTagContainer EventTagContainer;
-				EventTagContainer.AddTag(Tag.Event_ModeSwitchReady);
+				EventTagContainer.AddTag(WolfTags->Event_ModeSwitchReady);
 
 				ASC->AddGameplayEventTagContainerDelegate
 				(
@@ -56,7 +54,7 @@ void UPresageSubsystem::BindToModeSwitchEvent()
 
 void UPresageSubsystem::OnModeSwitchEventReceived(FGameplayTag GameplayTag, const FGameplayEventData* GameplayEventData)
 {
-	if (const auto& Tag = FWolfGameplayTags::Get(); GameplayEventData->TargetTags.HasTag(Tag.InputState_TB))
+	if (GameplayEventData->TargetTags.HasTag(WolfTags->InputState_TB))
 	{
 		StartLoop();
 	}
@@ -145,8 +143,6 @@ void UPresageSubsystem::RefreshParticipants()
 	TArray<AActor*> AllCharacters;
 	UGameplayStatics::GetAllActorsOfClass(GetWorld(), AWolfCharacterBase::StaticClass(), AllCharacters);
 
-	const auto& Tags = FWolfGameplayTags::Get();
-
 	for (auto* Actor : AllCharacters)
 	{
 		auto* Character = Cast<AWolfCharacterBase>(Actor);
@@ -155,11 +151,11 @@ void UPresageSubsystem::RefreshParticipants()
 		auto* ASC = Character->GetAbilitySystemComponent();
 		if (!ASC) continue;
 
-		if (ASC->HasMatchingGameplayTag(Tags.InputState_TB))
+		if (ASC->HasMatchingGameplayTag(WolfTags->InputState_TB))
 		{
 			TBParticipants.Add(Character);
 		}
-		else if (ASC->HasMatchingGameplayTag(Tags.InputState_RT))
+		else if (ASC->HasMatchingGameplayTag(WolfTags->InputState_RT))
 		{
 			RTParticipants.Add(Character);
 		}
@@ -207,9 +203,44 @@ void UPresageSubsystem::UpdateTimelinePrediction()
 	CurrentPredictedTimeline.Empty();
 	RefreshParticipants();
 
-	const auto& Tags = FWolfGameplayTags::Get();
 	TArray<FPresageTimelineEvent> PotentialEvents;
+	
+	GatherRTEvents(PotentialEvents);
+	GatherTBEvents(PotentialEvents);
+	OrganizeEventsByTime(PotentialEvents);
 
+	CurrentPredictedTimeline = PotentialEvents;
+}
+
+bool UPresageSubsystem::CheckFutureCollision(const AWolfCharacterBase* Attacker, const AWolfCharacterBase* Victim, float FutureTime)
+{
+	const auto AttackerTransform = Attacker->GetProjectedTransform(FutureTime);
+
+	float Radius, HalfHeight;
+	Victim->GetPresageCollisionDimensions(Radius, HalfHeight);
+
+	const FVector AttackLocation = AttackerTransform.GetLocation() + AttackerTransform.GetRotation().GetForwardVector()
+		* 100.f;
+	const float Distance = FVector::Dist(AttackLocation, Victim->GetActorLocation());
+
+	return Distance < Radius + 50.f;
+}
+
+float UPresageSubsystem::CalculateImpactFromSequence(const TArray<FPeriod>& Sequence)
+{
+	auto TimeAccumulator = 0.f;
+	for (const auto& Period : Sequence)
+	{
+		if (Period.PeriodType == EPeriod::Attack) return TimeAccumulator;
+		
+		TimeAccumulator += Period.Duration;
+	}
+	return -1.f;
+}
+
+void UPresageSubsystem::GatherRTEvents(TArray<FPresageTimelineEvent>& Events)
+{
+	
 	for (auto& RTAttacker : RTParticipants)
 	{
 		auto* RTCharacter = RTAttacker.Get();
@@ -225,11 +256,14 @@ void UPresageSubsystem::UpdateTimelinePrediction()
 
 			if (CheckFutureCollision(RTCharacter, TBCharacter, ImpactTime))
 			{
-				PotentialEvents.Add(FPresageTimelineEvent(RTCharacter, TBCharacter, ImpactTime, Tags.Result_Hit));
+				Events.Add(FPresageTimelineEvent(RTCharacter, TBCharacter, ImpactTime, WolfTags->Result_Hit));
 			}
 		}
 	}
+}
 
+void UPresageSubsystem::GatherTBEvents(TArray<FPresageTimelineEvent>& Events)
+{
 	for (const auto& Request : AbilityQueue)
 	{
 		auto* AbilityCDO = Request.GetAbilityCDO();
@@ -245,27 +279,32 @@ void UPresageSubsystem::UpdateTimelinePrediction()
 
 		for (auto& TargetActor : Request.GetTargets())
 		{
-			auto* Target = Cast<AWolfCharacterBase>(TargetActor);
+			auto* Target = Cast<AWolfCharacterBase>(TargetActor.Get());
 			if (!Target) continue;
 
-			PotentialEvents.Add(FPresageTimelineEvent(TBAttacker, Target, PresageSequenceImpactTime, Tags.Result_Hit));
+			Events.Add(FPresageTimelineEvent(TBAttacker, Target, PresageSequenceImpactTime, WolfTags->Result_Hit));
 		}
 	}
+}
 
-	PotentialEvents.Sort([](const FPresageTimelineEvent& A, const FPresageTimelineEvent& B)
+void UPresageSubsystem::OrganizeEventsByTime(TArray<FPresageTimelineEvent>& Events)
+{
+	
+	Events.Sort([](const FPresageTimelineEvent& A, const FPresageTimelineEvent& B)
 	{
 		return A.Time < B.Time;
 	});
 
 	TSet<AActor*> InterruptedActors;
+	TArray<FPresageTimelineEvent> TimeSortedEvents;
 
-	for (auto& Event : PotentialEvents)
+	for (auto& Event : Events)
 	{
 		if (InterruptedActors.Contains(Event.Attacker)) continue;
 
-		auto* Victim = Cast<AWolfCharacterBase>(Event.Victim);
-
+		const auto* Victim = Cast<AWolfCharacterBase>(Event.Victim);
 		bool bIsInvulnerable = false;
+		
 		if (Victim)
 		{
 			bIsInvulnerable = Victim->IsInvulnerableAt(Event.Time);
@@ -273,40 +312,15 @@ void UPresageSubsystem::UpdateTimelinePrediction()
 
 		if (bIsInvulnerable)
 		{
-			Event.ResultTag = Tags.Result_Dodge;
+			Event.ResultTag = WolfTags->Result_Dodge;
 		}
 		else
 		{
-			Event.ResultTag = Tags.Result_Hit;
+			Event.ResultTag = WolfTags->Result_Hit;
 			InterruptedActors.Add(Event.Victim);
 		}
 
-		CurrentPredictedTimeline.Add(Event);
+		TimeSortedEvents.Add(Event);
 	}
-}
-
-bool UPresageSubsystem::CheckFutureCollision(AWolfCharacterBase* Attacker, AWolfCharacterBase* Victim, float FutureTime)
-{
-	const auto AttackerTransform = Attacker->GetProjectedTransform(FutureTime);
-
-	float Radius, HalfHeight;
-	Victim->GetPresageCollisionDimensions(Radius, HalfHeight);
-
-	const FVector AttackLocation = AttackerTransform.GetLocation() + AttackerTransform.GetRotation().GetForwardVector()
-		* 100.f;
-	const float Distance = FVector::Dist(AttackLocation, Victim->GetActorLocation());
-
-	return Distance < Radius + 50.f;
-}
-
-float UPresageSubsystem::CalculateImpactFromSequence(const TArray<FPeriod>& Sequence) const
-{
-	auto TimeAccumulator = 0.f;
-	for (const auto& Period : Sequence)
-	{
-		if (Period.PeriodType == EPeriod::Attack) return TimeAccumulator;
-		
-		TimeAccumulator += Period.Duration;
-	}
-	return -1.f;
+	Events = TimeSortedEvents;
 }
