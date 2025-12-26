@@ -265,9 +265,14 @@ void AWolfCharacterBase::CreateSnapshot_Implementation(FActorSnapshot& OutSnapsh
 
 void AWolfCharacterBase::RestoreSnapshot_Implementation(const FActorSnapshot& InSnapshot)
 {
+	bIsRestoringSnapshot = true;
+	
 	RestorePhysics(InSnapshot);
 	RestoreGAS(InSnapshot);
 	RestoreAnim(InSnapshot);
+
+	bIsRestoringSnapshot = false;
+	// In UI or animation code, check if (bIsRestoringSnapshot) return; before doing effects
 }
 
 void AWolfCharacterBase::SnapshotPhysics(FActorSnapshot& Snapshot) const
@@ -348,7 +353,6 @@ void AWolfCharacterBase::RestorePhysics(const FActorSnapshot& Snapshot)
 void AWolfCharacterBase::RestoreGAS(const FActorSnapshot& Snapshot)
 {
 	if (!ASC) return;
-	ASC->bIsRestoringSnapshot = true;
 
 	for (const TPair<FGameplayAttribute, float>& AttrPair : Snapshot.Attributes)
 	{
@@ -379,7 +383,6 @@ void AWolfCharacterBase::RestoreGAS(const FActorSnapshot& Snapshot)
 		ASC->ApplyGameplayEffectSpecToSelf(*SpecHandle.Data.Get());
 	}
 
-	ASC->bIsRestoringSnapshot = false;
 	// TODO: When we implement the UI Controller, remember to check this bool when doing delegate broadcasts
 }
 

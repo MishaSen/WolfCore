@@ -55,6 +55,9 @@ protected:
 	void RestorePhysics(const FActorSnapshot& Snapshot);
 	void RestoreGAS(const FActorSnapshot& Snapshot);
 	void RestoreAnim(const FActorSnapshot& Snapshot);
+
+private:
+	bool bIsRestoringSnapshot = false;
 	
 #pragma endregion
 

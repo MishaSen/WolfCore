@@ -21,5 +21,4 @@ public:
 	void AbilityInputTagHeld(const FGameplayTag& Tag);
 	void AddCharacterAbilities(TArray<TSubclassOf<UGameplayAbility>> StartupAbilities);
 	FPresageAbilityRequest BuildInitialPresageRequest(const FGameplayTag& Tag, const TArray<TWeakObjectPtr<AActor>>& Targets);
-	bool bIsRestoringSnapshot = false;
 };
