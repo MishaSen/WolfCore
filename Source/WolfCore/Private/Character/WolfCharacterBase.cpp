@@ -5,7 +5,7 @@
 #include "Components/SkeletalMeshComponent.h"
 #include "Animation/AnimInstance.h"
 #include "Abilities/AbilityConfig.h"
-#include "AbilitySystem/WolfAttributeSetBase.h"
+#include "AbilitySystem/WolfAttributeSet.h"
 #include "AttributeSet.h"
 #include "Components/CapsuleComponent.h"
 #include "Core/WolfGameplayTags.h"
@@ -22,7 +22,7 @@ AWolfCharacterBase::AWolfCharacterBase()
 	PrimaryActorTick.bCanEverTick = true;
 
 	AbilitySystemComponentClass = UWolfAbilitySystemComponent::StaticClass();
-	AttributeSet = CreateDefaultSubobject<UWolfAttributeSetBase>("AttributeSet");
+	AttributeSet = CreateDefaultSubobject<UWolfAttributeSet>("AttributeSet");
 
 	bUseControllerRotationPitch = false;
 	bUseControllerRotationYaw = true;

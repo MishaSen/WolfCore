@@ -13,7 +13,7 @@
 #include "Components/SkeletalMeshComponent.h"
 #include "Core/WolfGameplayTags.h"
 #include "TimerManager.h"
-#include "AbilitySystem/WolfAttributeSetBase.h"
+#include "AbilitySystem/WolfAttributeSet.h"
 #include "Character/WolfCharacterBase.h"
 
 void UPresageSubsystem::Initialize(FSubsystemCollectionBase& Collection)

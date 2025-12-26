@@ -3,8 +3,7 @@
 
 #include "Abilities/Effects/PresageMode.h"
 
-#include "AbilitySystem/WolfAttributeSetBase.h"
-#include "AbilitySystem/WolfPlayerAttributeSet.h"
+#include "AbilitySystem/WolfAttributeSet.h"
 #include "Core/WolfGameplayTags.h"
 #include "GameplayEffectComponents/TargetTagsGameplayEffectComponent.h"
 
@@ -13,7 +12,7 @@ UPresageMode::UPresageMode()
 	DurationPolicy = EGameplayEffectDurationType::Infinite;
 
 	FGameplayModifierInfo FlowGaugeDrain;
-	FlowGaugeDrain.Attribute = UWolfPlayerAttributeSet::GetFlowGaugeAttribute();
+	FlowGaugeDrain.Attribute = UWolfAttributeSet::GetFlowGaugeAttribute();
 	FlowGaugeDrain.ModifierOp = EGameplayModOp::Additive;
 	FlowGaugeDrain.ModifierMagnitude = FScalableFloat(-1.f);
 	Modifiers.Add(FlowGaugeDrain);
