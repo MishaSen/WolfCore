@@ -33,6 +33,7 @@ struct FWolfGameplayTags
 
 	// --- Event Tags ---
 	FGameplayTag Event_ModeSwitchReady;
+	FGameplayTag Event_Ability_Attack;
 
 	// --- Presage Result ---
 	FGameplayTag Result_Hit;

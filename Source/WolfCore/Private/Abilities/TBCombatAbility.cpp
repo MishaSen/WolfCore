@@ -5,7 +5,11 @@
 #include "Abilities/Tasks/AbilityTask_PlayMontageAndWait.h"
 #include "Abilities/Tasks/AbilityTask_WaitDelay.h"
 #include "DrawDebugHelpers.h"
+#include "Abilities/Notifies/AnimNotify_Hit.h"
+#include "Animation/AnimMontage.h"
+#include "Animation/AnimTypes.h"
 #include "Abilities/Tasks/AbilityTask_WaitGameplayEvent.h"
+#include "Debug/WolfDebug.h"
 
 void UTBCombatAbility::ActivateAbility(const FGameplayAbilitySpecHandle Handle,
                                        const FGameplayAbilityActorInfo* ActorInfo,
@@ -25,6 +29,11 @@ void UTBCombatAbility::ActivateAbility(const FGameplayAbilitySpecHandle Handle,
 		UE_LOG(LogTemp, Warning, TEXT("No periods defined for TBCombatAbility"));
 		EndAbility(Handle, ActorInfo, ActivationInfo, true, false);
 		return;
+	}
+
+	if (CachedProjectedHitTime < 0.f)
+	{
+		RefreshCachedData();
 	}
 
 	// Cache context for use in OnDelayFinished()
@@ -118,29 +127,49 @@ void UTBCombatAbility::HandleGameplayEventHit_Implementation(FGameplayEventData 
 	UE_LOG(LogTemp, Warning, TEXT("TB ability hit detected."))
 }
 
-float UTBCombatAbility::GetProjectedAttackTime() const
+void UTBCombatAbility::RefreshCachedData()
 {
+	CachedProjectedHitTime = CalculateProjectedAttackTime();
+}
+
+void UTBCombatAbility::PostInitProperties()
+{
+	Super::PostInitProperties();
+
+	RefreshCachedData();
+}
+
+float UTBCombatAbility::CalculateProjectedAttackTime() const
+{
+	if (!ImpactTrackingTag.IsValid())
+	{
+		WOLF_WARN(TEXT("No impact tracking tag set on BaseTBCombatAbility Blueprint"));
+		return -1.f;
+	}
+	
 	auto TimeAccumulator = 0.0f;
 	for (const auto& Period : AbilitySequence)
 	{
 		if (Period.PeriodType != EPeriod::Attack)
 		{
 			TimeAccumulator += GetTruePeriodDuration(Period);
-			continue;
-		} 
-		
-		if (Period.Montage)
+			continue; // Add total period time and go to the next period.
+		}
+
+		// Attack periods must have montage
+		for (const auto& NotifyEvent : Period.Montage->Notifies)
 		{
-			for (const auto& Notify : Period.Montage->Notifies)
+			if (const auto* HitNotify = Cast<UAnimNotify_Hit>(NotifyEvent.Notify);
+				HitNotify->EventTag == ImpactTrackingTag) // Currently assumes one notify per attack montage
 			{
-				if (!Notify.NotifyName.ToString().Contains("Hit")) continue;
-				return TimeAccumulator + Notify.GetTriggerTime();
+				return TimeAccumulator + NotifyEvent.GetTriggerTime();
 			}
 		}
 
 		return TimeAccumulator + Period.HitDelay;
 	}
 
+	WOLF_WARN(TEXT("Ability Sequence has no attack period"));
 	return -1.f;
 }
 

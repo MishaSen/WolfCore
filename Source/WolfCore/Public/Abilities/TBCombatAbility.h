@@ -55,7 +55,11 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Periods")
 	TArray<FPeriod> AbilitySequence;
 
-	float GetProjectedAttackTime() const;
+	float GetProjectedAttackTime() const { return CachedProjectedHitTime; }
+
+	void RefreshCachedData();
+
+	virtual void PostInitProperties() override;
 
 	bool IsInvulnerableAt(float RelativeTime) const;
 
@@ -66,8 +70,16 @@ public:
 	                             const FGameplayAbilityActivationInfo ActivationInfo,
 	                             const FGameplayEventData* TriggerEventData) override;
 
+protected:
+	UPROPERTY(EditDefaultsOnly, Category = "Presage | Setup")
+	FGameplayTag ImpactTrackingTag;
+
 private:
 	int32 CurrentPeriodIndex = 0;
+
+	float CachedProjectedHitTime = -1.f;
+
+	float CalculateProjectedAttackTime() const;
 
 	void PlayCurrentPeriod(FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo,
 	                       const FGameplayAbilityActivationInfo& ActivationInfo);

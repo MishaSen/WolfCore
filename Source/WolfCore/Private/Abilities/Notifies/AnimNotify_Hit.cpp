@@ -14,11 +14,11 @@ void UAnimNotify_Hit::Notify(USkeletalMeshComponent* MeshComp, UAnimSequenceBase
 
 	if (auto* ASC = UAbilitySystemBlueprintLibrary::GetAbilitySystemComponent(MeshComp->GetOwner()))
 	{
-		if (GameplayTag.IsValid())
+		if (EventTag.IsValid())
 		{
 			FGameplayEventData Payload;
-			Payload.EventTag = GameplayTag;
-			ASC->HandleGameplayEvent(GameplayTag, &Payload);
+			Payload.EventTag = EventTag;
+			ASC->HandleGameplayEvent(EventTag, &Payload);
 		}
 	}
 }

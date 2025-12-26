@@ -17,7 +17,7 @@ class WOLFCORE_API UAnimNotify_Hit : public UAnimNotify
 
 public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Gameplay Ability System")
-	FGameplayTag GameplayTag;
+	FGameplayTag EventTag;
 
 	virtual void Notify(USkeletalMeshComponent* MeshComp, UAnimSequenceBase* Animation, const FAnimNotifyEventReference& EventReference) override;
 };
