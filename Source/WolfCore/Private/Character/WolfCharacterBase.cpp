@@ -7,6 +7,7 @@
 #include "Abilities/AbilityConfig.h"
 #include "AbilitySystem/WolfAttributeSet.h"
 #include "AttributeSet.h"
+#include "AbilitySystem/CharacterStatConfig.h"
 #include "Components/CapsuleComponent.h"
 #include "Core/WolfGameplayTags.h"
 #include "Debug/WolfDebug.h"
@@ -90,25 +91,25 @@ void AWolfCharacterBase::SetupAbilitySystem()
 
 void AWolfCharacterBase::ApplyDefaultAttributes()
 {
-	if (IsValid(ASC) && DefaultAttributes)
-	{
-		FGameplayEffectContextHandle EffectContext = ASC->MakeEffectContext();
-		EffectContext.AddSourceObject(this);
+	if (!IsValid(ASC) || !DefaultAttributes || !StatConfig) return;
+	
+	FGameplayEffectContextHandle EffectContext = ASC->MakeEffectContext();
+	EffectContext.AddSourceObject(this);
 
-		if (const FGameplayEffectSpecHandle SpecHandle = ASC->MakeOutgoingSpec(DefaultAttributes, 1, EffectContext);
-			SpecHandle.IsValid())
-		{
-			ASC->ApplyGameplayEffectSpecToSelf(*SpecHandle.Data.Get());
-			WOLF_LOG(Log, TEXT("Applied DefaultAttributesSpec to %s"), *GetName());
-		}
-		else
-		{
-			WOLF_WARN(TEXT("Failed to apply DefaultAttributesSpec to %s"), *GetName());
-		}
+	if (const FGameplayEffectSpecHandle SpecHandle = ASC->MakeOutgoingSpec(DefaultAttributes, 1, EffectContext);
+		SpecHandle.IsValid())
+	{
+		SpecHandle.Data->SetSetByCallerMagnitude(FWolfGameplayTags::Get().Attribute_Health, StatConfig->StartingHealth);
+		SpecHandle.Data->SetSetByCallerMagnitude(FWolfGameplayTags::Get().Attribute_MaxHealth, StatConfig->MaxHealth);
+		SpecHandle.Data->SetSetByCallerMagnitude(FWolfGameplayTags::Get().Attribute_FlowGauge, StatConfig->FlowGauge);
+		SpecHandle.Data->SetSetByCallerMagnitude(FWolfGameplayTags::Get().Attribute_Adrenaline, StatConfig->Adrenaline);
+		
+		ASC->ApplyGameplayEffectSpecToSelf(*SpecHandle.Data.Get());
+		WOLF_LOG(Log, TEXT("Applied DefaultAttributesSpec to %s"), *GetName());
 	}
 	else
 	{
-		WOLF_WARN(TEXT("ApplyDefaultAttributes called on %s but ASC or DefaultAttributes invalid."), *GetName());
+		WOLF_WARN(TEXT("Failed to apply DefaultAttributesSpec to %s"), *GetName());
 	}
 }
 
@@ -176,7 +177,8 @@ FTransform AWolfCharacterBase::GetProjectedTransform(float FutureTimeDelta) cons
 	const auto TargetMontagePosition = CurrentMontagePosition + FutureTimeDelta;
 
 	const auto RootMotionDelta = CurrentMontage->ExtractRootMotionFromRange(CurrentMontagePosition,
-	                                                                        TargetMontagePosition, FAnimExtractContext());
+	                                                                        TargetMontagePosition,
+	                                                                        FAnimExtractContext());
 
 	return RootMotionDelta * CurrentTransform;
 }
@@ -249,7 +251,7 @@ UTBCombatAbility* AWolfCharacterBase::GetCurrentTBAbility() const
 			if (auto* TBAbility = Cast<UTBCombatAbility>(AbilityInstance)) return TBAbility;
 		}
 	}
-	
+
 	return nullptr;
 }
 

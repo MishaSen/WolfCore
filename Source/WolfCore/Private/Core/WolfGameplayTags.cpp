@@ -30,6 +30,12 @@ void FWolfGameplayTags::InitializeNativeGameplayTags()
 	AddNativeTag(GameplayTags.InputState_TB, FName("InputState.TB"), TEXT("Input state tag for TB state."));
 	AddNativeTag(GameplayTags.InputState_OOC, FName("InputState.OOC"), TEXT("Input state tag for OOC state."));
 
+	// --- Attributes ---
+	AddNativeTag(GameplayTags.Attribute_Health, FName("Attribute.Health"), TEXT("Health attribute."));
+	AddNativeTag(GameplayTags.Attribute_MaxHealth, FName("Attribute.MaxHealth"), TEXT("Max health attribute."));
+	AddNativeTag(GameplayTags.Attribute_FlowGauge, FName("Attribute.FlowGauge"), TEXT("Flow gauge attribute."));
+	AddNativeTag(GameplayTags.Attribute_Adrenaline, FName("Attribute.Adrenaline"), TEXT("Adrenaline attribute."));
+
 	// --- Event Tags ---
 	AddNativeTag(GameplayTags.Event_ModeSwitchReady, FName("Event.ModeSwitch"), TEXT("Event tag for mode switching."));
 	AddNativeTag(GameplayTags.Event_Ability_Attack, FName("Event.Ability.Attack"), TEXT("Event tag for attacking."));

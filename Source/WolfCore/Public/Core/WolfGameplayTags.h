@@ -31,6 +31,12 @@ struct FWolfGameplayTags
 	FGameplayTag InputState_TB;
 	FGameplayTag InputState_OOC;
 
+	// --- Attributes ---
+	FGameplayTag Attribute_Health;
+	FGameplayTag Attribute_MaxHealth;
+	FGameplayTag Attribute_FlowGauge;
+	FGameplayTag Attribute_Adrenaline;
+
 	// --- Event Tags ---
 	FGameplayTag Event_ModeSwitchReady;
 	FGameplayTag Event_Ability_Attack;

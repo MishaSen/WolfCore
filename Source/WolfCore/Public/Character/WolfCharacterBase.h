@@ -11,6 +11,7 @@
 
 #include "WolfCharacterBase.generated.h"
 
+class UCharacterStatConfig;
 class UAbilityConfig;
 class UGameplayAbility;
 class UWolfAbilitySystemComponent;
@@ -71,14 +72,17 @@ protected:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Ability System")
 	TObjectPtr<UWolfAbilitySystemComponent> ASC;
 
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Ability System")
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Attributes")
 	TObjectPtr<UWolfAttributeSet> AttributeSet;
 
-	UPROPERTY(EditDefaultsOnly, Category = "Abilities")
+	UPROPERTY(EditDefaultsOnly, Category = "Attributes")
 	TSubclassOf<UGameplayEffect> DefaultAttributes;
 
 	UPROPERTY(EditDefaultsOnly, Category = "Abilities")
 	TObjectPtr<UAbilityConfig> AbilityConfig;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Attributes")
+	TObjectPtr<UCharacterStatConfig> StatConfig;
 	
 	virtual void BeginPlay() override;
 	virtual void Tick(float DeltaTime) override;
