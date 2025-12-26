@@ -3,6 +3,7 @@
 
 #include "WolfCore/Public/Presage/PresageSubsystem.h"
 
+#include "Engine/World.h"
 #include "AbilitySystemBlueprintLibrary.h"
 #include "Kismet/GameplayStatics.h"
 #include "WolfCore/Public/Presage/ActorSnapshot.h"

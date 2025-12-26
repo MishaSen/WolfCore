@@ -2,8 +2,11 @@
 
 #include "WolfCore/Public/Character/WolfCharacterBase.h"
 
+#include "Components/SkeletalMeshComponent.h"
+#include "Animation/AnimInstance.h"
 #include "Abilities/AbilityConfig.h"
 #include "AbilitySystem/WolfAttributeSetBase.h"
+#include "AttributeSet.h"
 #include "Components/CapsuleComponent.h"
 #include "Core/WolfGameplayTags.h"
 #include "Debug/WolfDebug.h"
@@ -173,7 +176,7 @@ FTransform AWolfCharacterBase::GetProjectedTransform(float FutureTimeDelta) cons
 	const auto TargetMontagePosition = CurrentMontagePosition + FutureTimeDelta;
 
 	const auto RootMotionDelta = CurrentMontage->ExtractRootMotionFromRange(CurrentMontagePosition,
-	                                                                        TargetMontagePosition);
+	                                                                        TargetMontagePosition, FAnimExtractContext());
 
 	return RootMotionDelta * CurrentTransform;
 }
@@ -217,7 +220,7 @@ FTransform AWolfCharacterBase::ExtractRootMotionAtTime(UAnimMontage* Montage, fl
 {
 	if (!Montage) return FTransform::Identity;
 
-	return Montage->ExtractRootMotionFromRange(0.f, Time);
+	return Montage->ExtractRootMotionFromRange(0.f, Time, FAnimExtractContext());
 }
 
 bool AWolfCharacterBase::IsInvulnerableAt(float RelativeTime) const
@@ -342,34 +345,32 @@ void AWolfCharacterBase::RestorePhysics(const FActorSnapshot& Snapshot)
 
 void AWolfCharacterBase::RestoreGAS(const FActorSnapshot& Snapshot)
 {
-	auto* ASC = GetAbilitySystemComponent();
 	if (!ASC) return;
 
-	for (auto& [Attr, AttrValue] : Snapshot.Attributes)
+	for (const TPair<FGameplayAttribute, float>& AttrPair : Snapshot.Attributes)
 	{
-		const auto& Attribute = Attr;
-		const auto AttributeValue = AttrValue;
+		const auto& Attribute = AttrPair.Key;
+		const auto AttributeValue = AttrPair.Value;
 
 		if (FMath::IsNearlyEqual(ASC->GetNumericAttributeBase(Attribute), AttributeValue)) continue;
 		ASC->SetNumericAttributeBase(Attribute, AttributeValue);
 	}
 
 	ASC->RemoveActiveEffects(FGameplayEffectQuery());
-	for (const auto& [EffectClass, Level, Stacks, RemainingDuration]
-	     : Snapshot.ActiveEffects)
+	for (const FStoredEffect& Effect : Snapshot.ActiveEffects)
 	{
-		if (!EffectClass) continue;
+		if (!Effect.EffectClass) continue;
 
 		const auto Context = ASC->MakeEffectContext();
-		auto SpecHandle = ASC->MakeOutgoingSpec(EffectClass, Level, Context);
+		auto SpecHandle = ASC->MakeOutgoingSpec(Effect.EffectClass, Effect.Level, Context);
 
 		if (!SpecHandle.IsValid()) continue;
 
-		SpecHandle.Data->SetStackCount(Stacks);
+		SpecHandle.Data->SetStackCount(Effect.Stacks);
 
-		if (RemainingDuration > 0.f)
+		if (Effect.RemainingDuration > 0.f)
 		{
-			SpecHandle.Data->Duration = RemainingDuration;
+			SpecHandle.Data->Duration = Effect.RemainingDuration;
 		}
 
 		ASC->ApplyGameplayEffectSpecToSelf(*SpecHandle.Data.Get());

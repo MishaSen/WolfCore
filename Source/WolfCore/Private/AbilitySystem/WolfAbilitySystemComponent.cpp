@@ -80,6 +80,7 @@ FPresageAbilityRequest UWolfAbilitySystemComponent::BuildInitialPresageRequest(c
 		if (!TBAbility) continue;
 
 		return FPresageAbilityRequest(
+			TBAbility->GetClass(),
 			this,
 			Tag,
 			0.f,

@@ -4,11 +4,12 @@
 
 #include "CoreMinimal.h"
 #include "GameplayTagContainer.h"
+#include "Engine/EngineTypes.h"
+#include "AttributeSet.h"
 
 #include "ActorSnapshot.generated.h"
 
 class UGameplayEffect;
-struct FGameplayAttribute;
 class AActor;
 class UAnimSequence;
 class UAnimMontage;
@@ -51,7 +52,7 @@ struct FActorSnapshot
 	FVector Velocity = FVector::ZeroVector;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Actor State")
-	TEnumAsByte<EMovementMode> MovementMode = EMovementMode::MOVE_None;
+	TEnumAsByte<EMovementMode> MovementMode = MOVE_None;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Actor State")
 	uint8 CustomMovementMode = 0;

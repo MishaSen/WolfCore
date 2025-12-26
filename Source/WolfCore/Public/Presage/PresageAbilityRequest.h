@@ -20,10 +20,10 @@ struct FPresageAbilityRequest
 	{
 	}
 
-	FPresageAbilityRequest(
+	explicit  FPresageAbilityRequest(
 		const TSubclassOf<UTBCombatAbility>& InAbilityClass,
 		const TObjectPtr<UAbilitySystemComponent>& InASC,
-		FGameplayTag InInputTag,
+		const FGameplayTag& InInputTag,
 		float InRequestedTime,
 		const TArray<FPeriod>& InAbilitySequence,
 		const TArray<TWeakObjectPtr<AActor>>& InTargets
