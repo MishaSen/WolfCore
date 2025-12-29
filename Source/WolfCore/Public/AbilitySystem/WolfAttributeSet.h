@@ -34,7 +34,6 @@ public:
 
 	virtual void PreAttributeChange(const FGameplayAttribute& Attribute, float& NewValue) override;
 	virtual void PostGameplayEffectExecute(const FGameplayEffectModCallbackData& Data) override;
-	virtual void PostInitProperties() override;
 	static FGameplayAttribute GetAttributeByTag(const FGameplayTag& Tag);
 
 protected:

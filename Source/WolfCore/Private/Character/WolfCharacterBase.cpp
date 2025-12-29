@@ -92,14 +92,31 @@ void AWolfCharacterBase::SetupAbilitySystem()
 void AWolfCharacterBase::ApplyDefaultAttributes()
 {
 	if (!IsValid(ASC) || !DefaultAttributes || !StatConfig) return;
-	
-	FGameplayEffectContextHandle EffectContext = ASC->MakeEffectContext();
+
+	auto EffectContext = ASC->MakeEffectContext();
 	EffectContext.AddSourceObject(this);
 
-	if (const FGameplayEffectSpecHandle SpecHandle = ASC->MakeOutgoingSpec(DefaultAttributes, 1, EffectContext);
+	const auto SpecHandle = ASC->MakeOutgoingSpec(DefaultAttributes, 1, EffectContext);
+	if (!SpecHandle.IsValid()) return;
+
+	for (const auto& [Tag, Value] : StatConfig->DefaultStats)
+	{
+		SpecHandle.Data->SetSetByCallerMagnitude(Tag, Value);
+
+		if (!UWolfAttributeSet::GetAttributeByTag(Tag).IsValid())
+		{
+			WOLF_WARN(TEXT("Attribute Tag [%s] is in StatConfig but NOT registered in UWolfAttributeSet mapping!"
+				          "Snapshots/Presage will ignore this stat."), *Tag.ToString());
+		}
+	}
+
+	ASC->ApplyGameplayEffectSpecToSelf(*SpecHandle.Data.Get());
+	WOLF_LOG(Log, TEXT("Applied all attributes from StatConfig to %s"), *GetName());
+
+	/*if (const auto SpecHandle = ASC->MakeOutgoingSpec(DefaultAttributes, 1, EffectContext);
 		SpecHandle.IsValid())
 	{
-		for (const TPair<FGameplayTag, float>& Pair : StatConfig->DefaultStats)
+		for (const auto& Pair : StatConfig->DefaultStats)
 		{
 			SpecHandle.Data->SetSetByCallerMagnitude(Pair.Key, Pair.Value);
 		}
@@ -110,7 +127,7 @@ void AWolfCharacterBase::ApplyDefaultAttributes()
 	else
 	{
 		WOLF_WARN(TEXT("Failed to apply DefaultAttributesSpec to %s"), *GetName());
-	}
+	}*/
 }
 
 void AWolfCharacterBase::PossessedBy(AController* NewController)
@@ -266,7 +283,7 @@ void AWolfCharacterBase::CreateSnapshot_Implementation(FActorSnapshot& OutSnapsh
 void AWolfCharacterBase::RestoreSnapshot_Implementation(const FActorSnapshot& InSnapshot)
 {
 	bIsRestoringSnapshot = true;
-	
+
 	RestorePhysics(InSnapshot);
 	RestoreGAS(InSnapshot);
 	RestoreAnim(InSnapshot);
@@ -286,13 +303,14 @@ void AWolfCharacterBase::SnapshotPhysics(FActorSnapshot& Snapshot) const
 
 void AWolfCharacterBase::SnapshotGAS(FActorSnapshot& Snapshot) const
 {
-	if (!ASC) return;
+	if (!ASC || !StatConfig) return;
 
-	TArray<FGameplayAttribute> CharAttributes;
-	ASC->GetAllAttributes(CharAttributes);
-	for (const auto& Attribute : CharAttributes)
+	for (const auto& Pair : StatConfig->DefaultStats)
 	{
-		Snapshot.Attributes.Add(Attribute, ASC->GetNumericAttributeBase(Attribute));
+		if (auto Attribute = UWolfAttributeSet::GetAttributeByTag(Pair.Key); Attribute.IsValid())
+		{
+			Snapshot.Attributes.Add(Attribute, ASC->GetNumericAttributeBase(Attribute));
+		}
 	}
 
 	for (auto ActiveHandles = ASC->GetActiveEffects(FGameplayEffectQuery());

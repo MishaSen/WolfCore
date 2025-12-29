@@ -5,6 +5,9 @@
 
 #include "GameplayEffectExtension.h"
 #include "Core/WolfGameplayTags.h"
+#include "Debug/WolfDebug.h"
+
+TMap<FGameplayTag, TFunction<FGameplayAttribute()>> UWolfAttributeSet::TagToAttributeMap;
 
 void UWolfAttributeSet::PreAttributeChange(const FGameplayAttribute& Attribute, float& NewValue)
 {
@@ -35,21 +38,20 @@ void UWolfAttributeSet::PostGameplayEffectExecute(const FGameplayEffectModCallba
 	}
 }
 
-void UWolfAttributeSet::PostInitProperties()
-{
-	Super::PostInitProperties();
-
-	if (TagToAttributeMap.IsEmpty())
-	{
-		TagToAttributeMap.Add(FWolfGameplayTags::Get().Attribute_Health, &GetHealthAttribute);
-		TagToAttributeMap.Add(FWolfGameplayTags::Get().Attribute_MaxHealth, &GetMaxHealthAttribute);
-		TagToAttributeMap.Add(FWolfGameplayTags::Get().Attribute_FlowGauge, &GetFlowGaugeAttribute);
-		TagToAttributeMap.Add(FWolfGameplayTags::Get().Attribute_Adrenaline, &GetAdrenalineAttribute);
-	}
-}
-
 FGameplayAttribute UWolfAttributeSet::GetAttributeByTag(const FGameplayTag& Tag)
 {
+	if (TagToAttributeMap.IsEmpty())
+	{
+		const auto& Tags = FWolfGameplayTags::Get();
+
+		TagToAttributeMap.Add(Tags.Attribute_Health, []() { return GetHealthAttribute(); });
+		TagToAttributeMap.Add(Tags.Attribute_MaxHealth, []() { return GetMaxHealthAttribute(); });
+		TagToAttributeMap.Add(Tags.Attribute_FlowGauge, []() { return GetFlowGaugeAttribute(); });
+		TagToAttributeMap.Add(Tags.Attribute_Adrenaline, []() { return GetAdrenalineAttribute(); });
+
+		WOLF_LOG(Log, TEXT("Static Tag Map initialized"));
+	}
+	
 	if (TagToAttributeMap.Contains(Tag))
 	{
 		return TagToAttributeMap[Tag]();
