@@ -99,13 +99,13 @@ void AWolfCharacterBase::ApplyDefaultAttributes()
 	if (const FGameplayEffectSpecHandle SpecHandle = ASC->MakeOutgoingSpec(DefaultAttributes, 1, EffectContext);
 		SpecHandle.IsValid())
 	{
-		SpecHandle.Data->SetSetByCallerMagnitude(FWolfGameplayTags::Get().Attribute_Health, StatConfig->StartingHealth);
-		SpecHandle.Data->SetSetByCallerMagnitude(FWolfGameplayTags::Get().Attribute_MaxHealth, StatConfig->MaxHealth);
-		SpecHandle.Data->SetSetByCallerMagnitude(FWolfGameplayTags::Get().Attribute_FlowGauge, StatConfig->FlowGauge);
-		SpecHandle.Data->SetSetByCallerMagnitude(FWolfGameplayTags::Get().Attribute_Adrenaline, StatConfig->Adrenaline);
+		for (const TPair<FGameplayTag, float>& Pair : StatConfig->DefaultStats)
+		{
+			SpecHandle.Data->SetSetByCallerMagnitude(Pair.Key, Pair.Value);
+		}
 		
 		ASC->ApplyGameplayEffectSpecToSelf(*SpecHandle.Data.Get());
-		WOLF_LOG(Log, TEXT("Applied DefaultAttributesSpec to %s"), *GetName());
+		WOLF_LOG(Log, TEXT("Applied all attributes from StatConfig to %s"), *GetName());
 	}
 	else
 	{

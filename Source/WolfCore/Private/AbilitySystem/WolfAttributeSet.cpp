@@ -4,6 +4,7 @@
 #include "WolfCore/Public/AbilitySystem/WolfAttributeSet.h"
 
 #include "GameplayEffectExtension.h"
+#include "Core/WolfGameplayTags.h"
 
 void UWolfAttributeSet::PreAttributeChange(const FGameplayAttribute& Attribute, float& NewValue)
 {
@@ -32,4 +33,26 @@ void UWolfAttributeSet::PostGameplayEffectExecute(const FGameplayEffectModCallba
 			 */
 		}
 	}
+}
+
+void UWolfAttributeSet::PostInitProperties()
+{
+	Super::PostInitProperties();
+
+	if (TagToAttributeMap.IsEmpty())
+	{
+		TagToAttributeMap.Add(FWolfGameplayTags::Get().Attribute_Health, &GetHealthAttribute);
+		TagToAttributeMap.Add(FWolfGameplayTags::Get().Attribute_MaxHealth, &GetMaxHealthAttribute);
+		TagToAttributeMap.Add(FWolfGameplayTags::Get().Attribute_FlowGauge, &GetFlowGaugeAttribute);
+		TagToAttributeMap.Add(FWolfGameplayTags::Get().Attribute_Adrenaline, &GetAdrenalineAttribute);
+	}
+}
+
+FGameplayAttribute UWolfAttributeSet::GetAttributeByTag(const FGameplayTag& Tag)
+{
+	if (TagToAttributeMap.Contains(Tag))
+	{
+		return TagToAttributeMap[Tag]();
+	}
+	return FGameplayAttribute();
 }

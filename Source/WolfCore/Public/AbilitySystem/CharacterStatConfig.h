@@ -3,6 +3,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "GameplayTagContainer.h"
 #include "Engine/DataAsset.h"
 #include "CharacterStatConfig.generated.h"
 
@@ -16,14 +17,5 @@ class WOLFCORE_API UCharacterStatConfig : public UDataAsset
 
 public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Attributes")
-	float MaxHealth = 100.f;
-
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Attributes")
-	float StartingHealth = 100.f;
-
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Attributes")
-	float FlowGauge = 0.f;
-
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Attributes")
-	float Adrenaline = 0.f;
+	TMap<FGameplayTag, float> DefaultStats;
 };
