@@ -68,6 +68,9 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Abilities")
 	FGameplayAbilitySpecHandle GetAbilitySpecHandle(const TSubclassOf<UGameplayAbility>& AbilityClass) const;
 
+	UFUNCTION(BlueprintNativeEvent, BlueprintCallable, Category = "Combat")
+	void Die();
+
 protected:
 	UPROPERTY(EditDefaultsOnly, Category = "Ability System")
 	TSubclassOf<UWolfAbilitySystemComponent> AbilitySystemComponentClass;

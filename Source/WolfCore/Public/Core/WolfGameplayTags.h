@@ -30,6 +30,7 @@ struct FWolfGameplayTags
 	FGameplayTag InputState_RT;
 	FGameplayTag InputState_TB;
 	FGameplayTag InputState_OOC;
+	FGameplayTag InputState_Dead;
 
 	// --- Attributes ---
 	FGameplayTag Attribute_Health;

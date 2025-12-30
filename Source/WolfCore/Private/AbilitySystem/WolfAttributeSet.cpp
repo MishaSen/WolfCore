@@ -4,6 +4,7 @@
 #include "WolfCore/Public/AbilitySystem/WolfAttributeSet.h"
 
 #include "GameplayEffectExtension.h"
+#include "Character/WolfCharacterBase.h"
 #include "Core/WolfGameplayTags.h"
 #include "Debug/WolfDebug.h"
 
@@ -23,18 +24,16 @@ void UWolfAttributeSet::PostGameplayEffectExecute(const FGameplayEffectModCallba
 {
 	Super::PostGameplayEffectExecute(Data);
 
-	if (Data.EvaluatedData.Attribute == GetHealthAttribute())
-	{
-		SetHealth(FMath::Clamp(GetHealth(), 0.f, GetMaxHealth()));
+	if (Data.EvaluatedData.Attribute != GetHealthAttribute()) return;
 
-		if (GetHealth() <= 0.f)
-		{
-			auto* Killer = Data.EffectSpec.GetContext().GetEffectCauser();
-			/*
-			 * Consider adding interface faction Die()
-			 * So far the plan is for all characters to inherit from WolfCharacterBase, so it's fine for now
-			 */
-		}
+	SetHealth(FMath::Clamp(GetHealth(), 0.f, GetMaxHealth()));
+
+	if (GetHealth() <= 0.f)
+	{
+		auto* Victim = Cast<AWolfCharacterBase>(Data.Target.GetAvatarActor());
+		if (!Victim) return;
+		
+		Victim->Die();
 	}
 }
 
@@ -51,7 +50,7 @@ FGameplayAttribute UWolfAttributeSet::GetAttributeByTag(const FGameplayTag& Tag)
 
 		WOLF_LOG(Log, TEXT("Static Tag Map initialized"));
 	}
-	
+
 	if (TagToAttributeMap.Contains(Tag))
 	{
 		return TagToAttributeMap[Tag]();

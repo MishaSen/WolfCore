@@ -58,6 +58,31 @@ void AWolfCharacterBase::BeginPlay()
 	}
 }
 
+void AWolfCharacterBase::Die_Implementation()
+{
+	if (ASC && ASC->HasMatchingGameplayTag(FWolfGameplayTags::Get().InputState_Dead)) return; // Already dead.
+
+	if (auto* const Capsule = GetCapsuleComponent())
+	{
+		Capsule->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+		Capsule->SetCollisionResponseToAllChannels(ECR_Ignore);
+	}
+
+	if (auto* const MoveComp = GetCharacterMovement())
+	{
+		MoveComp->StopMovementImmediately();
+		MoveComp->DisableMovement();
+	}
+
+	if (IsValid(ASC))
+	{
+		ASC->CancelAllAbilities();
+		ASC->AddLooseGameplayTag(FWolfGameplayTags::Get().InputState_Dead);
+	}
+
+	WOLF_INFO(TEXT("Character %s has died."), *GetName());
+}
+
 void AWolfCharacterBase::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
@@ -354,8 +379,18 @@ void AWolfCharacterBase::RestorePhysics(const FActorSnapshot& Snapshot)
 		ETeleportType::TeleportPhysics
 	);
 
+	if (auto* Capsule = GetCapsuleComponent())
+	{
+		Capsule->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
+		Capsule->SetCollisionResponseToAllChannels(ECR_Block);
+		Capsule->SetCollisionProfileName(UCollisionProfile::Pawn_ProfileName);
+	}
+
 	if (auto* MoveComp = GetCharacterMovement())
 	{
+		MoveComp->SetComponentTickEnabled(true);
+		MoveComp->Activate();
+
 		MoveComp->SetMovementMode(Snapshot.MovementMode, Snapshot.CustomMovementMode);
 		MoveComp->Velocity = Snapshot.Velocity;
 		MoveComp->UpdateComponentVelocity();
@@ -371,6 +406,7 @@ void AWolfCharacterBase::RestorePhysics(const FActorSnapshot& Snapshot)
 void AWolfCharacterBase::RestoreGAS(const FActorSnapshot& Snapshot)
 {
 	if (!ASC) return;
+	ASC->SetTagMapCount(FWolfGameplayTags::Get().InputState_Dead, 0);
 
 	for (const TPair<FGameplayAttribute, float>& AttrPair : Snapshot.Attributes)
 	{
