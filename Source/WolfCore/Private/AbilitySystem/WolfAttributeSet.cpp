@@ -26,6 +26,9 @@ void UWolfAttributeSet::PostGameplayEffectExecute(const FGameplayEffectModCallba
 
 	if (Data.EvaluatedData.Attribute != GetHealthAttribute()) return;
 
+	auto* TargetActor = Data.Target.GetAvatarActor();
+	WOLF_LOG(Log, TEXT("Health Change on %s. New Health: %f"), TargetActor ? *TargetActor->GetName() : TEXT("NULL"), GetHealth());
+
 	SetHealth(FMath::Clamp(GetHealth(), 0.f, GetMaxHealth()));
 
 	if (GetHealth() <= 0.f)

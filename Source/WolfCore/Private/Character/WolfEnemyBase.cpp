@@ -3,6 +3,7 @@
 
 #include "Character/WolfEnemyBase.h"
 
+#include "AIController.h"
 #include "GameFramework/CharacterMovementComponent.h"
 
 
@@ -11,7 +12,7 @@ AWolfEnemyBase::AWolfEnemyBase()
 	PrimaryActorTick.bCanEverTick = false;
 
 	AutoPossessAI = EAutoPossessAI::PlacedInWorldOrSpawned;
-	AIControllerClass = nullptr;
+	AIControllerClass = AAIController::StaticClass();
 
 	bUseControllerRotationYaw = false;
 	if (GetCharacterMovement())
@@ -27,9 +28,3 @@ void AWolfEnemyBase::BeginPlay()
 	Super::BeginPlay();
 	
 }
-
-void AWolfEnemyBase::Die_Implementation()
-{
-	Super::Die_Implementation();
-}
-
