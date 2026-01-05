@@ -44,6 +44,9 @@ protected:
 	virtual void CancelAbility(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo,
 	                           const FGameplayAbilityActivationInfo ActivationInfo, bool bReplicateCancelAbility) override;
 
+	UPROPERTY(EditDefaultsOnly, Category = "GAS | Effects")
+	TSubclassOf<UGameplayEffect> HitAdrenalineGE;
+
 private:
 	UPROPERTY()
 	UWorld* CachedWorld;

@@ -18,25 +18,37 @@ void UWolfAttributeSet::PreAttributeChange(const FGameplayAttribute& Attribute, 
 	{
 		NewValue = FMath::Clamp(NewValue, 0.f, GetMaxHealth());
 	}
+
+	if (Attribute == GetAdrenalineAttribute())
+	{
+		NewValue = FMath::Max(NewValue, 0.f);
+	}
 }
 
 void UWolfAttributeSet::PostGameplayEffectExecute(const FGameplayEffectModCallbackData& Data)
 {
 	Super::PostGameplayEffectExecute(Data);
 
-	if (Data.EvaluatedData.Attribute != GetHealthAttribute()) return;
-
+	const auto Attribute = Data.EvaluatedData.Attribute;
 	auto* TargetActor = Data.Target.GetAvatarActor();
-	WOLF_LOG(Log, TEXT("Health Change on %s. New Health: %f"), TargetActor ? *TargetActor->GetName() : TEXT("NULL"), GetHealth());
+	const FString ActorName = TargetActor ? TargetActor->GetName() : TEXT("NULL");
 
-	SetHealth(FMath::Clamp(GetHealth(), 0.f, GetMaxHealth()));
-
-	if (GetHealth() <= 0.f)
+	if (Attribute == GetHealthAttribute())
 	{
-		auto* Victim = Cast<AWolfCharacterBase>(Data.Target.GetAvatarActor());
-		if (!Victim) return;
-		
-		Victim->Die();
+		SetHealth(FMath::Clamp(GetHealth(), 0.f, GetMaxHealth()));
+		WOLF_LOG(Log, TEXT("[%s] Health: %f"), *ActorName, GetHealth());
+
+		if (GetHealth() <= 0.f)
+		{
+			if (auto* Victim = Cast<AWolfCharacterBase>(TargetActor)) Victim->Die();
+		}
+		return;
+	}
+
+	if (Attribute == GetAdrenalineAttribute())
+	{
+		SetAdrenaline(FMath::Max(GetAdrenaline(), 0.f));
+		WOLF_LOG(Log, TEXT("[%s] Adrenaline: %f"), *ActorName, GetAdrenaline());
 	}
 }
 

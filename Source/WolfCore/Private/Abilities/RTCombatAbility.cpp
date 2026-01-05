@@ -60,6 +60,18 @@ void URTCombatAbility::StartupPhase()
 
 void URTCombatAbility::ActivePhase()
 {
+	/*
+	 * If hit, remember to call:
+	 * 
+	 FGameplayEffectSpecHandle SpecHandle = ASC->MakeOutgoingSpec(HitAdrenalineGE, 1.f, ASC->MakeEffectContext());
+	 if (SpecHandle.IsValid())
+		{
+	 // Pass +10.0 into the MMC
+			 SpecHandle.Data->SetSetByCallerMagnitude(FWolfGameplayTags::Get().Data_Amount, 10.0f);
+			 ASC->ApplyGameplayEffectSpecToSelf(*SpecHandle.Data.Get());
+		}
+		
+	 */
 }
 
 void URTCombatAbility::RecoveryPhase()

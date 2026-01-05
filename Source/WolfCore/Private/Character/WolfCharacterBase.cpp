@@ -121,12 +121,12 @@ void AWolfCharacterBase::ApplyDefaultAttributes()
 	auto EffectContext = ASC->MakeEffectContext();
 	EffectContext.AddSourceObject(this);
 
-	const auto SpecHandle = ASC->MakeOutgoingSpec(DefaultAttributes, 1, EffectContext);
-	if (!SpecHandle.IsValid()) return;
+	const auto DefaultStatsHandle = ASC->MakeOutgoingSpec(DefaultAttributes, 1, EffectContext);
+	if (!DefaultStatsHandle.IsValid()) return;
 
 	for (const auto& [Tag, Value] : StatConfig->DefaultStats)
 	{
-		SpecHandle.Data->SetSetByCallerMagnitude(Tag, Value);
+		DefaultStatsHandle.Data->SetSetByCallerMagnitude(Tag, Value);
 
 		if (!UWolfAttributeSet::GetAttributeByTag(Tag).IsValid())
 		{
@@ -135,24 +135,23 @@ void AWolfCharacterBase::ApplyDefaultAttributes()
 		}
 	}
 
-	ASC->ApplyGameplayEffectSpecToSelf(*SpecHandle.Data.Get());
+	ASC->ApplyGameplayEffectSpecToSelf(*DefaultStatsHandle.Data.Get());
 	WOLF_LOG(Log, TEXT("Applied all attributes from StatConfig to %s"), *GetName());
 
-	/*if (const auto SpecHandle = ASC->MakeOutgoingSpec(DefaultAttributes, 1, EffectContext);
-		SpecHandle.IsValid())
+	// Passive Adrenaline
+	if (!PassiveAdrenalineGE)
 	{
-		for (const auto& Pair : StatConfig->DefaultStats)
-		{
-			SpecHandle.Data->SetSetByCallerMagnitude(Pair.Key, Pair.Value);
-		}
-		
-		ASC->ApplyGameplayEffectSpecToSelf(*SpecHandle.Data.Get());
-		WOLF_LOG(Log, TEXT("Applied all attributes from StatConfig to %s"), *GetName());
+		WOLF_WARN(TEXT("PassiveAdrenalineGE is invalid for %s"), *GetName());
 	}
-	else
+
+	if (const auto PassiveAdrenalineHandle = ASC->MakeOutgoingSpec(PassiveAdrenalineGE, 1.f, ASC->MakeEffectContext());
+		PassiveAdrenalineHandle.IsValid())
 	{
-		WOLF_WARN(TEXT("Failed to apply DefaultAttributesSpec to %s"), *GetName());
-	}*/
+		PassiveAdrenalineHandle.Data->SetSetByCallerMagnitude(FWolfGameplayTags::Get().Data_Amount, -2.f);
+		ASC->ApplyGameplayEffectSpecToSelf(*PassiveAdrenalineHandle.Data.Get());
+
+		WOLF_LOG(Log, TEXT("Applied PassiveAdrenalineGE to %s"), *GetName());
+	}
 }
 
 void AWolfCharacterBase::PossessedBy(AController* NewController)

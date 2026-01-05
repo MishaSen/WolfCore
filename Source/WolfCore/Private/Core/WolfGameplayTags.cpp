@@ -29,6 +29,7 @@ void FWolfGameplayTags::InitializeNativeGameplayTags()
 	AddNativeTag(GameplayTags.InputState_RT, FName("InputState.RT"), TEXT("Input state tag for RT state."));
 	AddNativeTag(GameplayTags.InputState_TB, FName("InputState.TB"), TEXT("Input state tag for TB state."));
 	AddNativeTag(GameplayTags.InputState_OOC, FName("InputState.OOC"), TEXT("Input state tag for OOC state."));
+	AddNativeTag(GameplayTags.InputState_Dead, FName("InputState.Dead"), TEXT("Input state tag for dead state."));
 
 	// --- Attributes ---
 	AddNativeTag(GameplayTags.Attribute_Health, FName("Attribute.Health"), TEXT("Health attribute."));
@@ -43,4 +44,7 @@ void FWolfGameplayTags::InitializeNativeGameplayTags()
 	// --- Presage Result ---
 	AddNativeTag(GameplayTags.Result_Hit, FName("Result.Hit"), TEXT("Result tag for a hit."));
 	AddNativeTag(GameplayTags.Result_Dodge, FName("Result.Dodge"), TEXT("Result tag for a dodge."));
+
+	// --- Data ---
+	AddNativeTag(GameplayTags.Data_Amount, FName("Data.Amount"), TEXT("Data tag for amount."));
 }

@@ -109,4 +109,7 @@ private:
 
 	UFUNCTION(BlueprintCallable, Category = "Abilities")
 	void AddCharacterAbilities();
+
+	UPROPERTY(EditDefaultsOnly, Category = "GAS | Effects")
+	TSubclassOf<UGameplayEffect> PassiveAdrenalineGE;
 };
