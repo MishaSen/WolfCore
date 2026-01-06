@@ -72,22 +72,22 @@ public:
 	void Die();
 
 protected:
-	UPROPERTY(EditDefaultsOnly, Category = "Ability System")
+	UPROPERTY(EditDefaultsOnly, Category = "GAS | Ability System")
 	TSubclassOf<UWolfAbilitySystemComponent> AbilitySystemComponentClass;
 	
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Ability System")
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "GAS | Ability System")
 	TObjectPtr<UWolfAbilitySystemComponent> ASC;
 
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Attributes")
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "GAS | Attributes")
 	TObjectPtr<UWolfAttributeSet> AttributeSet;
 
-	UPROPERTY(EditDefaultsOnly, Category = "Attributes")
+	UPROPERTY(EditDefaultsOnly, Category = "GAS | Attributes")
 	TSubclassOf<UGameplayEffect> DefaultAttributes;
 
-	UPROPERTY(EditDefaultsOnly, Category = "Abilities")
+	UPROPERTY(EditDefaultsOnly, Category = "GAS | Abilities")
 	TObjectPtr<UAbilityConfig> AbilityConfig;
 
-	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Attributes")
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "GAS | Attributes")
 	TObjectPtr<UCharacterStatConfig> StatConfig;
 	
 	virtual void BeginPlay() override;
@@ -112,4 +112,7 @@ private:
 
 	UPROPERTY(EditDefaultsOnly, Category = "GAS | Effects")
 	TSubclassOf<UGameplayEffect> PassiveAdrenalineGE;
+
+	UPROPERTY(EditDefaultsOnly, Category = "GAS | Effects")
+	TSubclassOf<UGameplayEffect> PassiveFlowGaugeGE;
 };

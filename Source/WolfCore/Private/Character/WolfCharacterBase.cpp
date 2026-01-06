@@ -152,6 +152,19 @@ void AWolfCharacterBase::ApplyDefaultAttributes()
 
 		WOLF_LOG(Log, TEXT("Applied PassiveAdrenalineGE to %s"), *GetName());
 	}
+
+	// Passive Flow Gauge
+	if (!PassiveFlowGaugeGE)
+	{
+		WOLF_WARN(TEXT("PassiveFlowGaugeGE is invalid for %s"), *GetName());
+	}
+
+	if (const auto PassiveFlowGaugeHandle = ASC->MakeOutgoingSpec(PassiveFlowGaugeGE, 1.f, ASC->MakeEffectContext());
+		PassiveFlowGaugeHandle.IsValid())
+	{
+		PassiveFlowGaugeHandle.Data->SetSetByCallerMagnitude(FWolfGameplayTags::Get().Data_Amount, -2.f);
+		ASC->ApplyGameplayEffectSpecToSelf(*PassiveFlowGaugeHandle.Data.Get());
+	}
 }
 
 void AWolfCharacterBase::PossessedBy(AController* NewController)

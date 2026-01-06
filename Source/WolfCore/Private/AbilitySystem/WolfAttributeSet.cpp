@@ -23,6 +23,11 @@ void UWolfAttributeSet::PreAttributeChange(const FGameplayAttribute& Attribute, 
 	{
 		NewValue = FMath::Max(NewValue, 0.f);
 	}
+	
+	if (Attribute == GetFlowGaugeAttribute())
+	{
+		NewValue = FMath::Max(NewValue, 0.f);
+	}
 }
 
 void UWolfAttributeSet::PostGameplayEffectExecute(const FGameplayEffectModCallbackData& Data)
@@ -49,6 +54,12 @@ void UWolfAttributeSet::PostGameplayEffectExecute(const FGameplayEffectModCallba
 	{
 		SetAdrenaline(FMath::Max(GetAdrenaline(), 0.f));
 		WOLF_LOG(Log, TEXT("[%s] Adrenaline: %f"), *ActorName, GetAdrenaline());
+	}
+	
+	if (Attribute == GetFlowGaugeAttribute())
+	{
+		SetFlowGauge(FMath::Max(GetFlowGauge(), 0.f));
+		WOLF_LOG(Log, TEXT("[%s] Flow Gauge: %f"), *ActorName, GetFlowGauge());
 	}
 }
 
