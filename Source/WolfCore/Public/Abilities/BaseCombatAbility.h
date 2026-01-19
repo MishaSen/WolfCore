@@ -44,6 +44,9 @@ public:
 	UPROPERTY(EditDefaultsOnly, Category = "Combat Data")
 	TArray<FCombatPeriod> AbilitySequence;
 
+	UFUNCTION(BlueprintCallable, Category = "Presage")
+	float CalculateProjectedImpactTime() const;
+
 	bool IsInvulnerableAt(float RelativeTime) const;
 	
 	UPROPERTY(EditDefaultsOnly, Category = "Input")
