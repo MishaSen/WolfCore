@@ -138,7 +138,7 @@ void AWolfCharacterBase::ApplyDefaultAttributes()
 	ASC->ApplyGameplayEffectSpecToSelf(*DefaultStatsHandle.Data.Get());
 	WOLF_LOG(Log, TEXT("Applied all attributes from StatConfig to %s"), *GetName());
 
-	// Passive Adrenaline
+	// --- Passive Adrenaline ---
 	if (!PassiveAdrenalineGE)
 	{
 		WOLF_WARN(TEXT("PassiveAdrenalineGE is invalid for %s"), *GetName());
@@ -153,7 +153,7 @@ void AWolfCharacterBase::ApplyDefaultAttributes()
 		WOLF_LOG(Log, TEXT("Applied PassiveAdrenalineGE to %s"), *GetName());
 	}
 
-	// Passive Flow Gauge
+	// --- Passive Flow Gauge ---
 	if (!PassiveFlowGaugeGE)
 	{
 		WOLF_WARN(TEXT("PassiveFlowGaugeGE is invalid for %s"), *GetName());
