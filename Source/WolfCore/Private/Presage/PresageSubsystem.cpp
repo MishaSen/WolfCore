@@ -205,7 +205,7 @@ void UPresageSubsystem::UpdateTimelinePrediction()
 	RefreshParticipants();
 
 	TArray<FPresageTimelineEvent> PotentialEvents;
-	
+
 	GatherRTEvents(PotentialEvents);
 	GatherTBEvents(PotentialEvents);
 	OrganizeEventsByTime(PotentialEvents);
@@ -213,7 +213,8 @@ void UPresageSubsystem::UpdateTimelinePrediction()
 	CurrentPredictedTimeline = PotentialEvents;
 }
 
-bool UPresageSubsystem::CheckFutureCollision(const AWolfCharacterBase* Attacker, const AWolfCharacterBase* Victim, float FutureTime)
+bool UPresageSubsystem::CheckFutureCollision(const AWolfCharacterBase* Attacker, const AWolfCharacterBase* Victim,
+                                             float FutureTime)
 {
 	const auto AttackerTransform = Attacker->GetProjectedTransform(FutureTime);
 
@@ -233,7 +234,7 @@ float UPresageSubsystem::CalculateImpactFromSequence(const TArray<FPeriod>& Sequ
 	for (const auto& Period : Sequence)
 	{
 		if (Period.PeriodType == EPeriod::Attack) return TimeAccumulator;
-		
+
 		TimeAccumulator += Period.Duration;
 	}
 	return -1.f;
@@ -241,23 +242,29 @@ float UPresageSubsystem::CalculateImpactFromSequence(const TArray<FPeriod>& Sequ
 
 void UPresageSubsystem::GatherRTEvents(TArray<FPresageTimelineEvent>& Events)
 {
-	
 	for (auto& RTAttacker : RTParticipants)
 	{
 		auto* RTCharacter = RTAttacker.Get();
 		if (!RTCharacter) continue;
 
-		auto ImpactTime = RTCharacter->GetTimeToNextHitImpact();
-		if (ImpactTime < 0.f || ImpactTime > FlowTime) continue;
+		UBaseCombatAbility* ActiveAbility = Cast<UBaseCombatAbility>(RTCharacter->GetActiveCombatAbility());
 
-		for (auto& TBAttacker : TBParticipants)
+		if (ActiveAbility)
 		{
-			auto* TBCharacter = TBAttacker.Get();
-			if (!TBCharacter) continue;
-
-			if (CheckFutureCollision(RTCharacter, TBCharacter, ImpactTime))
+			// TODO: Implement method to calculate elapsed time. Impact time will be different if ability was already active.
+			auto ImpactTime = ActiveAbility->CalculateProjectedImpactTime();
+			if (ImpactTime > 0.f && ImpactTime <= FlowTime)
 			{
-				Events.Add(FPresageTimelineEvent(RTCharacter, TBCharacter, ImpactTime, WolfTags->Result_Hit));
+				for (auto& TBAttacker : TBParticipants)
+				{
+					auto* TBCharacter = TBAttacker.Get();
+					if (!TBCharacter) continue;
+
+					if (CheckFutureCollision(RTCharacter, TBCharacter, ImpactTime))
+					{
+						Events.Add(FPresageTimelineEvent(RTCharacter, TBCharacter, ImpactTime, WolfTags->Result_Hit));
+					}
+				}
 			}
 		}
 	}
@@ -272,11 +279,11 @@ void UPresageSubsystem::GatherTBEvents(TArray<FPresageTimelineEvent>& Events)
 
 		auto* TBAttacker = Cast<AWolfCharacterBase>(Request.GetOwnerASC()->GetAvatarActor());
 		if (!TBAttacker) continue;
-		
+
 		auto AbilitySequenceImpactTime = CalculateImpactFromSequence(Request.GetAbilitySequence());
 		if (AbilitySequenceImpactTime < 0.f) continue;
 
-		auto PresageSequenceImpactTime = AbilitySequenceImpactTime + Request.GetScheduledTime(); 
+		auto PresageSequenceImpactTime = AbilitySequenceImpactTime + Request.GetScheduledTime();
 
 		for (auto& TargetActor : Request.GetTargets())
 		{
@@ -290,7 +297,6 @@ void UPresageSubsystem::GatherTBEvents(TArray<FPresageTimelineEvent>& Events)
 
 void UPresageSubsystem::OrganizeEventsByTime(TArray<FPresageTimelineEvent>& Events)
 {
-	
 	Events.Sort([](const FPresageTimelineEvent& A, const FPresageTimelineEvent& B)
 	{
 		return A.Time < B.Time;
@@ -305,7 +311,7 @@ void UPresageSubsystem::OrganizeEventsByTime(TArray<FPresageTimelineEvent>& Even
 
 		const auto* Victim = Cast<AWolfCharacterBase>(Event.Victim);
 		bool bIsInvulnerable = false;
-		
+
 		if (Victim)
 		{
 			bIsInvulnerable = Victim->IsInvulnerableAt(Event.Time);

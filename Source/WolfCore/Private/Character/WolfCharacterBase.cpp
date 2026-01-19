@@ -7,6 +7,7 @@
 #include "Abilities/AbilityConfig.h"
 #include "AbilitySystem/WolfAttributeSet.h"
 #include "AttributeSet.h"
+#include "Abilities/RTCombatAbility.h"
 #include "AbilitySystem/CharacterStatConfig.h"
 #include "Components/CapsuleComponent.h"
 #include "Core/WolfGameplayTags.h"
@@ -281,7 +282,7 @@ FTransform AWolfCharacterBase::ExtractRootMotionAtTime(UAnimMontage* Montage, fl
 
 bool AWolfCharacterBase::IsInvulnerableAt(float RelativeTime) const
 {
-	if (auto* CurrentAbility = GetCurrentTBAbility())
+	if (auto* CurrentAbility = GetActiveCombatAbility())
 	{
 		return CurrentAbility->IsInvulnerableAt(RelativeTime);
 	}
@@ -289,11 +290,25 @@ bool AWolfCharacterBase::IsInvulnerableAt(float RelativeTime) const
 	return false;
 }
 
-UTBCombatAbility* AWolfCharacterBase::GetCurrentTBAbility() const
+class UBaseCombatAbility* AWolfCharacterBase::GetActiveCombatAbility() const
 {
 	if (!ASC) return nullptr;
 
-	TArray<FGameplayAbilitySpec> ActiveAbilities = ASC->GetActivatableAbilities();
+	for (const auto& Spec : ASC->GetActivatableAbilities())
+	{
+		if (!Spec.IsActive()) continue;
+
+		for (auto* Instance : Spec.GetAbilityInstances())
+		{
+			if (auto* CombatAbility = Cast<UBaseCombatAbility>(Instance))
+			{
+				return CombatAbility;
+			}
+		}
+	}
+	return nullptr;
+
+	/*TArray<FGameplayAbilitySpec> ActiveAbilities = ASC->GetActivatableAbilities();
 
 	for (const auto& Spec : ActiveAbilities)
 	{
@@ -306,7 +321,7 @@ UTBCombatAbility* AWolfCharacterBase::GetCurrentTBAbility() const
 		}
 	}
 
-	return nullptr;
+	return nullptr;*/
 }
 
 void AWolfCharacterBase::CreateSnapshot_Implementation(FActorSnapshot& OutSnapshot)
