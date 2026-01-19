@@ -17,37 +17,38 @@ class WOLFCORE_API URTCombatAbility : public UBaseCombatAbility
 	GENERATED_BODY()
 
 public:
-	UPROPERTY(EditDefaultsOnly, Category = "Animation")
-	TObjectPtr<UAnimMontage> AttackMontage;
-	
-	UPROPERTY(EditDefaultsOnly, Category = "Timing")
-	TObjectPtr<UAbilityFrameData> FrameData;
-
 	virtual void ActivateAbility(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo,
 	                             const FGameplayAbilityActivationInfo ActivationInfo,
 	                             const FGameplayEventData* TriggerEventData) override;
-	void OnNotifyReceived(FName NotifyName);
 
 protected:
-	UFUNCTION()
-	void StartupPhase();
+	UPROPERTY(EditDefaultsOnly, Category = "Combat | Effects")
+	TSubclassOf<UGameplayEffect> FlowGainEffect;
 
-	UFUNCTION()
-	void ActivePhase();
+	UPROPERTY(EditDefaultsOnly, Category = "Combat | Effects")
+	TSubclassOf<UGameplayEffect> AdrenalineGainEffect;
 
-	UFUNCTION()
-	void RecoveryPhase();
+	UPROPERTY(EditDefaultsOnly, Category = "Combat | Effects")
+	TSubclassOf<UGameplayEffect> DamageEffect;
 
-	UFUNCTION()
-	void EndPhase();
-	
-	virtual void CancelAbility(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo,
-	                           const FGameplayAbilityActivationInfo ActivationInfo, bool bReplicateCancelAbility) override;
+	UPROPERTY(EditDefaultsOnly, Category = "Combat | Trace")
+	float AttackRange = 150.f;
 
-	UPROPERTY(EditDefaultsOnly, Category = "GAS | Effects")
-	TSubclassOf<UGameplayEffect> HitAdrenalineGE;
+	UPROPERTY(EditDefaultsOnly, Category = "Combat | Trace")
+	float AttackRadius = 50.f;
 
 private:
-	UPROPERTY()
-	UWorld* CachedWorld;
+	int32 CurrentPeriodIndex = 0;
+
+	UFUNCTION()
+	void PlayNextPeriod();
+
+	UFUNCTION()
+	void OnPeriodCompleted();
+
+	UFUNCTION()
+	void OnEventReceived(FGameplayEventData EventData);
+
+	UFUNCTION()
+	void PerformAttackTrace();
 };

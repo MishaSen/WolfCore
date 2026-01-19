@@ -54,8 +54,4 @@ public:
 	
 protected:
 	float GetPeriodDuration(const FCombatPeriod& Period) const;
-	
-	UFUNCTION(BlueprintCallable, BlueprintNativeEvent, Category = "Combat")
-	void HandleGameplayEventHit(FGameplayEventData Payload);
-	virtual void HandleGameplayEventHit_Implementation(FGameplayEventData Payload);
 };

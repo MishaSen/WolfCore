@@ -44,7 +44,3 @@ bool UBaseCombatAbility::IsInvulnerableAt(float RelativeTime) const
 	}
 	return false;
 }
-
-void UBaseCombatAbility::HandleGameplayEventHit_Implementation(FGameplayEventData Payload)
-{
-}

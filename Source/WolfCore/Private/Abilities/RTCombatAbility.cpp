@@ -3,10 +3,14 @@
 
 #include "Abilities/RTCombatAbility.h"
 
+#include "AbilitySystemBlueprintLibrary.h"
 #include "Abilities/AbilityFrameData.h"
 #include "Debug/WolfDebug.h"
 #include "TimerManager.h"
 #include "Abilities/Tasks/AbilityTask_PlayMontageAndWait.h"
+#include "Abilities/Tasks/AbilityTask_WaitDelay.h"
+#include "Abilities/Tasks/AbilityTask_WaitGameplayEvent.h"
+#include "Kismet/KismetSystemLibrary.h"
 #include "Systems/CombatModeSubsystem.h"
 
 void URTCombatAbility::ActivateAbility(const FGameplayAbilitySpecHandle Handle,
@@ -16,78 +20,117 @@ void URTCombatAbility::ActivateAbility(const FGameplayAbilitySpecHandle Handle,
 {
 	Super::ActivateAbility(Handle, ActorInfo, ActivationInfo, TriggerEventData);
 
-	CachedWorld = GetWorld();
+	CurrentPeriodIndex = 0;
+	PlayNextPeriod();
+}
 
-	if (AttackMontage)
+void URTCombatAbility::PlayNextPeriod()
+{
+	if (!AbilitySequence.IsValidIndex(CurrentPeriodIndex))
 	{
-		auto* MontageTask = UAbilityTask_PlayMontageAndWait::CreatePlayMontageAndWaitProxy(
-			this,
-			NAME_None,
-			AttackMontage,
-			1.f,
-			NAME_None,
-			false,
-			1.f,
-			0.f,
-			false
-		);
+		EndAbility(CurrentSpecHandle, CurrentActorInfo, CurrentActivationInfo, true, false);
+		return;
+	}
 
-		MontageTask->OnCompleted.AddDynamic(this, &ThisClass::EndPhase);
-		MontageTask->OnInterrupted.AddDynamic(this, &ThisClass::EndPhase);
-		MontageTask->OnCancelled.AddDynamic(this, &ThisClass::EndPhase);
+	const FCombatPeriod& Period = AbilitySequence[CurrentPeriodIndex];
+
+	if (Period.Type == EPeriodType::Attack)
+	{
+		FGameplayTag Tag = FWolfGameplayTags::Get().Event_Ability_Attack;
+
+		UAbilityTask_WaitGameplayEvent* WaitTask = UAbilityTask_WaitGameplayEvent::WaitGameplayEvent(this, Tag);
+
+		WaitTask->EventReceived.AddDynamic(this, &URTCombatAbility::OnEventReceived);
+		WaitTask->ReadyForActivation();
+	}
+
+	if (Period.Montage)
+	{
+		UAbilityTask_PlayMontageAndWait* MontageTask =
+			UAbilityTask_PlayMontageAndWait::CreatePlayMontageAndWaitProxy(
+				this,
+				NAME_None,
+				Period.Montage,
+				1.f,
+				NAME_None,
+				false,
+				1.f,
+				0.f,
+				false
+			);
+
+		MontageTask->OnCompleted.AddDynamic(this, &URTCombatAbility::OnPeriodCompleted);
+		MontageTask->OnInterrupted.AddDynamic(this, &URTCombatAbility::K2_EndAbility);
+		MontageTask->OnCancelled.AddDynamic(this, &URTCombatAbility::K2_EndAbility);
 
 		MontageTask->ReadyForActivation();
-		StartupPhase();
-		WOLF_INFO(TEXT("RTCombatAbility: Started montage %s"), *AttackMontage.GetName());
 	}
-	else
+	else // For prototyping
 	{
-		WOLF_WARN(TEXT("No AttackMontage set, skipping playback."));
-		StartupPhase();
+		float Duration = Period.Duration > 0.f ? Period.Duration : 0.1f;
+		if (Period.Type == EPeriodType::Attack)
+		{
+			FTimerHandle TimerHandle;
+			GetWorld()->GetTimerManager().SetTimer(TimerHandle, this, &URTCombatAbility::PerformAttackTrace,
+			                                       Period.HitDelay, false);
+		}
+
+		UAbilityTask_WaitDelay* DelayTask = UAbilityTask_WaitDelay::WaitDelay(this, Duration);
+		DelayTask->OnFinish.AddDynamic(this, &URTCombatAbility::OnPeriodCompleted);
+		DelayTask->ReadyForActivation();
 	}
 }
 
-void URTCombatAbility::OnNotifyReceived(FName NotifyName)
+void URTCombatAbility::OnPeriodCompleted()
 {
-	if (NotifyName == "Notify_StartupEnd") ActivePhase();
-	else if (NotifyName == "Notify_ActiveEnd") RecoveryPhase();
-	else if (NotifyName == "Notify_RecoveryEnd") EndPhase();
+	CurrentPeriodIndex++;
+	PlayNextPeriod();
 }
 
-void URTCombatAbility::StartupPhase()
+void URTCombatAbility::OnEventReceived(FGameplayEventData EventData)
 {
+	PerformAttackTrace();
 }
 
-void URTCombatAbility::ActivePhase()
+void URTCombatAbility::PerformAttackTrace()
 {
-	/*
-	 * If hit, remember to call:
-	 * 
-	 FGameplayEffectSpecHandle SpecHandle = ASC->MakeOutgoingSpec(HitAdrenalineGE, 1.f, ASC->MakeEffectContext());
-	 if (SpecHandle.IsValid())
+	AActor* Avatar = GetAvatarActorFromActorInfo();
+	if (!Avatar) return;
+
+	FVector Start = Avatar->GetActorLocation();
+	FVector End = Start + Avatar->GetActorForwardVector() * AttackRange;
+
+	TArray<AActor*> Ignore;
+	Ignore.Add(Avatar);
+
+	FHitResult HitResult;
+	bool bHit = UKismetSystemLibrary::SphereTraceSingle(
+		this, Start, End, AttackRadius,
+		UEngineTypes::ConvertToTraceType(ECC_Pawn),
+		false, Ignore,
+		EDrawDebugTrace::ForDuration,
+		HitResult, true
+		);
+
+	if (bHit && HitResult.GetActor())
+	{
+		UAbilitySystemComponent* MyASC = GetAbilitySystemComponentFromActorInfo();
+		UAbilitySystemComponent* TargetASC = UAbilitySystemBlueprintLibrary::GetAbilitySystemComponent(HitResult.GetActor());
+
+		if (MyASC)
 		{
-	 // Pass +10.0 into the MMC
-			 SpecHandle.Data->SetSetByCallerMagnitude(FWolfGameplayTags::Get().Data_Amount, 10.0f);
-			 ASC->ApplyGameplayEffectSpecToSelf(*SpecHandle.Data.Get());
+			if (FlowGainEffect)
+			{
+				FGameplayEffectSpecHandle Spec = MyASC->MakeOutgoingSpec(FlowGainEffect, 1.f, MyASC->MakeEffectContext());
+				Spec.Data->SetSetByCallerMagnitude(FWolfGameplayTags::Get().Data_Amount, 10.f);
+				MyASC->ApplyGameplayEffectSpecToSelf(*Spec.Data.Get());
+			}
+
+			if (TargetASC && DamageEffect)
+			{
+				MyASC->ApplyGameplayEffectToTarget(DamageEffect.GetDefaultObject(), TargetASC, 1.f);
+			}
 		}
-		
-	 */
+	}
 }
 
-void URTCombatAbility::RecoveryPhase()
-{
-}
-
-void URTCombatAbility::EndPhase()
-{
-	EndAbility(CurrentSpecHandle, CurrentActorInfo, CurrentActivationInfo, true, false);
-}
-
-void URTCombatAbility::CancelAbility(const FGameplayAbilitySpecHandle Handle,
-                                     const FGameplayAbilityActorInfo* ActorInfo,
-                                     const FGameplayAbilityActivationInfo ActivationInfo,
-                                     bool bReplicateCancelAbility)
-{
-	WOLF_INFO(TEXT("Ability cancelled early."));
-	Super::CancelAbility(Handle, ActorInfo, ActivationInfo, bReplicateCancelAbility);
-}
