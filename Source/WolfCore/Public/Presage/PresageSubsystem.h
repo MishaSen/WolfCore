@@ -11,7 +11,6 @@
 
 #include "PresageSubsystem.generated.h"
 
-struct FPeriod;
 class AWolfCharacterBase;
 struct FPresageAbilityRequest;
 struct FActorSnapshot;
