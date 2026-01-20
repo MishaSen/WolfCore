@@ -20,117 +20,58 @@ void URTCombatAbility::ActivateAbility(const FGameplayAbilitySpecHandle Handle,
 {
 	Super::ActivateAbility(Handle, ActorInfo, ActivationInfo, TriggerEventData);
 
-	CurrentPeriodIndex = 0;
-	PlayNextPeriod();
+	StartCombatSequence();
 }
 
-void URTCombatAbility::PlayNextPeriod()
+void URTCombatAbility::HandleAttackHitEvent()
 {
-	if (!AbilitySequence.IsValidIndex(CurrentPeriodIndex))
-	{
-		EndAbility(CurrentSpecHandle, CurrentActorInfo, CurrentActivationInfo, true, false);
-		return;
-	}
-
-	const FCombatPeriod& Period = AbilitySequence[CurrentPeriodIndex];
-
-	if (Period.Type == EPeriodType::Attack)
-	{
-		FGameplayTag Tag = FWolfGameplayTags::Get().Event_Ability_Attack;
-
-		UAbilityTask_WaitGameplayEvent* WaitTask = UAbilityTask_WaitGameplayEvent::WaitGameplayEvent(this, Tag);
-
-		WaitTask->EventReceived.AddDynamic(this, &URTCombatAbility::OnEventReceived);
-		WaitTask->ReadyForActivation();
-	}
-
-	if (Period.Montage)
-	{
-		UAbilityTask_PlayMontageAndWait* MontageTask =
-			UAbilityTask_PlayMontageAndWait::CreatePlayMontageAndWaitProxy(
-				this,
-				NAME_None,
-				Period.Montage,
-				1.f,
-				NAME_None,
-				false,
-				1.f,
-				0.f,
-				false
-			);
-
-		MontageTask->OnCompleted.AddDynamic(this, &URTCombatAbility::OnPeriodCompleted);
-		MontageTask->OnInterrupted.AddDynamic(this, &URTCombatAbility::K2_EndAbility);
-		MontageTask->OnCancelled.AddDynamic(this, &URTCombatAbility::K2_EndAbility);
-
-		MontageTask->ReadyForActivation();
-	}
-	else // For prototyping
-	{
-		float Duration = Period.Duration > 0.f ? Period.Duration : 0.1f;
-		if (Period.Type == EPeriodType::Attack)
-		{
-			FTimerHandle TimerHandle;
-			GetWorld()->GetTimerManager().SetTimer(TimerHandle, this, &URTCombatAbility::PerformAttackTrace,
-			                                       Period.HitDelay, false);
-		}
-
-		UAbilityTask_WaitDelay* DelayTask = UAbilityTask_WaitDelay::WaitDelay(this, Duration);
-		DelayTask->OnFinish.AddDynamic(this, &URTCombatAbility::OnPeriodCompleted);
-		DelayTask->ReadyForActivation();
-	}
-}
-
-void URTCombatAbility::OnPeriodCompleted()
-{
-	CurrentPeriodIndex++;
-	PlayNextPeriod();
-}
-
-void URTCombatAbility::OnEventReceived(FGameplayEventData EventData)
-{
-	PerformAttackTrace();
-}
-
-void URTCombatAbility::PerformAttackTrace()
-{
-	AActor* Avatar = GetAvatarActorFromActorInfo();
+	auto* Avatar = GetAvatarActorFromActorInfo();
 	if (!Avatar) return;
 
-	FVector Start = Avatar->GetActorLocation();
-	FVector End = Start + Avatar->GetActorForwardVector() * AttackRange;
+	const auto StartVector = Avatar->GetActorLocation();
+	const auto EndVector = StartVector + Avatar->GetActorForwardVector() * AttackRange;
 
-	TArray<AActor*> Ignore;
-	Ignore.Add(Avatar);
+	TArray<AActor*> IgnoreActors;
+	IgnoreActors.Add(Avatar);
 
 	FHitResult HitResult;
-	bool bHit = UKismetSystemLibrary::SphereTraceSingle(
-		this, Start, End, AttackRadius,
-		UEngineTypes::ConvertToTraceType(ECC_Pawn),
-		false, Ignore,
-		EDrawDebugTrace::ForDuration,
-		HitResult, true
+	const auto bHit = UKismetSystemLibrary::SphereTraceSingle(
+		this, StartVector, EndVector, AttackRadius,
+		UEngineTypes::ConvertToTraceType(ECC_Pawn), false, IgnoreActors,
+		EDrawDebugTrace::ForDuration,HitResult, true
 		);
 
 	if (bHit && HitResult.GetActor())
 	{
-		UAbilitySystemComponent* MyASC = GetAbilitySystemComponentFromActorInfo();
-		UAbilitySystemComponent* TargetASC = UAbilitySystemBlueprintLibrary::GetAbilitySystemComponent(HitResult.GetActor());
+		auto* MyASC = GetAbilitySystemComponentFromActorInfo();
+		auto* TargetASC = UAbilitySystemBlueprintLibrary::GetAbilitySystemComponent(HitResult.GetActor());
 
-		if (MyASC)
+		if (!MyASC)
 		{
-			if (FlowGainEffect)
-			{
-				FGameplayEffectSpecHandle Spec = MyASC->MakeOutgoingSpec(FlowGainEffect, 1.f, MyASC->MakeEffectContext());
-				Spec.Data->SetSetByCallerMagnitude(FWolfGameplayTags::Get().Data_Amount, 10.f);
-				MyASC->ApplyGameplayEffectSpecToSelf(*Spec.Data.Get());
-			}
+			WOLF_WARN(TEXT("No AbilitySystemComponent found on Avatar Actor."));
+			return;
+		}
+		if (!TargetASC)
+		{
+			WOLF_WARN(TEXT("No AbilitySystemComponent found on Target Actor."));
+			return;
+		}
 
-			if (TargetASC && DamageEffect)
-			{
-				MyASC->ApplyGameplayEffectToTarget(DamageEffect.GetDefaultObject(), TargetASC, 1.f);
-			}
+		if (FlowGainEffect)
+		{
+			const auto SpecHandle = MyASC->MakeOutgoingSpec(FlowGainEffect, 1.f, MyASC->MakeEffectContext());
+			SpecHandle.Data->SetSetByCallerMagnitude(FWolfGameplayTags::Get().Data_Amount, 10.f);
+			MyASC->ApplyGameplayEffectSpecToSelf(*SpecHandle.Data.Get());
+		}
+		if (AdrenalineGainEffect)
+		{
+			const auto SpecHandle = TargetASC->MakeOutgoingSpec(AdrenalineGainEffect, 1.f, TargetASC->MakeEffectContext());
+			SpecHandle.Data->SetSetByCallerMagnitude(FWolfGameplayTags::Get().Data_Amount, 10.f);
+			TargetASC->ApplyGameplayEffectSpecToSelf(*SpecHandle.Data.Get());
+		}
+		if (DamageEffect)
+		{
+			MyASC->ApplyGameplayEffectToTarget(DamageEffect.GetDefaultObject(), TargetASC, 1.f);
 		}
 	}
 }
-

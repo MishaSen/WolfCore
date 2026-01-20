@@ -37,18 +37,5 @@ protected:
 	UPROPERTY(EditDefaultsOnly, Category = "Combat | Trace")
 	float AttackRadius = 50.f;
 
-private:
-	int32 CurrentPeriodIndex = 0;
-
-	UFUNCTION()
-	void PlayNextPeriod();
-
-	UFUNCTION()
-	void OnPeriodCompleted();
-
-	UFUNCTION()
-	void OnEventReceived(FGameplayEventData EventData);
-
-	UFUNCTION()
-	void PerformAttackTrace();
+	virtual void HandleAttackHitEvent() override;
 };
