@@ -76,6 +76,6 @@ protected:
 	void OnEventReceived(FGameplayEventData EventData);
 
 	virtual void HandleAttackHitEvent();
-	
-	float GetPeriodDuration(const FCombatPeriod& Period) const;
+
+	static float GetPeriodDuration(const FCombatPeriod& Period);
 };
