@@ -3,7 +3,6 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "CombatMode.h"
 #include "AbilitySystem/WolfAbilitySystemComponent.h"
 #include "GameFramework/PlayerController.h"
 #include "Engine/HitResult.h"

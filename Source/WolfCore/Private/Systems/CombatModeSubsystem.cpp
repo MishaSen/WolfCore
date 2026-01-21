@@ -9,6 +9,7 @@
 #include "AbilitySystemComponent.h"
 #include "AbilitySystemInterface.h"
 #include "WolfLevelScript.h"
+#include "Core/WolfGameInstance.h"
 #include "Core/WolfGameplayTags.h"
 #include "Debug/WolfDebug.h"
 #include "Kismet/GameplayStatics.h"
@@ -57,16 +58,25 @@ void UCombatModeSubsystem::OnWorldBeginPlay(UWorld& InWorld)
 	WolfTag = FWolfGameplayTags::Get();
 	PlayerASC = GetPlayerASC();
 
-	const auto* LevelScript = Cast<AWolfLevelScript>(InWorld.GetLevelScriptActor());
-	if (!LevelScript)
+	if (auto* GameInstance = InWorld.GetGameInstance<UWolfGameInstance>();
+		GameInstance && GameInstance->SelectedCombatMode.IsValid())
 	{
-		WOLF_ERROR(TEXT("Error: LevelScript not found."));
-		return;
+		SetMode(GameInstance->SelectedCombatMode);
+		WOLF_LOG(Log, TEXT("Selected Combat Mode set to %s"), *GameInstance->SelectedCombatMode.ToString());
+		
+		GameInstance->ClearSelectedCombatMode();
 	}
-	else
+	else // Select the default level mode if no player choice
 	{
-		WOLF_INFO( TEXT( "LevelScript found: %s" ), *LevelScript->GetName());
+		const auto* LevelScript = Cast<AWolfLevelScript>(InWorld.GetLevelScriptActor());
+		if (!LevelScript)
+		{
+			WOLF_ERROR(TEXT("LevelScript not found."));
+			return;
+		}
+
 		SetMode(LevelScript->StartingCombatTag);
+		WOLF_LOG(Log, TEXT("Combat Mode set to default level mode: %s"), *LevelScript->StartingCombatTag.ToString());
 	}
 }
 
