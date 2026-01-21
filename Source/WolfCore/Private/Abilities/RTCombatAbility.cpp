@@ -67,7 +67,7 @@ void URTCombatAbility::HandleAttackHitEvent()
 		{
 			const auto SpecHandle = TargetASC->MakeOutgoingSpec(AdrenalineGainEffect, 1.f, TargetASC->MakeEffectContext());
 			SpecHandle.Data->SetSetByCallerMagnitude(FWolfGameplayTags::Get().Data_Amount, 10.f);
-			TargetASC->ApplyGameplayEffectSpecToSelf(*SpecHandle.Data.Get());
+			MyASC->ApplyGameplayEffectSpecToSelf(*SpecHandle.Data.Get());
 		}
 		if (DamageEffect)
 		{

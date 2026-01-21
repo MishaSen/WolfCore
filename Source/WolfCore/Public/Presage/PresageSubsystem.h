@@ -11,6 +11,7 @@
 
 #include "PresageSubsystem.generated.h"
 
+struct FCombatPeriod;
 class AWolfCharacterBase;
 struct FPresageAbilityRequest;
 struct FActorSnapshot;
@@ -112,5 +113,5 @@ private:
 	void RevertCharacterStates();
 	void UpdateTimelinePrediction();
 	static bool CheckFutureCollision(const AWolfCharacterBase* Attacker, const AWolfCharacterBase* Victim, float FutureTime);
-	static float CalculateImpactFromSequence(const TArray<FPeriod>& Sequence);
+	static float CalculateImpactFromSequence(const TArray<FCombatPeriod>& Sequence);
 };

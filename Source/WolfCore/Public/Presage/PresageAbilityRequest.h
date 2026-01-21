@@ -3,6 +3,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Abilities/BaseCombatAbility.h"
 #include "Abilities/TBCombatAbility.h"
 
 #include "PresageAbilityRequest.generated.h"
@@ -25,7 +26,7 @@ struct FPresageAbilityRequest
 		const TObjectPtr<UAbilitySystemComponent>& InASC,
 		const FGameplayTag& InInputTag,
 		float InRequestedTime,
-		const TArray<FPeriod>& InAbilitySequence,
+		const TArray<FCombatPeriod>& InAbilitySequence,
 		const TArray<TWeakObjectPtr<AActor>>& InTargets
 	):
 		AbilityClass(InAbilityClass),
@@ -48,7 +49,7 @@ struct FPresageAbilityRequest
 	TObjectPtr<UAbilitySystemComponent> GetOwnerASC() const { return OwnerASC; }
 	const FGameplayTag& GetInputTag() const { return InputTag; }
 	float GetScheduledTime() const { return ScheduledTime; }
-	const TArray<FPeriod>& GetAbilitySequence() const { return AbilitySequence; }
+	const TArray<FCombatPeriod>& GetAbilitySequence() const { return AbilitySequence; }
 	const TArray<TWeakObjectPtr<AActor>>& GetTargets() const { return Targets; }
 
 private:
@@ -62,7 +63,7 @@ private:
 	float ScheduledTime = 0.f;
 
 	UPROPERTY()
-	TArray<FPeriod> AbilitySequence;
+	TArray<FCombatPeriod> AbilitySequence;
 
 	UPROPERTY()
 	TArray<TWeakObjectPtr<AActor>> Targets;

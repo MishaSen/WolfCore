@@ -7,7 +7,7 @@
 #include "UAnimNotify_CombatPhase.generated.h"
 
 /**
- * 
+ * No idea what I made this for. Flag for deletion. 
  */
 UCLASS()
 class WOLFCORE_API UUAnimNotify_CombatPhase : public UAnimNotify

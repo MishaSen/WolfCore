@@ -19,9 +19,9 @@ void UUAnimNotify_CombatPhase::Notify(USkeletalMeshComponent* MeshComp, UAnimSeq
 
 	for (const auto& Spec : ASC->GetActivatableAbilities())
 	{
-		if (auto* ActiveAbility = Cast<URTCombatAbility>(Spec.GetPrimaryInstance()))
+		if (auto* ActiveAbility = Cast<UBaseCombatAbility>(Spec.GetPrimaryInstance()))
 		{
-			ActiveAbility->OnNotifyReceived(NotifyName);
+			// ActiveAbility->OnNotifyReceived(NotifyName);
 			WOLF_INFO(TEXT("CombatPhase notify sent: %s"), *NotifyName.ToString());
 			return;
 		}

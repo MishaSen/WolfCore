@@ -228,12 +228,12 @@ bool UPresageSubsystem::CheckFutureCollision(const AWolfCharacterBase* Attacker,
 	return Distance < Radius + 50.f;
 }
 
-float UPresageSubsystem::CalculateImpactFromSequence(const TArray<FPeriod>& Sequence)
+float UPresageSubsystem::CalculateImpactFromSequence(const TArray<FCombatPeriod>& Sequence)
 {
 	auto TimeAccumulator = 0.f;
 	for (const auto& Period : Sequence)
 	{
-		if (Period.PeriodType == EPeriod::Attack) return TimeAccumulator;
+		if (Period.Type == EPeriodType::Attack) return TimeAccumulator;
 
 		TimeAccumulator += Period.Duration;
 	}

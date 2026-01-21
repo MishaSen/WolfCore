@@ -22,15 +22,6 @@ public:
 	                             const FGameplayEventData* TriggerEventData) override;
 
 protected:
-	UPROPERTY(EditDefaultsOnly, Category = "Combat | Effects")
-	TSubclassOf<UGameplayEffect> FlowGainEffect;
-
-	UPROPERTY(EditDefaultsOnly, Category = "Combat | Effects")
-	TSubclassOf<UGameplayEffect> AdrenalineGainEffect;
-
-	UPROPERTY(EditDefaultsOnly, Category = "Combat | Effects")
-	TSubclassOf<UGameplayEffect> DamageEffect;
-
 	UPROPERTY(EditDefaultsOnly, Category = "Combat | Trace")
 	float AttackRange = 150.f;
 

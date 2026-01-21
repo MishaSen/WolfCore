@@ -78,4 +78,15 @@ protected:
 	virtual void HandleAttackHitEvent();
 
 	static float GetPeriodDuration(const FCombatPeriod& Period);
+
+	// --- Attribute Effects ---
+	
+	UPROPERTY(EditDefaultsOnly, Category = "Combat | Effects")
+	TSubclassOf<UGameplayEffect> FlowGainEffect;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Combat | Effects")
+	TSubclassOf<UGameplayEffect> AdrenalineGainEffect;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Combat | Effects")
+	TSubclassOf<UGameplayEffect> DamageEffect;
 };
