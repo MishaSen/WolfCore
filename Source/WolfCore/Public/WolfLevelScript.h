@@ -7,7 +7,6 @@
 #include "Engine/LevelScriptActor.h"
 #include "WolfLevelScript.generated.h"
 
-enum class ECombatMode : uint8;
 /**
  * 
  */

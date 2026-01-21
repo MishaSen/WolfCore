@@ -7,7 +7,7 @@
 #include "WolfGameMode.generated.h"
 
 /**
- * 
+ * No plans to use. Flag for deletion.
  */
 UCLASS()
 class WOLFCORE_API AWolfGameMode : public AGameModeBase
