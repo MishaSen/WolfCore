@@ -102,7 +102,7 @@ void AWolfPlayerController::OnCombatTagChanged(const FGameplayTag Tag, int32 New
 void AWolfPlayerController::AbilityInputTagPressed(const FGameplayTag InputTag)
 {
 	WolfASC->AbilityInputTagPressed(InputTag);
-	WOLF_INFO(TEXT("Ability Input Tag Pressed: %s"), *InputTag.ToString());
+	WOLF_LOG(Log, TEXT("Ability Input Tag Pressed: %s"), *InputTag.ToString());
 }
 
 void AWolfPlayerController::AbilityInputTagReleased(const FGameplayTag InputTag)
