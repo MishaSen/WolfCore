@@ -33,7 +33,7 @@ void URTCombatAbility::HandleAttackHitEvent()
 	}
 
 	const auto& CurrentPeriod = AbilitySequence[CurrentPeriodIndex];
-	
+
 	auto* Avatar = GetAvatarActorFromActorInfo();
 	if (!Avatar) return;
 
@@ -43,9 +43,9 @@ void URTCombatAbility::HandleAttackHitEvent()
 	FHitResult HitResult;
 	const auto bHit = UKismetSystemLibrary::SphereTraceSingle(
 		this, StartVector, EndVector, AttackRadius,
-		UEngineTypes::ConvertToTraceType(ECC_Pawn), false, { Avatar },
-		EDrawDebugTrace::ForDuration,HitResult, true
-		);
+		UEngineTypes::ConvertToTraceType(ECC_Pawn), false, {Avatar},
+		EDrawDebugTrace::ForDuration, HitResult, true
+	);
 
 	if (bHit && HitResult.GetActor())
 	{
@@ -56,10 +56,10 @@ void URTCombatAbility::HandleAttackHitEvent()
 		auto EffectContextHandle = MyASC->MakeEffectContext();
 		EffectContextHandle.AddHitResult(HitResult);
 
-		const auto DataAmountTag = FWolfGameplayTags::Get().Data_Amount;
 		const auto AbilityLevel = GetAbilityLevel();
 
-		auto ApplyEffect = [&](const TSubclassOf<UGameplayEffect>& EffectClass, const FScalableFloat& AttributeAmount, bool bToTarget)
+		auto ApplyEffect = [&](const TSubclassOf<UGameplayEffect>& EffectClass, const FScalableFloat& AttributeAmount,
+		                       bool bToTarget, FGameplayTag DataAmountTag = FWolfGameplayTags::Get().Data_Amount)
 		{
 			if (!EffectClass) return;
 
