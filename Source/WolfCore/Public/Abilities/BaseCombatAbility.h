@@ -32,6 +32,16 @@ struct FCombatPeriod
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly)
 	float HitDelay = 0.2f; // For Presage prediction if no Montage/Notify
+
+	// --- Attribute Data ---
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Attribute Effects")
+	FScalableFloat FlowGain = 0.f;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Attribute Effects")
+	FScalableFloat AdrenalineGain = 0.f;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Attribute Effects")
+	FScalableFloat Damage = 0.f;
 };
 /**
  * 
