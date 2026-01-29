@@ -52,6 +52,8 @@ class WOLFCORE_API UBaseCombatAbility : public UGameplayAbility
 	GENERATED_BODY()
 
 public:
+	UBaseCombatAbility();
+	
 	// --- Data ---
 	UPROPERTY(EditDefaultsOnly, Category = "Combat Data")
 	TArray<FCombatPeriod> AbilitySequence;

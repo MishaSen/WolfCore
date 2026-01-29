@@ -38,6 +38,7 @@ void URTCombatAbility::HandleAttackHitEvent()
 	if (!Avatar) return;
 
 	const auto StartVector = Avatar->GetActorLocation();
+	WOLF_INFO(TEXT("Actor location is at %s"), *StartVector.ToString());
 	const auto EndVector = StartVector + Avatar->GetActorForwardVector() * AttackRange;
 
 	FHitResult HitResult;

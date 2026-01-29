@@ -8,6 +8,14 @@
 #include "Abilities/Tasks/AbilityTask_PlayMontageAndWait.h"
 #include "Abilities/Tasks/AbilityTask_WaitDelay.h"
 #include "Abilities/Tasks/AbilityTask_WaitGameplayEvent.h"
+#include "Core/WolfGameplayTags.h"
+
+UBaseCombatAbility::UBaseCombatAbility()
+{
+	ActivationBlockedTags.AddTag(FWolfGameplayTags::Get().InputState_Dead);
+	CancelAbilitiesWithTag.AddTag(FWolfGameplayTags::Get().InputState_Dead);
+}
+
 
 void UBaseCombatAbility::StartCombatSequence()
 {

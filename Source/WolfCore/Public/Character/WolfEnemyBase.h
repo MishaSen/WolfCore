@@ -17,9 +17,12 @@ class WOLFCORE_API AWolfEnemyBase : public AWolfCharacterBase
 public:
 	AWolfEnemyBase();
 
-	UPROPERTY(EditAnywhere, Category = "AI")
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "AI")
 	TObjectPtr<UBehaviorTree> BehaviorTree;
 
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "AI")
+	uint8 TeamID = 2;
+
 protected:
-	virtual void BeginPlay() override;
+	virtual void PossessedBy(AController* NewController) override;
 };

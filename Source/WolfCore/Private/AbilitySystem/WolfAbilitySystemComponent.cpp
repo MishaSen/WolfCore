@@ -17,6 +17,12 @@ void UWolfAbilitySystemComponent::AbilityInputTagPressed(const FGameplayTag& Tag
 		if (AbilitySpec.GetDynamicSpecSourceTags().HasTagExact(Tag))
 		{
 			AbilitySpecInputPressed(AbilitySpec);
+
+			if (!AbilitySpec.IsActive())
+			{
+				TryActivateAbility(AbilitySpec.Handle);
+				WOLF_INFO( TEXT( "Ability Spec not active, running TryActivateAbility. Ability [%s] activated." ), *AbilitySpec.Ability->GetName());
+			}
 		}
 	}
 }

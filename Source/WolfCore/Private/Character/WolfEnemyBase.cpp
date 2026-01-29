@@ -4,27 +4,32 @@
 #include "Character/WolfEnemyBase.h"
 
 #include "AIController.h"
+#include "Character/AI/WolfAIController.h"
+#include "Debug/WolfDebug.h"
 #include "GameFramework/CharacterMovementComponent.h"
-
 
 AWolfEnemyBase::AWolfEnemyBase()
 {
-	PrimaryActorTick.bCanEverTick = false;
-
+	AIControllerClass = AWolfAIController::StaticClass();
 	AutoPossessAI = EAutoPossessAI::PlacedInWorldOrSpawned;
-	AIControllerClass = AAIController::StaticClass();
 
-	bUseControllerRotationYaw = false;
-	if (GetCharacterMovement())
-	{
-		GetCharacterMovement()->bUseControllerDesiredRotation = true;
-		GetCharacterMovement()->RotationRate = FRotator(0.f, 400.f, 0.f);
-		GetCharacterMovement()->MaxWalkSpeed = 400.f;
-	}
+	GetCharacterMovement()->bUseControllerDesiredRotation = true;
+	GetCharacterMovement()->MaxWalkSpeed = 400.f;
 }
 
-void AWolfEnemyBase::BeginPlay()
+void AWolfEnemyBase::PossessedBy(AController* NewController)
 {
-	Super::BeginPlay();
-	
+	Super::PossessedBy(NewController);
+
+	auto* AIController = Cast<AWolfAIController>(NewController);
+	if (!IsValid(AIController))
+	{
+		WOLF_WARN(TEXT("AI Controller on %s is not valid."), *GetName());
+		return;
+	}
+
+	if (BehaviorTree)
+	{
+		AIController->RunBehaviorTree(BehaviorTree);
+	}
 }
