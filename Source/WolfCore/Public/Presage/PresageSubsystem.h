@@ -40,7 +40,7 @@ struct FPresageTimelineEvent
 	TObjectPtr<AActor> Victim;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Presage")
-	float Time;
+	float Time = 0.f;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Presage")
 	FGameplayTag ResultTag;

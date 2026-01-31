@@ -21,7 +21,7 @@ void UWolfAbilitySystemComponent::AbilityInputTagPressed(const FGameplayTag& Tag
 			if (!AbilitySpec.IsActive())
 			{
 				TryActivateAbility(AbilitySpec.Handle);
-				WOLF_INFO( TEXT( "Ability Spec not active, running TryActivateAbility. Ability [%s] activated." ), *AbilitySpec.Ability->GetName());
+				WOLF_LOG(Log, TEXT( "Ability Spec not active, running TryActivateAbility. Ability [%s] activated." ), *AbilitySpec.Ability->GetName());
 			}
 		}
 	}
