@@ -42,9 +42,9 @@ void AWolfPlayerController::BeginPlay()
 	WolfASC->AddLooseGameplayTag(WolfTags.Event_ModeSwitchReady);
 	WOLF_LOG(Log, TEXT("Player Controller ready to switch modes"));
 
-	if (const auto* CMS = GetWorld()->GetSubsystem<UCombatModeSubsystem>())
+	if (const auto* CombatModeSubsystem = GetWorld()->GetSubsystem<UCombatModeSubsystem>())
 	{
-		const auto CurrentModeTag = CMS->GetCombatMode();
+		const auto CurrentModeTag = CombatModeSubsystem->GetCombatMode();
 		OnCombatTagChanged(CurrentModeTag, 1);
 	}
 }
@@ -102,19 +102,17 @@ void AWolfPlayerController::OnCombatTagChanged(const FGameplayTag Tag, int32 New
 void AWolfPlayerController::AbilityInputTagPressed(const FGameplayTag InputTag)
 {
 	WolfASC->AbilityInputTagPressed(InputTag);
-	WOLF_LOG(Log, TEXT("Ability Input Tag Pressed: %s"), *InputTag.ToString());
+	WOLF_LOG(Log, TEXT( "Ability [%s] activated." ), *InputTag.ToString());
 }
 
 void AWolfPlayerController::AbilityInputTagReleased(const FGameplayTag InputTag)
 {
 	WolfASC->AbilityInputTagReleased(InputTag);
-	WOLF_LOG(Log, TEXT("Ability Input Tag Released: %s"), *InputTag.ToString());
 }
 
 void AWolfPlayerController::AbilityInputTagHeld(const FGameplayTag InputTag)
 {
 	WolfASC->AbilityInputTagHeld(InputTag);
-	WOLF_LOG(Log, TEXT("Ability Input Tag Held: %s"), *InputTag.ToString());
 }
 
 void AWolfPlayerController::Move(const FInputActionValue& Value)

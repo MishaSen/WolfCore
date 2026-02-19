@@ -14,7 +14,9 @@
 #include "Core/WolfGameplayTags.h"
 #include "TimerManager.h"
 #include "AbilitySystem/WolfAttributeSet.h"
+#include "Algo/ForEach.h"
 #include "Character/WolfCharacterBase.h"
+#include "GameFramework/CharacterMovementComponent.h"
 
 void UPresageSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {
@@ -136,7 +138,81 @@ void UPresageSubsystem::StopLoop()
 	AccumulatedTime = 0.f;
 }
 
+void UPresageSubsystem::BakeSimulation()
+{
+	VisualTracks.Empty();
+
+	const int32 NumSteps = FMath::CeilToInt(FlowTime / PredictionTimeStep);
+
+	auto ProcessParticipant = [this, NumSteps](const TWeakObjectPtr<AWolfCharacterBase>& Character)
+	{
+		auto* SimulatedCharacter = Character.Get();
+		if (!SimulatedCharacter) return;
+
+		const auto* Mesh = SimulatedCharacter->GetMesh();
+		const auto* AnimInst = Mesh ? Mesh->GetAnimInstance() : nullptr;
+		
+		// TODO: If nothing is playing yet, should we check Ability Queue for future planned abilities (e.g., for TB Characters)?
+		auto* Montage = AnimInst ? AnimInst->GetCurrentActiveMontage() : nullptr; 
+		const float MontageStartPosition = AnimInst ? AnimInst->Montage_GetPosition(Montage) : 0.f;
+		const float MontagePlayRate = AnimInst && Montage ? AnimInst->Montage_GetPlayRate(Montage) : 1.f;
+
+		auto& Track = VisualTracks.FindOrAdd(SimulatedCharacter);
+		Track.Frames.Empty(NumSteps);
+
+		for (float SimTime = 0.f; SimTime <= FlowTime; SimTime += PredictionTimeStep)
+		{
+			const auto ProjectedTransform = SimulatedCharacter->GetProjectedTransform(SimTime);
+
+			auto& NewFrame = Track.Frames.AddDefaulted_GetRef();
+			NewFrame.Timestamp = SimTime;
+			NewFrame.Location = ProjectedTransform.GetLocation();
+			NewFrame.Rotation = ProjectedTransform.Rotator();
+			NewFrame.ActiveMontage = Montage;
+			NewFrame.MontagePosition = Montage ? MontageStartPosition + SimTime * MontagePlayRate: 0.f;
+		}
+	};
+
+	Algo::ForEach(RTParticipants, ProcessParticipant);
+	Algo::ForEach(TBParticipants, ProcessParticipant);
+}
+
+void UPresageSubsystem::ScrubToTime(float Time)
+{
+	for (auto& [Character, Track] : VisualTracks)
+	{
+		if (!Character || Track.Frames.Num() == 0) continue;
+
+		auto FrameIndex = FMath::RoundToInt(Time / PredictionTimeStep);
+		FrameIndex = FMath::Clamp(FrameIndex, 0, Track.Frames.Num() - 1);
+		if (!Track.Frames.IsValidIndex(FrameIndex)) continue;
+
+		const auto& Frame = Track.Frames[FrameIndex];
+
+		if (auto* MoveComp = Character->GetCharacterMovement())
+		{
+			MoveComp->StopMovementImmediately();
+		}
+
+		Character->SetActorLocationAndRotation(Frame.Location, Frame.Rotation);
+
+		auto* AnimInst = Character->GetMesh()->GetAnimInstance();
+		auto* Montage = Frame.ActiveMontage.Get();
+
+		if (AnimInst && Montage)
+		{
+			if (!AnimInst->Montage_IsPlaying(Montage))
+			{
+				AnimInst->Montage_Play(Montage, 0.f);
+			}
+			AnimInst->Montage_SetPosition(Montage, Frame.MontagePosition);
+		}
+	}
+}
+
+
 void UPresageSubsystem::RefreshParticipants()
+// TODO: Combine method with CharacterSnapshot since they both get all characters
 {
 	TBParticipants.Empty();
 	RTParticipants.Empty();
@@ -202,7 +278,8 @@ void UPresageSubsystem::RevertCharacterStates()
 void UPresageSubsystem::UpdateTimelinePrediction()
 {
 	CurrentPredictedTimeline.Empty();
-	RefreshParticipants();
+	RefreshParticipants(); // Refreshes the arrays used in the following functions
+	BakeSimulation();
 
 	TArray<FPresageTimelineEvent> PotentialEvents;
 
@@ -247,7 +324,7 @@ void UPresageSubsystem::GatherRTEvents(TArray<FPresageTimelineEvent>& Events)
 		auto* RTCharacter = RTAttacker.Get();
 		if (!RTCharacter) continue;
 
-		UBaseCombatAbility* ActiveAbility = Cast<UBaseCombatAbility>(RTCharacter->GetActiveCombatAbility());
+		const UBaseCombatAbility* ActiveAbility = Cast<UBaseCombatAbility>(RTCharacter->GetActiveCombatAbility());
 
 		if (ActiveAbility)
 		{

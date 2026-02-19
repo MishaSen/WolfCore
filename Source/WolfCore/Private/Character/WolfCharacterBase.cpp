@@ -2,6 +2,7 @@
 
 #include "WolfCore/Public/Character/WolfCharacterBase.h"
 
+#include "AIController.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "Animation/AnimInstance.h"
 #include "Abilities/AbilityConfig.h"
@@ -9,12 +10,15 @@
 #include "AttributeSet.h"
 #include "Abilities/RTCombatAbility.h"
 #include "AbilitySystem/CharacterStatConfig.h"
+#include "BehaviorTree/BehaviorTreeComponent.h"
 #include "Components/CapsuleComponent.h"
 #include "Core/WolfGameplayTags.h"
 #include "Debug/WolfDebug.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "Kismet/GameplayStatics.h"
+#include "Perception/AIPerceptionComponent.h"
 #include "Presage/ActorSnapshot.h"
+#include "Systems/CombatModeSubsystem.h"
 #include "WolfCore/Public/AbilitySystem/WolfAbilitySystemComponent.h"
 #include "WolfCore/Public/Presage/PresageAbilityRequest.h"
 #include "WolfCore/Public/Presage/PresageSubsystem.h"
@@ -53,23 +57,43 @@ void AWolfCharacterBase::BeginPlay()
 {
 	Super::BeginPlay();
 
+	if (auto* World = GetWorld())
+	{
+		if (auto* CMS = World->GetSubsystem<UCombatModeSubsystem>())
+		{
+			CMS->RegisterCombatListener(this);
+		}
+	}
+	
 	if (HasAuthority() && !IsValid(ASC))
 	{
 		SetupAbilitySystem();
 	}
 }
 
+void AWolfCharacterBase::EndPlay(const EEndPlayReason::Type EndPlayReason)
+{
+	if (auto* World = GetWorld())
+	{
+		if (auto* CMS = World->GetSubsystem<UCombatModeSubsystem>())
+		{
+			CMS->UnregisterCombatListener(this);
+		}
+	}
+	Super::EndPlay(EndPlayReason);
+}
+
 void AWolfCharacterBase::Die_Implementation()
 {
 	if (ASC && ASC->HasMatchingGameplayTag(FWolfGameplayTags::Get().InputState_Dead)) return; // Already dead.
 
-	if (auto* const Capsule = GetCapsuleComponent())
+	if (auto* Capsule = GetCapsuleComponent())
 	{
 		Capsule->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 		Capsule->SetCollisionResponseToAllChannels(ECR_Ignore);
 	}
 
-	if (auto* const MoveComp = GetCharacterMovement())
+	if (auto* MoveComp = GetCharacterMovement())
 	{
 		MoveComp->StopMovementImmediately();
 		MoveComp->DisableMovement();
@@ -261,7 +285,7 @@ float AWolfCharacterBase::GetTimeToNextHitImpact() const
 
 void AWolfCharacterBase::GetPresageCollisionDimensions(float& OutRadius, float& OutHalfHeight) const
 {
-	auto* Capsule = GetCapsuleComponent();
+	const auto* Capsule = GetCapsuleComponent();
 	if (!Capsule)
 	{
 		OutRadius = 0.f;
@@ -273,7 +297,7 @@ void AWolfCharacterBase::GetPresageCollisionDimensions(float& OutRadius, float& 
 	OutHalfHeight = Capsule->GetScaledCapsuleHalfHeight();
 }
 
-FTransform AWolfCharacterBase::ExtractRootMotionAtTime(UAnimMontage* Montage, float Time) const
+FTransform AWolfCharacterBase::ExtractRootMotionAtTime(UAnimMontage* Montage, float Time)
 {
 	if (!Montage) return FTransform::Identity;
 
@@ -409,7 +433,6 @@ void AWolfCharacterBase::RestorePhysics(const FActorSnapshot& Snapshot)
 	if (auto* Capsule = GetCapsuleComponent())
 	{
 		Capsule->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
-		Capsule->SetCollisionResponseToAllChannels(ECR_Block);
 		Capsule->SetCollisionProfileName(UCollisionProfile::Pawn_ProfileName);
 	}
 

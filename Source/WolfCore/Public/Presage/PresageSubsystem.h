@@ -20,6 +20,39 @@ class UGameplayAbility;
 class UAbilitySystemComponent;
 
 USTRUCT(BlueprintType)
+struct FCharacterFrame
+{
+	GENERATED_BODY()
+
+	UPROPERTY()
+	float Timestamp = 0.f;
+
+	UPROPERTY()
+	FVector Location = FVector::ZeroVector;
+
+	UPROPERTY()
+	FRotator Rotation = FRotator::ZeroRotator;
+
+	UPROPERTY()
+	float MontagePosition = 0.f;
+
+	UPROPERTY()
+	TWeakObjectPtr<UAnimMontage> ActiveMontage = nullptr;
+
+	UPROPERTY()
+	float CurrentHealth = 0.f;
+};
+
+USTRUCT(BlueprintType)
+struct FCharacterTimelineTrack
+{
+	GENERATED_BODY()
+
+	UPROPERTY()
+	TArray<FCharacterFrame> Frames;
+};
+
+USTRUCT(BlueprintType)
 struct FPresageTimelineEvent
 {
 	GENERATED_BODY()
@@ -55,6 +88,15 @@ class WOLFCORE_API UPresageSubsystem : public UTickableWorldSubsystem, public IS
 	GENERATED_BODY()
 
 public:
+	// --- Database of Predictions ---
+	UPROPERTY(BlueprintReadOnly)
+	TMap<AWolfCharacterBase*, FCharacterTimelineTrack> VisualTracks;
+
+	void BakeSimulation();
+
+	UFUNCTION(BlueprintCallable)
+	void ScrubToTime(float Time);
+	
 	void OnModeSwitchEventReceived(FGameplayTag GameplayTag, const FGameplayEventData* GameplayEventData);
 	void BindToModeSwitchEvent();
 	// --- Subsystem Lifecycle ---
@@ -99,6 +141,7 @@ private:
 	const FWolfGameplayTags* WolfTags;
 	bool bLoopActive = false;
 	float AccumulatedTime = 0.f;
+	const float PredictionTimeStep = 0.033f;
 
 	TArray<TWeakObjectPtr<AWolfCharacterBase>> TBParticipants;
 	TArray<TWeakObjectPtr<AWolfCharacterBase>> RTParticipants;

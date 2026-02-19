@@ -7,6 +7,7 @@
 #include "AbilitySystemInterface.h"
 #include "GameplayAbilitySpecHandle.h"
 #include "GameplayTagContainer.h"
+#include "Interfaces/CombatModeListener.h"
 #include "Presage/Snapshot.h"
 
 #include "WolfCharacterBase.generated.h"
@@ -22,7 +23,7 @@ class UWolfAttributeSet;
 class UGameplayEffect;
 
 UCLASS(Blueprintable, BlueprintType)
-class WOLFCORE_API AWolfCharacterBase : public ACharacter, public IAbilitySystemInterface, public ISnapshot
+class WOLFCORE_API AWolfCharacterBase : public ACharacter, public IAbilitySystemInterface, public ISnapshot, public ICombatModeListener
 {
 	GENERATED_BODY()
 
@@ -40,7 +41,7 @@ public:
 	class UBaseCombatAbility* GetActiveCombatAbility() const;
 	
 protected:
-	FTransform ExtractRootMotionAtTime(UAnimMontage* Montage, float Time) const;
+	static FTransform ExtractRootMotionAtTime(UAnimMontage* Montage, float Time);
 
 	virtual void CreateSnapshot_Implementation(FActorSnapshot& OutSnapshot) override;
 
@@ -91,6 +92,7 @@ protected:
 	TObjectPtr<UCharacterStatConfig> StatConfig;
 	
 	virtual void BeginPlay() override;
+	virtual void EndPlay(EEndPlayReason::Type EndPlayReason) override;
 	virtual void Tick(float DeltaTime) override;
 	virtual void SetupPlayerInputComponent(class UInputComponent* PlayerInputComponent) override;
 	void SetupAbilitySystem();

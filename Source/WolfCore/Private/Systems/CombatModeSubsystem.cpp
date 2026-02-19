@@ -14,32 +14,57 @@
 #include "Debug/WolfDebug.h"
 #include "Kismet/GameplayStatics.h"
 
+void UCombatModeSubsystem::RegisterCombatListener(AActor* Combatant)
+{
+	if (Combatant)
+	{
+		Combatants.Add(Combatant);
+		WOLF_LOG(Log, TEXT("Combatant registered: %s"), *Combatant->GetName());
+	}
+}
+
+void UCombatModeSubsystem::UnregisterCombatListener(const AActor* Combatant)
+{
+	if (Combatant)
+	{
+		Combatants.Remove(Combatant);
+		WOLF_LOG(Log, TEXT("Combatant unregistered: %s"), *Combatant->GetName());
+	}
+}
+
 void UCombatModeSubsystem::SetMode(FGameplayTag NewMode)
 {
-	if (CurrentMode == NewMode)
-	{
-		WOLF_LOG(Log, TEXT("Current Mode is already set to %s"), *NewMode.ToString());
-		return;
-	}
+	if (CurrentMode == NewMode) return;
 	
 	CurrentMode = NewMode;
-	WOLF_LOG(Log, TEXT("Current Mode set to %s"), *NewMode.ToString());
+	UGameplayStatics::SetGlobalTimeDilation(GetWorld(), GetDilationForMode(NewMode));
 
-	TArray<AActor*> CombatActors;
-	UGameplayStatics::GetAllActorsWithInterface(GetWorld(), UAbilitySystemInterface::StaticClass(), CombatActors);
-
-	for (auto Actor : CombatActors)
+	for (auto Iterator = Combatants.CreateIterator(); Iterator; ++Iterator)
 	{
-		if (auto* ASC = Cast<IAbilitySystemInterface>(Actor)->GetAbilitySystemComponent())
+		auto* Combatant = *Iterator;
+		if (!IsValid(Combatant))
 		{
-			ASC->RemoveLooseGameplayTag(WolfTag.InputState_RT);
-			ASC->RemoveLooseGameplayTag(WolfTag.InputState_TB);
-			ASC->RemoveLooseGameplayTag(WolfTag.InputState_OOC);
-			ASC->AddLooseGameplayTag(NewMode);
+			Iterator.RemoveCurrent();
+			continue;
+		}
+
+		if (const auto* ASI = Cast<IAbilitySystemInterface>(Combatant))
+		{
+			if (auto* ASC = ASI->GetAbilitySystemComponent())
+			{
+				ASC->RemoveLooseGameplayTag(WolfTag.InputState_RT);
+				ASC->RemoveLooseGameplayTag(WolfTag.InputState_TB);
+				ASC->RemoveLooseGameplayTag(WolfTag.InputState_OOC);
+				ASC->AddLooseGameplayTag(NewMode);
+			}
+		}
+
+		if (Combatant->Implements<UCombatModeListener>())
+		{
+			ICombatModeListener::Execute_OnCombatModeChanged(Combatant, NewMode);
 		}
 	}
-
-	WOLF_INFO(TEXT("Global Combat Mode set to %s for %d actors"), *NewMode.ToString(), CombatActors.Num());
+	WOLF_INFO(TEXT("Combat Mode set to %s for %d actors"), *NewMode.ToString(), Combatants.Num());
 }
 
 void UCombatModeSubsystem::SwitchCombatMode()
@@ -56,6 +81,11 @@ void UCombatModeSubsystem::OnWorldBeginPlay(UWorld& InWorld)
 	Super::OnWorldBeginPlay(InWorld);
 
 	WolfTag = FWolfGameplayTags::Get();
+	
+	ModeTimeDilationMap.Add(WolfTag.InputState_TB, 0.f);
+	ModeTimeDilationMap.Add(WolfTag.InputState_RT, 1.f);
+	ModeTimeDilationMap.Add(WolfTag.InputState_OOC, 1.f);
+
 	PlayerASC = GetPlayerASC();
 
 	if (auto* GameInstance = InWorld.GetGameInstance<UWolfGameInstance>();

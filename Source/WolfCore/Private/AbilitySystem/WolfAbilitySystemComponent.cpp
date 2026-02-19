@@ -4,6 +4,7 @@
 #include "WolfCore/Public/AbilitySystem/WolfAbilitySystemComponent.h"
 
 #include "Abilities/TBCombatAbility.h"
+#include "Character/WolfCharacterBase.h"
 #include "Core/WolfGameplayTags.h"
 #include "Debug/WolfDebug.h"
 
@@ -18,10 +19,10 @@ void UWolfAbilitySystemComponent::AbilityInputTagPressed(const FGameplayTag& Tag
 		{
 			AbilitySpecInputPressed(AbilitySpec);
 
-			if (!AbilitySpec.IsActive())
+			const bool bIsPlayerControlled = GetAvatarActor() ? Cast<APawn>(GetAvatarActor())->IsPlayerControlled() : false; 
+			if (!bIsPlayerControlled && !AbilitySpec.IsActive()) // For AI activated abilities
 			{
 				TryActivateAbility(AbilitySpec.Handle);
-				WOLF_LOG(Log, TEXT( "Ability Spec not active, running TryActivateAbility. Ability [%s] activated." ), *AbilitySpec.Ability->GetName());
 			}
 		}
 	}
