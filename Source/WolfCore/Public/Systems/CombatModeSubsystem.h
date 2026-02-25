@@ -28,14 +28,14 @@ public:
 
 	void RegisterCombatListener(AActor* Combatant);
 	void UnregisterCombatListener(const AActor* Combatant);
+	void ApplyModeToActor(AActor* Combatant, FGameplayTag NewMode);
 	void UpdateCombatantModeTags(FGameplayTag NewMode);
+
+	FGameplayTag GetCurrentMode() const { return CurrentMode; }
 
 private:
 	FGameplayTag CurrentMode;
 	FWolfGameplayTags WolfTag;
-
-	UPROPERTY()
-	UAbilitySystemComponent* PlayerASC;
 
 	UPROPERTY()
 	TSet<AActor*> Combatants;

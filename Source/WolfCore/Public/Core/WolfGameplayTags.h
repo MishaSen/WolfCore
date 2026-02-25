@@ -49,6 +49,9 @@ struct FWolfGameplayTags
 	// --- Data ---
 	FGameplayTag Data_Amount;
 
+	// --- Status ---
+	FGameplayTag Status_Link;
+	
 private:
 	static FWolfGameplayTags GameplayTags;
 };

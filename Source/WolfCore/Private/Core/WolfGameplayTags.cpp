@@ -47,4 +47,7 @@ void FWolfGameplayTags::InitializeNativeGameplayTags()
 
 	// --- Data ---
 	AddNativeTag(GameplayTags.Data_Amount, FName("Data.Amount"), TEXT("Data tag for amount."));
+
+	// --- Status ---
+	AddNativeTag(GameplayTags.Status_Link, FName("Status.Link"), TEXT("Status tag for link."));
 }

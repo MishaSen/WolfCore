@@ -12,6 +12,7 @@
 #include "AbilitySystem/CharacterStatConfig.h"
 #include "BehaviorTree/BehaviorTreeComponent.h"
 #include "Components/CapsuleComponent.h"
+#include "Core/WolfFunctionLibrary.h"
 #include "Core/WolfGameplayTags.h"
 #include "Debug/WolfDebug.h"
 #include "GameFramework/CharacterMovementComponent.h"
@@ -57,14 +58,11 @@ void AWolfCharacterBase::BeginPlay()
 {
 	Super::BeginPlay();
 
-	if (auto* World = GetWorld())
+	if (auto* CMS = UWolfFunctionLibrary::GetWorldSubsystem<UCombatModeSubsystem>(this))
 	{
-		if (auto* CMS = World->GetSubsystem<UCombatModeSubsystem>())
-		{
-			CMS->RegisterCombatListener(this);
-		}
+		CMS->RegisterCombatListener(this);
 	}
-	
+
 	if (HasAuthority() && !IsValid(ASC))
 	{
 		SetupAbilitySystem();
@@ -73,13 +71,11 @@ void AWolfCharacterBase::BeginPlay()
 
 void AWolfCharacterBase::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
-	if (auto* World = GetWorld())
+	if (auto* CMS = UWolfFunctionLibrary::GetWorldSubsystem<UCombatModeSubsystem>(this))
 	{
-		if (auto* CMS = World->GetSubsystem<UCombatModeSubsystem>())
-		{
-			CMS->UnregisterCombatListener(this);
-		}
+		CMS->UnregisterCombatListener(this);
 	}
+	
 	Super::EndPlay(EndPlayReason);
 }
 

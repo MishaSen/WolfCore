@@ -17,19 +17,42 @@
 
 void UCombatModeSubsystem::RegisterCombatListener(AActor* Combatant)
 {
-	if (Combatant)
-	{
-		Combatants.Add(Combatant);
-		WOLF_LOG(Log, TEXT("Combatant registered: %s"), *Combatant->GetName());
-	}
+	if (!IsValid(Combatant) || Combatants.Contains(Combatant)) return;
+
+	Combatants.Add(Combatant);
+	ApplyModeToActor(Combatant, CurrentMode);
+	WOLF_LOG(Log, TEXT("Combatant registered: %s"), *Combatant->GetName());
 }
 
 void UCombatModeSubsystem::UnregisterCombatListener(const AActor* Combatant)
 {
-	if (Combatant)
+	if (IsValid(Combatant))
 	{
 		Combatants.Remove(Combatant);
 		WOLF_LOG(Log, TEXT("Combatant unregistered: %s"), *Combatant->GetName());
+	}
+}
+
+void UCombatModeSubsystem::ApplyModeToActor(AActor* Combatant, FGameplayTag NewMode)
+{
+	const auto* ASI = Cast<IAbilitySystemInterface>(Combatant);
+	auto* ASC = ASI ? ASI->GetAbilitySystemComponent() : nullptr;
+	if (!ASC) return;
+
+	// Enemies and unlinked allies don't need to switch
+	const auto* Pawn = Cast<APawn>(Combatant);
+	const bool bIsPlayer = Pawn && Pawn->IsPlayerControlled();
+	const bool bHasLink = ASC->HasMatchingGameplayTag(WolfTag.Status_Link);
+	const auto ActualModeForActor = bIsPlayer || bHasLink ? NewMode : WolfTag.InputState_RT;
+
+	ASC->RemoveLooseGameplayTag(WolfTag.InputState_RT);
+	ASC->RemoveLooseGameplayTag(WolfTag.InputState_TB);
+	ASC->RemoveLooseGameplayTag(WolfTag.InputState_OOC);
+	ASC->AddLooseGameplayTag(ActualModeForActor);
+
+	if (Combatant->Implements<UCombatModeListener>())
+	{
+		ICombatModeListener::Execute_OnCombatModeChanged(Combatant, ActualModeForActor);
 	}
 }
 
@@ -37,28 +60,12 @@ void UCombatModeSubsystem::UpdateCombatantModeTags(FGameplayTag NewMode)
 {
 	for (auto Iterator = Combatants.CreateIterator(); Iterator; ++Iterator)
 	{
-		auto* Combatant = *Iterator;
-		if (!IsValid(Combatant))
+		if (!IsValid(*Iterator))
 		{
 			Iterator.RemoveCurrent();
 			continue;
 		}
-
-		if (const auto* ASI = Cast<IAbilitySystemInterface>(Combatant))
-		{
-			if (auto* ASC = ASI->GetAbilitySystemComponent())
-			{
-				ASC->RemoveLooseGameplayTag(WolfTag.InputState_RT);
-				ASC->RemoveLooseGameplayTag(WolfTag.InputState_TB);
-				ASC->RemoveLooseGameplayTag(WolfTag.InputState_OOC);
-				ASC->AddLooseGameplayTag(NewMode);
-			}
-		}
-
-		if (Combatant->Implements<UCombatModeListener>())
-		{
-			ICombatModeListener::Execute_OnCombatModeChanged(Combatant, NewMode);
-		}
+		ApplyModeToActor(*Iterator, NewMode);
 	}
 	WOLF_INFO(TEXT("Combat Mode set to %s for %d actors"), *NewMode.ToString(), Combatants.Num());
 }
@@ -67,7 +74,7 @@ void UCombatModeSubsystem::SetMode(FGameplayTag NewMode)
 {
 	if (CurrentMode == NewMode) return;
 	CurrentMode = NewMode;
-	
+
 	UGameplayStatics::SetGlobalTimeDilation(GetWorld(), GetDilationForMode(NewMode));
 
 	UpdateCombatantModeTags(NewMode);
@@ -100,19 +107,17 @@ void UCombatModeSubsystem::OnWorldBeginPlay(UWorld& InWorld)
 	Super::OnWorldBeginPlay(InWorld);
 
 	WolfTag = FWolfGameplayTags::Get();
-	
+
 	ModeTimeDilationMap.Add(WolfTag.InputState_TB, 0.f);
 	ModeTimeDilationMap.Add(WolfTag.InputState_RT, 1.f);
 	ModeTimeDilationMap.Add(WolfTag.InputState_OOC, 1.f);
-
-	PlayerASC = GetPlayerASC();
 
 	if (auto* GameInstance = InWorld.GetGameInstance<UWolfGameInstance>();
 		GameInstance && GameInstance->SelectedCombatMode.IsValid())
 	{
 		SetMode(GameInstance->SelectedCombatMode);
 		WOLF_LOG(Log, TEXT("Selected Combat Mode set to %s"), *GameInstance->SelectedCombatMode.ToString());
-		
+
 		GameInstance->ClearSelectedCombatMode();
 	}
 	else // Select the default level mode if no player choice
