@@ -16,6 +16,12 @@
 #include "Kismet/GameplayStatics.h"
 #include "Presage/PresageSubsystem.h"
 
+void UCombatModeSubsystem::Initialize(FSubsystemCollectionBase& Collection)
+{
+	Collection.InitializeDependency<UPresageSubsystem>();
+	Super::Initialize(Collection);
+}
+
 void UCombatModeSubsystem::RegisterCombatListener(AActor* Combatant)
 {
 	if (!IsValid(Combatant) || Combatants.Contains(Combatant)) return;
@@ -94,37 +100,52 @@ void UCombatModeSubsystem::SwitchCombatMode()
 	SetMode(NewMode);
 }
 
-void UCombatModeSubsystem::OnWorldBeginPlay(UWorld& InWorld)
+void UCombatModeSubsystem::InitializeSubsystemDefaults()
 {
-	Super::OnWorldBeginPlay(InWorld);
-
-	CachedPresage = UWolfFunctionLibrary::GetWorldSubsystem<UPresageSubsystem>(&InWorld);
 	WolfTag = FWolfGameplayTags::Get();
-
 	ModeTimeDilationMap.Add(WolfTag.InputState_TB, 0.f);
 	ModeTimeDilationMap.Add(WolfTag.InputState_RT, 1.f);
 	ModeTimeDilationMap.Add(WolfTag.InputState_OOC, 1.f);
 
-	if (auto* GameInstance = InWorld.GetGameInstance<UWolfGameInstance>();
-		GameInstance && GameInstance->SelectedCombatMode.IsValid())
-	{
-		SetMode(GameInstance->SelectedCombatMode);
-		WOLF_LOG(Log, TEXT("Selected Combat Mode set to %s"), *GameInstance->SelectedCombatMode.ToString());
+	CachedPresage = UWolfFunctionLibrary::GetWorldSubsystem<UPresageSubsystem>(GetWorld());
+}
 
-		GameInstance->ClearSelectedCombatMode();
+bool UCombatModeSubsystem::TryLoadPlayerSelectedMode()
+{
+	auto* GI = GetWorld()->GetGameInstance<UWolfGameInstance>();
+	if (GI && GI->SelectedCombatMode.IsValid())
+	{
+		SetMode(GI->SelectedCombatMode);
+		WOLF_LOG(Log, TEXT("Selected Combat Mode set to %s"), *GI->SelectedCombatMode.ToString());
+
+		GI->ClearSelectedCombatMode();
+		return true;
 	}
-	else // Select the default level mode if no player choice
-	{
-		const auto* LevelScript = Cast<AWolfLevelScript>(InWorld.GetLevelScriptActor());
-		if (!LevelScript)
-		{
-			WOLF_ERROR(TEXT("LevelScript not found."));
-			return;
-		}
+	return false;
+}
 
+void UCombatModeSubsystem::ApplyDefaultLevelMode()
+{
+	const auto* LevelScript = Cast<AWolfLevelScript>(GetWorld()->GetLevelScriptActor());
+	if (LevelScript)
+	{
 		SetMode(LevelScript->StartingCombatTag);
-		WOLF_LOG(Log, TEXT("Combat Mode set to default level mode: %s"), *LevelScript->StartingCombatTag.ToString());
+		WOLF_LOG(Log, TEXT("Combat Mode defaulting to Level Mode: %s"), *LevelScript->StartingCombatTag.ToString());
 	}
+	else
+	{
+		WOLF_ERROR(TEXT("LevelScript not found - No default mode set"));
+	}
+}
+
+void UCombatModeSubsystem::OnWorldBeginPlay(UWorld& InWorld)
+{
+	Super::OnWorldBeginPlay(InWorld);
+
+	InitializeSubsystemDefaults();
+
+	if (TryLoadPlayerSelectedMode()) return;
+	ApplyDefaultLevelMode();
 }
 
 UAbilitySystemComponent* UCombatModeSubsystem::GetPlayerASC() const

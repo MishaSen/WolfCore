@@ -22,11 +22,15 @@ class WOLFCORE_API UCombatModeSubsystem : public UWorldSubsystem
 public:
 	void SetMode(FGameplayTag NewMode);
 	void SwitchCombatMode();
+	void InitializeSubsystemDefaults();
+	bool TryLoadPlayerSelectedMode();
+	void ApplyDefaultLevelMode();
 
 	FGameplayTag GetCombatMode() const { return CurrentMode; }
 
 	virtual void OnWorldBeginPlay(UWorld& InWorld) override;
 
+	virtual void Initialize(FSubsystemCollectionBase& Collection) override;
 	void RegisterCombatListener(AActor* Combatant);
 	void UnregisterCombatListener(const AActor* Combatant);
 	void ApplyModeToActor(AActor* Combatant, FGameplayTag NewMode);
