@@ -9,6 +9,7 @@
 #include "AbilitySystemComponent.h"
 #include "AbilitySystemInterface.h"
 #include "WolfLevelScript.h"
+#include "Core/WolfFunctionLibrary.h"
 #include "Core/WolfGameInstance.h"
 #include "Core/WolfGameplayTags.h"
 #include "Debug/WolfDebug.h"
@@ -35,8 +36,7 @@ void UCombatModeSubsystem::UnregisterCombatListener(const AActor* Combatant)
 
 void UCombatModeSubsystem::ApplyModeToActor(AActor* Combatant, FGameplayTag NewMode)
 {
-	const auto* ASI = Cast<IAbilitySystemInterface>(Combatant);
-	auto* ASC = ASI ? ASI->GetAbilitySystemComponent() : nullptr;
+	auto* ASC = UAbilitySystemBlueprintLibrary::GetAbilitySystemComponent(Combatant);
 	if (!ASC) return;
 
 	// Enemies and unlinked allies don't need to switch
@@ -76,20 +76,12 @@ void UCombatModeSubsystem::SetMode(FGameplayTag NewMode)
 	CurrentMode = NewMode;
 
 	UGameplayStatics::SetGlobalTimeDilation(GetWorld(), GetDilationForMode(NewMode));
-
 	UpdateCombatantModeTags(NewMode);
 
-	auto* Presage = GetWorld()->GetSubsystem<UPresageSubsystem>();
-	if (Presage)
+	if (CachedPresage)
 	{
-		if (NewMode == WolfTag.InputState_TB)
-		{
-			Presage->StartLoop();
-		}
-		else
-		{
-			Presage->StopLoop();
-		}
+		const bool bIsTurnBased = NewMode == WolfTag.InputState_TB;
+		bIsTurnBased ? CachedPresage->StartLoop() : CachedPresage->StopLoop();
 	}
 }
 
@@ -106,6 +98,7 @@ void UCombatModeSubsystem::OnWorldBeginPlay(UWorld& InWorld)
 {
 	Super::OnWorldBeginPlay(InWorld);
 
+	CachedPresage = UWolfFunctionLibrary::GetWorldSubsystem<UPresageSubsystem>(&InWorld);
 	WolfTag = FWolfGameplayTags::Get();
 
 	ModeTimeDilationMap.Add(WolfTag.InputState_TB, 0.f);

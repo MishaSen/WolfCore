@@ -13,7 +13,7 @@ public:
 	template<typename T>
 	static T* GetWorldSubsystem(const UObject* WorldContextObject)
 	{
-		if (auto* World = GEngine->GetWorldFromContextObject(WorldContextObject, EGetWorldErrorMode::LogAndReturnNull))
+		if (const auto* World = GEngine->GetWorldFromContextObject(WorldContextObject, EGetWorldErrorMode::LogAndReturnNull))
 		{
 			return World->GetSubsystem<T>();
 		}

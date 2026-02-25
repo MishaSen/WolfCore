@@ -10,6 +10,7 @@
 #include "Subsystems/WorldSubsystem.h"
 #include "CombatModeSubsystem.generated.h"
 
+class UPresageSubsystem;
 /**
  * 
  */
@@ -36,6 +37,9 @@ public:
 private:
 	FGameplayTag CurrentMode;
 	FWolfGameplayTags WolfTag;
+
+	UPROPERTY()
+	TObjectPtr<UPresageSubsystem> CachedPresage;
 
 	UPROPERTY()
 	TSet<AActor*> Combatants;
