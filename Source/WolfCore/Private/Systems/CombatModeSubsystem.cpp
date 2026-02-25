@@ -13,6 +13,7 @@
 #include "Core/WolfGameplayTags.h"
 #include "Debug/WolfDebug.h"
 #include "Kismet/GameplayStatics.h"
+#include "Presage/PresageSubsystem.h"
 
 void UCombatModeSubsystem::RegisterCombatListener(AActor* Combatant)
 {
@@ -32,13 +33,8 @@ void UCombatModeSubsystem::UnregisterCombatListener(const AActor* Combatant)
 	}
 }
 
-void UCombatModeSubsystem::SetMode(FGameplayTag NewMode)
+void UCombatModeSubsystem::UpdateCombatantModeTags(FGameplayTag NewMode)
 {
-	if (CurrentMode == NewMode) return;
-	
-	CurrentMode = NewMode;
-	UGameplayStatics::SetGlobalTimeDilation(GetWorld(), GetDilationForMode(NewMode));
-
 	for (auto Iterator = Combatants.CreateIterator(); Iterator; ++Iterator)
 	{
 		auto* Combatant = *Iterator;
@@ -65,6 +61,29 @@ void UCombatModeSubsystem::SetMode(FGameplayTag NewMode)
 		}
 	}
 	WOLF_INFO(TEXT("Combat Mode set to %s for %d actors"), *NewMode.ToString(), Combatants.Num());
+}
+
+void UCombatModeSubsystem::SetMode(FGameplayTag NewMode)
+{
+	if (CurrentMode == NewMode) return;
+	CurrentMode = NewMode;
+	
+	UGameplayStatics::SetGlobalTimeDilation(GetWorld(), GetDilationForMode(NewMode));
+
+	UpdateCombatantModeTags(NewMode);
+
+	auto* Presage = GetWorld()->GetSubsystem<UPresageSubsystem>();
+	if (Presage)
+	{
+		if (NewMode == WolfTag.InputState_TB)
+		{
+			Presage->StartLoop();
+		}
+		else
+		{
+			Presage->StopLoop();
+		}
+	}
 }
 
 void UCombatModeSubsystem::SwitchCombatMode()

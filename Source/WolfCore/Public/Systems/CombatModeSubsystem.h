@@ -28,6 +28,7 @@ public:
 
 	void RegisterCombatListener(AActor* Combatant);
 	void UnregisterCombatListener(const AActor* Combatant);
+	void UpdateCombatantModeTags(FGameplayTag NewMode);
 
 private:
 	FGameplayTag CurrentMode;
