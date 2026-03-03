@@ -47,9 +47,8 @@ void UCombatModeSubsystem::ApplyModeToActor(AActor* Combatant, FGameplayTag NewM
 
 	// Enemies and unlinked allies don't need to switch
 	const auto* Pawn = Cast<APawn>(Combatant);
-	const bool bIsPlayer = Pawn && Pawn->IsPlayerControlled();
-	const bool bHasLink = ASC->HasMatchingGameplayTag(WolfTag.Status_Link);
-	const auto ActualModeForActor = bIsPlayer || bHasLink ? NewMode : WolfTag.InputState_RT;
+	const bool bCanChangeMode = Pawn && Pawn->IsPlayerControlled() || ASC->HasMatchingGameplayTag(WolfTag.Status_Link);
+	const auto ActualModeForActor = bCanChangeMode ? NewMode : WolfTag.InputState_RT;
 
 	ASC->RemoveLooseGameplayTag(WolfTag.InputState_RT);
 	ASC->RemoveLooseGameplayTag(WolfTag.InputState_TB);
@@ -122,6 +121,8 @@ bool UCombatModeSubsystem::TryLoadPlayerSelectedMode()
 		return true;
 	}
 	return false;
+	/* TODO: We have the logic to influence combat mode through player input.
+	 * Now we need to implement a way for players to input the desired mode. */
 }
 
 void UCombatModeSubsystem::ApplyDefaultLevelMode()
