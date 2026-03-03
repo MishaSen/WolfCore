@@ -7,7 +7,6 @@
 #include "GameFramework/PlayerController.h"
 #include "GameFramework/Pawn.h"
 #include "AbilitySystemComponent.h"
-#include "AbilitySystemInterface.h"
 #include "WolfLevelScript.h"
 #include "Core/WolfFunctionLibrary.h"
 #include "Core/WolfGameInstance.h"
@@ -20,6 +19,50 @@ void UCombatModeSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {
 	Collection.InitializeDependency<UPresageSubsystem>();
 	Super::Initialize(Collection);
+}
+
+void UCombatModeSubsystem::OnWorldBeginPlay(UWorld& InWorld)
+{
+	Super::OnWorldBeginPlay(InWorld);
+
+	InitializeSubsystemDefaults();
+
+	if (TryLoadPlayerSelectedMode()) return;
+	ApplyDefaultLevelMode();
+}
+
+void UCombatModeSubsystem::InitializeSubsystemDefaults()
+{
+	WolfTag = FWolfGameplayTags::Get();
+	ModeTimeDilationMap.Add(WolfTag.InputState_TB, 0.f);
+	ModeTimeDilationMap.Add(WolfTag.InputState_RT, 1.f);
+	ModeTimeDilationMap.Add(WolfTag.InputState_OOC, 1.f);
+
+	CachedPresage = UWolfFunctionLibrary::GetWorldSubsystem<UPresageSubsystem>(GetWorld());
+}
+
+void UCombatModeSubsystem::SetMode(FGameplayTag NewMode)
+{
+	if (CurrentMode == NewMode) return;
+	CurrentMode = NewMode;
+
+	UGameplayStatics::SetGlobalTimeDilation(GetWorld(), GetDilationForMode(NewMode));
+	UpdateCombatantModeTags(NewMode);
+
+	if (CachedPresage)
+	{
+		const bool bIsTurnBased = NewMode == WolfTag.InputState_TB;
+		bIsTurnBased ? CachedPresage->StartLoop() : CachedPresage->StopLoop();
+	}
+}
+
+void UCombatModeSubsystem::SwitchCombatMode()
+{
+	const auto NewMode = CurrentMode == WolfTag.InputState_RT
+							 ? WolfTag.InputState_TB
+							 : WolfTag.InputState_RT;
+
+	SetMode(NewMode);
 }
 
 void UCombatModeSubsystem::RegisterCombatListener(AActor* Combatant)
@@ -38,6 +81,20 @@ void UCombatModeSubsystem::UnregisterCombatListener(const AActor* Combatant)
 		Combatants.Remove(Combatant);
 		WOLF_LOG(Log, TEXT("Combatant unregistered: %s"), *Combatant->GetName());
 	}
+}
+
+void UCombatModeSubsystem::UpdateCombatantModeTags(FGameplayTag NewMode)
+{
+	for (auto Iterator = Combatants.CreateIterator(); Iterator; ++Iterator)
+	{
+		if (!IsValid(*Iterator))
+		{
+			Iterator.RemoveCurrent();
+			continue;
+		}
+		ApplyModeToActor(*Iterator, NewMode);
+	}
+	WOLF_INFO(TEXT("Combat Mode set to %s for %d actors"), *NewMode.ToString(), Combatants.Num());
 }
 
 void UCombatModeSubsystem::ApplyModeToActor(AActor* Combatant, FGameplayTag NewMode)
@@ -59,54 +116,6 @@ void UCombatModeSubsystem::ApplyModeToActor(AActor* Combatant, FGameplayTag NewM
 	{
 		ICombatModeListener::Execute_OnCombatModeChanged(Combatant, ActualModeForActor);
 	}
-}
-
-void UCombatModeSubsystem::UpdateCombatantModeTags(FGameplayTag NewMode)
-{
-	for (auto Iterator = Combatants.CreateIterator(); Iterator; ++Iterator)
-	{
-		if (!IsValid(*Iterator))
-		{
-			Iterator.RemoveCurrent();
-			continue;
-		}
-		ApplyModeToActor(*Iterator, NewMode);
-	}
-	WOLF_INFO(TEXT("Combat Mode set to %s for %d actors"), *NewMode.ToString(), Combatants.Num());
-}
-
-void UCombatModeSubsystem::SetMode(FGameplayTag NewMode)
-{
-	if (CurrentMode == NewMode) return;
-	CurrentMode = NewMode;
-
-	UGameplayStatics::SetGlobalTimeDilation(GetWorld(), GetDilationForMode(NewMode));
-	UpdateCombatantModeTags(NewMode);
-
-	if (CachedPresage)
-	{
-		const bool bIsTurnBased = NewMode == WolfTag.InputState_TB;
-		bIsTurnBased ? CachedPresage->StartLoop() : CachedPresage->StopLoop();
-	}
-}
-
-void UCombatModeSubsystem::SwitchCombatMode()
-{
-	const auto NewMode = CurrentMode == WolfTag.InputState_RT
-		                     ? WolfTag.InputState_TB
-		                     : WolfTag.InputState_RT;
-
-	SetMode(NewMode);
-}
-
-void UCombatModeSubsystem::InitializeSubsystemDefaults()
-{
-	WolfTag = FWolfGameplayTags::Get();
-	ModeTimeDilationMap.Add(WolfTag.InputState_TB, 0.f);
-	ModeTimeDilationMap.Add(WolfTag.InputState_RT, 1.f);
-	ModeTimeDilationMap.Add(WolfTag.InputState_OOC, 1.f);
-
-	CachedPresage = UWolfFunctionLibrary::GetWorldSubsystem<UPresageSubsystem>(GetWorld());
 }
 
 bool UCombatModeSubsystem::TryLoadPlayerSelectedMode()
@@ -139,16 +148,6 @@ void UCombatModeSubsystem::ApplyDefaultLevelMode()
 	}
 }
 
-void UCombatModeSubsystem::OnWorldBeginPlay(UWorld& InWorld)
-{
-	Super::OnWorldBeginPlay(InWorld);
-
-	InitializeSubsystemDefaults();
-
-	if (TryLoadPlayerSelectedMode()) return;
-	ApplyDefaultLevelMode();
-}
-
 UAbilitySystemComponent* UCombatModeSubsystem::GetPlayerASC() const
 {
 	const auto* PC = GetWorld()->GetFirstPlayerController();
@@ -158,4 +157,11 @@ UAbilitySystemComponent* UCombatModeSubsystem::GetPlayerASC() const
 	if (!Pawn) return nullptr;
 
 	return UAbilitySystemBlueprintLibrary::GetAbilitySystemComponent(Pawn);
+}
+
+float UCombatModeSubsystem::GetDilationForMode(const FGameplayTag& Mode) const
+{
+	const auto* ModeDilation = ModeTimeDilationMap.Find(Mode);
+	if (!ModeDilation) WOLF_WARN(TEXT("Dilation Map missing tag: %s"), *Mode.ToString());
+	return ModeDilation ? *ModeDilation : 1.f;
 }

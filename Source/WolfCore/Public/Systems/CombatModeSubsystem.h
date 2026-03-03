@@ -20,24 +20,28 @@ class WOLFCORE_API UCombatModeSubsystem : public UWorldSubsystem
 	GENERATED_BODY()
 
 public:
+	virtual void Initialize(FSubsystemCollectionBase& Collection) override;
+	virtual void OnWorldBeginPlay(UWorld& InWorld) override;
+	
 	void SetMode(FGameplayTag NewMode);
 	void SwitchCombatMode();
+	
+	UFUNCTION(BlueprintPure, Category = "Combat")
+	FGameplayTag GetCurrentMode() const { return CurrentMode; }
+	
+	void RegisterCombatListener(AActor* Combatant);
+	void UnregisterCombatListener(const AActor* Combatant);
+
+private:
 	void InitializeSubsystemDefaults();
 	bool TryLoadPlayerSelectedMode();
 	void ApplyDefaultLevelMode();
-
-	FGameplayTag GetCombatMode() const { return CurrentMode; }
-
-	virtual void OnWorldBeginPlay(UWorld& InWorld) override;
-
-	virtual void Initialize(FSubsystemCollectionBase& Collection) override;
-	void RegisterCombatListener(AActor* Combatant);
-	void UnregisterCombatListener(const AActor* Combatant);
-	void ApplyModeToActor(AActor* Combatant, FGameplayTag NewMode);
 	void UpdateCombatantModeTags(FGameplayTag NewMode);
+	void ApplyModeToActor(AActor* Combatant, FGameplayTag NewMode);
 
-	FGameplayTag GetCurrentMode() const { return CurrentMode; }
-
+	UAbilitySystemComponent* GetPlayerASC() const;
+	float GetDilationForMode(const FGameplayTag& Mode) const;
+	
 private:
 	FGameplayTag CurrentMode;
 	FWolfGameplayTags WolfTag;
@@ -48,17 +52,6 @@ private:
 	UPROPERTY()
 	TSet<AActor*> Combatants;
 
-	UAbilitySystemComponent* GetPlayerASC() const;
-
 	UPROPERTY(EditDefaultsOnly, Category = "Combat Settings")
 	TMap<FGameplayTag, float> ModeTimeDilationMap; // Possibly implement as a data asset in the future
-
-	FORCEINLINE float GetDilationForMode(const FGameplayTag& Mode) const
-	{
-		if (const auto* FoundDilation = ModeTimeDilationMap.Find(Mode))
-		{
-			return *FoundDilation;
-		}
-		return 1.f;
-	}
 };
