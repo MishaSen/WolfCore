@@ -22,7 +22,7 @@ void UPresageSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {
 	Super::Initialize(Collection);
 
-	if (const UWorld* World = GetWorld())
+	if (const auto* World = GetWorld())
 	{
 		World->GetTimerManager().SetTimerForNextTick(this, &UPresageSubsystem::BindToModeSwitchEvent);
 	}
@@ -32,32 +32,24 @@ void UPresageSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 
 void UPresageSubsystem::BindToModeSwitchEvent()
 {
-	if (const UWorld* World = GetWorld())
+	if (auto* ASC = UAbilitySystemBlueprintLibrary::GetAbilitySystemComponent(
+		UGameplayStatics::GetPlayerPawn(GetWorld(), 0)))
 	{
-		if (auto* PlayerPawn = UGameplayStatics::GetPlayerPawn(World, 0))
-		{
-			if (auto* ASC = UAbilitySystemBlueprintLibrary::GetAbilitySystemComponent(PlayerPawn))
-			{
-				FGameplayTagContainer EventTagContainer;
-				EventTagContainer.AddTag(WolfTags->Event_ModeSwitchReady);
+		FGameplayTagContainer EventTagContainer;
+		EventTagContainer.AddTag(WolfTags->Event_ModeSwitchReady);
 
-				ASC->AddGameplayEventTagContainerDelegate
-				(
-					EventTagContainer,
-					FGameplayEventTagMulticastDelegate::FDelegate::CreateUObject
-					(
-						this,
-						&ThisClass::OnModeSwitchEventReceived
-					)
-				);
-			}
-		}
+		const auto Delegate = FGameplayEventTagMulticastDelegate::FDelegate::CreateUObject(
+			this, &ThisClass::OnModeSwitchEventReceived);
+		ASC->AddGameplayEventTagContainerDelegate(EventTagContainer, Delegate);
 	}
 }
 
 void UPresageSubsystem::OnModeSwitchEventReceived(FGameplayTag GameplayTag, const FGameplayEventData* GameplayEventData)
 {
-	if (GameplayEventData->TargetTags.HasTag(WolfTags->InputState_TB))
+	if (!GameplayEventData) return;
+	const auto& TargetTags = GameplayEventData->TargetTags;
+
+	if (TargetTags.HasTag(WolfTags->InputState_TB))
 	{
 		StartLoop();
 	}
@@ -151,9 +143,9 @@ void UPresageSubsystem::BakeSimulation()
 
 		const auto* Mesh = SimulatedCharacter->GetMesh();
 		const auto* AnimInst = Mesh ? Mesh->GetAnimInstance() : nullptr;
-		
+
 		// TODO: If nothing is playing yet, should we check Ability Queue for future planned abilities (e.g., for TB Characters)?
-		auto* Montage = AnimInst ? AnimInst->GetCurrentActiveMontage() : nullptr; 
+		auto* Montage = AnimInst ? AnimInst->GetCurrentActiveMontage() : nullptr;
 		const float MontageStartPosition = AnimInst ? AnimInst->Montage_GetPosition(Montage) : 0.f;
 		const float MontagePlayRate = AnimInst && Montage ? AnimInst->Montage_GetPlayRate(Montage) : 1.f;
 
@@ -169,7 +161,7 @@ void UPresageSubsystem::BakeSimulation()
 			NewFrame.Location = ProjectedTransform.GetLocation();
 			NewFrame.Rotation = ProjectedTransform.Rotator();
 			NewFrame.ActiveMontage = Montage;
-			NewFrame.MontagePosition = Montage ? MontageStartPosition + SimTime * MontagePlayRate: 0.f;
+			NewFrame.MontagePosition = Montage ? MontageStartPosition + SimTime * MontagePlayRate : 0.f;
 		}
 	};
 
@@ -324,25 +316,20 @@ void UPresageSubsystem::GatherRTEvents(TArray<FPresageTimelineEvent>& Events)
 		auto* RTCharacter = RTAttacker.Get();
 		if (!RTCharacter) continue;
 
-		const UBaseCombatAbility* ActiveAbility = Cast<UBaseCombatAbility>(RTCharacter->GetActiveCombatAbility());
+		const auto* ActiveAbility = Cast<UBaseCombatAbility>(RTCharacter->GetActiveCombatAbility());
+		if (ActiveAbility) continue;
 
-		if (ActiveAbility)
+		// TODO: Implement method to calculate elapsed time. Impact time will be different if ability was already active.
+		const auto ImpactTime = ActiveAbility->CalculateProjectedImpactTime();
+		if (ImpactTime <= 0.f || ImpactTime > FlowTime) continue;
+
+		for (auto& TBAttacker : TBParticipants)
 		{
-			// TODO: Implement method to calculate elapsed time. Impact time will be different if ability was already active.
-			auto ImpactTime = ActiveAbility->CalculateProjectedImpactTime();
-			if (ImpactTime > 0.f && ImpactTime <= FlowTime)
-			{
-				for (auto& TBAttacker : TBParticipants)
-				{
-					auto* TBCharacter = TBAttacker.Get();
-					if (!TBCharacter) continue;
-
-					if (CheckFutureCollision(RTCharacter, TBCharacter, ImpactTime))
-					{
-						Events.Add(FPresageTimelineEvent(RTCharacter, TBCharacter, ImpactTime, WolfTags->Result_Hit));
-					}
-				}
-			}
+			auto* TBCharacter = TBAttacker.Get();
+			if (!TBCharacter) continue;
+			if (!CheckFutureCollision(RTCharacter, TBCharacter, ImpactTime)) continue;
+			
+			Events.Add(FPresageTimelineEvent(RTCharacter, TBCharacter, ImpactTime, WolfTags->Result_Hit));
 		}
 	}
 }
@@ -351,7 +338,7 @@ void UPresageSubsystem::GatherTBEvents(TArray<FPresageTimelineEvent>& Events)
 {
 	for (const auto& Request : AbilityQueue)
 	{
-		auto* AbilityCDO = Request.GetAbilityCDO();
+		const auto* AbilityCDO = Request.GetAbilityCDO();
 		if (!AbilityCDO) continue;
 
 		auto* TBAttacker = Cast<AWolfCharacterBase>(Request.GetOwnerASC()->GetAvatarActor());
