@@ -64,7 +64,7 @@ void UBaseCombatAbility::PlayNextPeriod()
 		{
 			FTimerHandle TimerHandle;
 			GetWorld()->GetTimerManager().SetTimer(TimerHandle, this, &UBaseCombatAbility::HandleAttackHitEvent,
-				CombatPeriod.HitDelay, false);
+			                                       CombatPeriod.HitDelay, false);
 		}
 
 		auto* DelayTask = UAbilityTask_WaitDelay::WaitDelay(this, Duration);
@@ -106,20 +106,18 @@ float UBaseCombatAbility::CalculateProjectedImpactTime() const
 			continue;
 		}
 
-		if (Period.Montage)
-		{
-			for (const auto& NotifyEvent : Period.Montage->Notifies)
-			{
-				if (const auto* HitNotify = Cast<UAnimNotify_Hit>(NotifyEvent.Notify);
-					HitNotify->EventTag == HitEventTag)
-				{
-					return TimeAccumulator + NotifyEvent.GetTriggerTime();
-				}
-			}
-		}
-		else
+		if (!Period.Montage)
 		{
 			return TimeAccumulator + Period.HitDelay;
+		}
+		
+		for (const auto& NotifyEvent : Period.Montage->Notifies)
+		{
+			const auto* HitNotify = Cast<UAnimNotify_Hit>(NotifyEvent.Notify);
+			if (HitNotify && HitNotify->EventTag == HitEventTag)
+			{
+				return TimeAccumulator + NotifyEvent.GetTriggerTime();
+			}
 		}
 	}
 	return -1.f;

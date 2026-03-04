@@ -44,7 +44,7 @@ void AWolfPlayerController::BeginPlay()
 
 	if (const auto* CombatModeSubsystem = GetWorld()->GetSubsystem<UCombatModeSubsystem>())
 	{
-		const auto CurrentModeTag = CombatModeSubsystem->GetCombatMode();
+		const auto CurrentModeTag = CombatModeSubsystem->GetCurrentMode();
 		OnCombatTagChanged(CurrentModeTag, 1);
 	}
 }

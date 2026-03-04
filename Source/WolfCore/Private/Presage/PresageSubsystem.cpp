@@ -314,10 +314,9 @@ void UPresageSubsystem::GatherRTEvents(TArray<FPresageTimelineEvent>& Events)
 	for (auto& RTAttacker : RTParticipants)
 	{
 		auto* RTCharacter = RTAttacker.Get();
-		if (!RTCharacter) continue;
+		const auto* ActiveAbility = Cast<UBaseCombatAbility>(RTCharacter ? RTCharacter->GetActiveCombatAbility() : nullptr);
 
-		const auto* ActiveAbility = Cast<UBaseCombatAbility>(RTCharacter->GetActiveCombatAbility());
-		if (ActiveAbility) continue;
+		if (!ActiveAbility) continue;
 
 		// TODO: Implement method to calculate elapsed time. Impact time will be different if ability was already active.
 		const auto ImpactTime = ActiveAbility->CalculateProjectedImpactTime();
@@ -326,10 +325,10 @@ void UPresageSubsystem::GatherRTEvents(TArray<FPresageTimelineEvent>& Events)
 		for (auto& TBAttacker : TBParticipants)
 		{
 			auto* TBCharacter = TBAttacker.Get();
-			if (!TBCharacter) continue;
-			if (!CheckFutureCollision(RTCharacter, TBCharacter, ImpactTime)) continue;
-			
-			Events.Add(FPresageTimelineEvent(RTCharacter, TBCharacter, ImpactTime, WolfTags->Result_Hit));
+			if (TBCharacter && CheckFutureCollision(RTCharacter, TBCharacter, ImpactTime))
+			{
+				Events.Emplace(FPresageTimelineEvent(RTCharacter, TBCharacter, ImpactTime, WolfTags->Result_Hit));
+			}
 		}
 	}
 }

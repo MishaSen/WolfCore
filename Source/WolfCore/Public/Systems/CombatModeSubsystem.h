@@ -5,8 +5,6 @@
 #include "CoreMinimal.h"
 #include "AbilitySystemComponent.h"
 #include "Core/WolfGameplayTags.h"
-#include "Debug/WolfDebug.h"
-#include "Interfaces/CombatModeListener.h"
 #include "Subsystems/WorldSubsystem.h"
 #include "CombatModeSubsystem.generated.h"
 
@@ -37,6 +35,7 @@ private:
 	bool TryLoadPlayerSelectedMode();
 	void ApplyDefaultLevelMode();
 	void UpdateCombatantModeTags(FGameplayTag NewMode);
+	void HandlePlayerPresageEffect(UAbilitySystemComponent* ASC, FGameplayTag CurrentActorMode);
 	void ApplyModeToActor(AActor* Combatant, FGameplayTag NewMode);
 
 	UAbilitySystemComponent* GetPlayerASC() const;
@@ -45,6 +44,10 @@ private:
 private:
 	FGameplayTag CurrentMode;
 	FWolfGameplayTags WolfTag;
+
+	UPROPERTY()
+	TSubclassOf<UGameplayEffect> PresageEffectClass;
+	FActiveGameplayEffectHandle PresageEffectHandle;
 
 	UPROPERTY()
 	TObjectPtr<UPresageSubsystem> CachedPresage;
