@@ -9,11 +9,13 @@
 #include "AbilitySystemComponent.h"
 #include "WolfLevelScript.h"
 #include "Abilities/Effects/PresageMode.h"
+#include "Character/WolfCharacterBase.h"
 #include "Core/WolfCombatSettings.h"
 #include "Core/WolfFunctionLibrary.h"
 #include "Core/WolfGameInstance.h"
 #include "Core/WolfGameplayTags.h"
 #include "Debug/WolfDebug.h"
+#include "Engine/AssetManager.h"
 #include "Interfaces/CombatModeListener.h"
 #include "Kismet/GameplayStatics.h"
 #include "Presage/PresageSubsystem.h"
@@ -37,20 +39,23 @@ void UCombatModeSubsystem::OnWorldBeginPlay(UWorld& InWorld)
 void UCombatModeSubsystem::InitializeSubsystemDefaults()
 {
 	WolfTag = FWolfGameplayTags::Get();
-	ModeTimeDilationMap.Add(WolfTag.InputState_TB, 0.f);
-	ModeTimeDilationMap.Add(WolfTag.InputState_RT, 1.f);
-	ModeTimeDilationMap.Add(WolfTag.InputState_OOC, 1.f);
-
 	CachedPresage = UWolfFunctionLibrary::GetWorldSubsystem<UPresageSubsystem>(GetWorld());
 
 	if (const auto* Settings = GetDefault<UWolfCombatSettings>())
 	{
-		PresageEffectClass = Settings->PresageEffectClass.LoadSynchronous();
+		auto& Streamable = UAssetManager::GetStreamableManager();
+		PresageClassLoadHandle = Streamable.RequestAsyncLoad( // Async Load: Set the class once loaded 
+			Settings->PresageEffectClass.ToSoftObjectPath(),
+			FStreamableDelegate::CreateUObject(this, &UCombatModeSubsystem::OnPresageEffectLoaded));
+	}
+}
 
-		if (!PresageEffectClass)
-		{
-			WOLF_ERROR(TEXT("PresageEffectClass not found in Project Settings"));
-		}
+void UCombatModeSubsystem::OnPresageEffectLoaded()
+{
+	if (const auto* Settings = GetDefault<UWolfCombatSettings>())
+	{
+		PresageEffectClass = Settings->PresageEffectClass.Get();
+		WOLF_LOG(Log, TEXT("Presage Effect Loaded: %s"), *PresageEffectClass->GetName());
 	}
 }
 
@@ -60,7 +65,7 @@ void UCombatModeSubsystem::SetMode(FGameplayTag NewMode)
 	CurrentMode = NewMode;
 
 	UGameplayStatics::SetGlobalTimeDilation(GetWorld(), GetDilationForMode(NewMode));
-	UpdateCombatantModeTags(NewMode);
+	OnCombatModeChanged.Broadcast(NewMode);
 
 	if (CachedPresage)
 	{
@@ -78,45 +83,15 @@ void UCombatModeSubsystem::SwitchCombatMode()
 	SetMode(NewMode);
 }
 
-void UCombatModeSubsystem::RegisterCombatListener(AActor* Combatant)
+void UCombatModeSubsystem::HandlePresageDrainEffect(UAbilitySystemComponent* ASC, FGameplayTag CurrentActorMode)
 {
-	if (!IsValid(Combatant) || Combatants.Contains(Combatant)) return;
-
-	Combatants.Add(Combatant);
-	ApplyModeToActor(Combatant, CurrentMode);
-	WOLF_LOG(Log, TEXT("Combatant registered: %s"), *Combatant->GetName());
-}
-
-void UCombatModeSubsystem::UnregisterCombatListener(const AActor* Combatant)
-{
-	if (IsValid(Combatant))
-	{
-		Combatants.Remove(Combatant);
-		WOLF_LOG(Log, TEXT("Combatant unregistered: %s"), *Combatant->GetName());
-	}
-}
-
-void UCombatModeSubsystem::UpdateCombatantModeTags(FGameplayTag NewMode)
-{
-	for (auto Iterator = Combatants.CreateIterator(); Iterator; ++Iterator)
-	{
-		if (!IsValid(*Iterator))
-		{
-			Iterator.RemoveCurrent();
-			continue;
-		}
-		ApplyModeToActor(*Iterator, NewMode);
-	}
-	WOLF_INFO(TEXT("Combat Mode set to %s for %d actors"), *NewMode.ToString(), Combatants.Num());
-}
-
-void UCombatModeSubsystem::HandlePlayerPresageEffect(UAbilitySystemComponent* ASC, FGameplayTag CurrentActorMode)
-{
+	auto* WolfChar = Cast<AWolfCharacterBase>(ASC->GetAvatarActor());
+	if (!WolfChar) return;
+	
 	const bool bShouldHaveEffect = CurrentActorMode == WolfTag.InputState_TB;
-	const bool bHasActivePresage = PresageEffectHandle.IsValid();
 
 	// If GE and GTag match, skip. We want to remove or add the GE if there's a mismatch.
-	if (bShouldHaveEffect == bHasActivePresage) return;
+	if (bShouldHaveEffect == WolfChar->PresageEffectHandle.IsValid()) return;
 
 	if (bShouldHaveEffect && PresageEffectClass)
 	{
@@ -124,15 +99,15 @@ void UCombatModeSubsystem::HandlePlayerPresageEffect(UAbilitySystemComponent* AS
 		Context.AddInstigator(ASC->GetOwner(), ASC->GetOwner());
 
 		const auto Spec = ASC->MakeOutgoingSpec(PresageEffectClass, 1.f, Context);
-		if (Spec.IsValid())
-		{
-			PresageEffectHandle = ASC->ApplyGameplayEffectSpecToSelf(*Spec.Data.Get());
-		}
-		return;
+		if (!Spec.IsValid()) return;
+
+		WolfChar->PresageEffectHandle = ASC->ApplyGameplayEffectSpecToSelf(*Spec.Data.Get());
 	}
-	
-	ASC->RemoveActiveGameplayEffect(PresageEffectHandle);
-	PresageEffectHandle.Invalidate();
+	else
+	{
+		ASC->RemoveActiveGameplayEffect(WolfChar->PresageEffectHandle);
+		WolfChar->PresageEffectHandle.Invalidate();
+	}
 }
 
 void UCombatModeSubsystem::ApplyModeToActor(AActor* Combatant, FGameplayTag NewMode)
@@ -146,14 +121,22 @@ void UCombatModeSubsystem::ApplyModeToActor(AActor* Combatant, FGameplayTag NewM
 	const bool bCanChangeMode = bIsPlayer || ASC->HasMatchingGameplayTag(WolfTag.Status_Link);
 	const auto ActualModeForActor = bCanChangeMode ? NewMode : WolfTag.InputState_RT;
 
-	ASC->RemoveLooseGameplayTag(WolfTag.InputState_RT);
-	ASC->RemoveLooseGameplayTag(WolfTag.InputState_TB);
-	ASC->RemoveLooseGameplayTag(WolfTag.InputState_OOC);
+	static const auto ModeTags = FGameplayTagContainer::CreateFromArray(TArray<FGameplayTag>{
+		FWolfGameplayTags::Get().InputState_RT,
+		FWolfGameplayTags::Get().InputState_TB,
+		FWolfGameplayTags::Get().InputState_OOC
+		/* Apparently using WolfTags will crash because static cannot reference non-static members
+		 * Add more input states as needed */
+	});
+
+	ASC->RemoveLooseGameplayTags(ModeTags);
+	WOLF_LOG(Verbose, TEXT("Removing Mode Tags: %s"), *ModeTags.ToString());
 	ASC->AddLooseGameplayTag(ActualModeForActor);
+	WOLF_LOG(Verbose, TEXT("Adding Mode Tag: %s"), *ActualModeForActor.ToString());
 
 	if (bIsPlayer)
 	{
-		HandlePlayerPresageEffect(ASC, ActualModeForActor);
+		HandlePresageDrainEffect(ASC, ActualModeForActor);
 	}
 
 	if (Combatant->Implements<UCombatModeListener>())
@@ -203,10 +186,11 @@ UAbilitySystemComponent* UCombatModeSubsystem::GetPlayerASC() const
 	return UAbilitySystemBlueprintLibrary::GetAbilitySystemComponent(Pawn);
 }
 
-float UCombatModeSubsystem::GetDilationForMode(const FGameplayTag& Mode) const
+float UCombatModeSubsystem::GetDilationForMode(const FGameplayTag& Mode)
 {
-	const auto* ModeDilation = ModeTimeDilationMap.Find(Mode);
-	if (!ModeDilation)
-		WOLF_WARN(TEXT("Dilation Map missing tag: %s"), *Mode.ToString());
-	return ModeDilation ? *ModeDilation : 1.f;
+	const auto* Settings = GetDefault<UWolfCombatSettings>();
+	if (const auto* Dilation = Settings->ModeTimeDilationMap.Find(Mode)) return *Dilation;
+
+	WOLF_WARN(TEXT("Dilation Map missing tag: %s. Defaulting to 1.f"), *Mode.ToString());
+	return 1.f;
 }

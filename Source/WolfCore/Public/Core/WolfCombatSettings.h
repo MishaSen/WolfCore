@@ -14,4 +14,7 @@ class WOLFCORE_API UWolfCombatSettings : public UDeveloperSettings
 public:
 	UPROPERTY(Config, EditAnywhere, Category = "Presage")
 	TSoftClassPtr<UGameplayEffect> PresageEffectClass;
+
+	UPROPERTY(Config, EditAnywhere, Category = "Combat", meta = (Categories = "InputState"))
+	TMap<FGameplayTag, float> ModeTimeDilationMap;
 };

@@ -60,7 +60,8 @@ void AWolfCharacterBase::BeginPlay()
 
 	if (auto* CMS = UWolfFunctionLibrary::GetWorldSubsystem<UCombatModeSubsystem>(this))
 	{
-		CMS->RegisterCombatListener(this);
+		CMS->OnCombatModeChanged.AddDynamic(this, &AWolfCharacterBase::HandleCombatModeChanged);
+		CMS->ApplyModeToActor(this, CMS->GetCurrentMode());
 	}
 
 	if (HasAuthority() && !IsValid(ASC))
@@ -69,14 +70,12 @@ void AWolfCharacterBase::BeginPlay()
 	}
 }
 
-void AWolfCharacterBase::EndPlay(const EEndPlayReason::Type EndPlayReason)
+void AWolfCharacterBase::HandleCombatModeChanged(FGameplayTag NewMode)
 {
 	if (auto* CMS = UWolfFunctionLibrary::GetWorldSubsystem<UCombatModeSubsystem>(this))
 	{
-		CMS->UnregisterCombatListener(this);
+		CMS->ApplyModeToActor(this, NewMode);
 	}
-	
-	Super::EndPlay(EndPlayReason);
 }
 
 void AWolfCharacterBase::Die_Implementation()

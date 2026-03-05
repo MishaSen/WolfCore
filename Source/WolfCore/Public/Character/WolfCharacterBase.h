@@ -5,6 +5,7 @@
 #include "CoreMinimal.h"
 #include "GameFramework/Character.h"
 #include "AbilitySystemInterface.h"
+#include "ActiveGameplayEffectHandle.h"
 #include "GameplayAbilitySpecHandle.h"
 #include "GameplayTagContainer.h"
 #include "Interfaces/CombatModeListener.h"
@@ -72,6 +73,8 @@ public:
 	UFUNCTION(BlueprintNativeEvent, BlueprintCallable, Category = "Combat")
 	void Die();
 
+	FActiveGameplayEffectHandle PresageEffectHandle;
+
 protected:
 	UPROPERTY(EditDefaultsOnly, Category = "GAS | Ability System")
 	TSubclassOf<UWolfAbilitySystemComponent> AbilitySystemComponentClass;
@@ -90,9 +93,10 @@ protected:
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "GAS | Attributes")
 	TObjectPtr<UCharacterStatConfig> StatConfig;
-	
+
+	UFUNCTION()
+	void HandleCombatModeChanged(FGameplayTag NewMode);
 	virtual void BeginPlay() override;
-	virtual void EndPlay(EEndPlayReason::Type EndPlayReason) override;
 	virtual void Tick(float DeltaTime) override;
 	virtual void SetupPlayerInputComponent(class UInputComponent* PlayerInputComponent) override;
 	void SetupAbilitySystem();

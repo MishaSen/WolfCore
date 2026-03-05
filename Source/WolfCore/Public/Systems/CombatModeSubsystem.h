@@ -8,10 +8,13 @@
 #include "Subsystems/WorldSubsystem.h"
 #include "CombatModeSubsystem.generated.h"
 
+struct FStreamableHandle;
 class UPresageSubsystem;
 /**
  * 
  */
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnCombatModeChanged, FGameplayTag, NewMode);
+
 UCLASS()
 class WOLFCORE_API UCombatModeSubsystem : public UWorldSubsystem
 {
@@ -23,38 +26,33 @@ public:
 	
 	void SetMode(FGameplayTag NewMode);
 	void SwitchCombatMode();
+	void ApplyModeToActor(AActor* Combatant, FGameplayTag NewMode);
 	
 	UFUNCTION(BlueprintPure, Category = "Combat")
 	FGameplayTag GetCurrentMode() const { return CurrentMode; }
-	
-	void RegisterCombatListener(AActor* Combatant);
-	void UnregisterCombatListener(const AActor* Combatant);
+
+public:
+	UPROPERTY(BlueprintAssignable, Category = "Combat")
+	FOnCombatModeChanged OnCombatModeChanged;
 
 private:
+	void OnPresageEffectLoaded();
 	void InitializeSubsystemDefaults();
 	bool TryLoadPlayerSelectedMode();
 	void ApplyDefaultLevelMode();
-	void UpdateCombatantModeTags(FGameplayTag NewMode);
-	void HandlePlayerPresageEffect(UAbilitySystemComponent* ASC, FGameplayTag CurrentActorMode);
-	void ApplyModeToActor(AActor* Combatant, FGameplayTag NewMode);
+	void HandlePresageDrainEffect(UAbilitySystemComponent* ASC, FGameplayTag CurrentActorMode);
 
 	UAbilitySystemComponent* GetPlayerASC() const;
-	float GetDilationForMode(const FGameplayTag& Mode) const;
+	static float GetDilationForMode(const FGameplayTag& Mode);
 	
 private:
 	FGameplayTag CurrentMode;
 	FWolfGameplayTags WolfTag;
+	TSharedPtr<FStreamableHandle> PresageClassLoadHandle;
 
 	UPROPERTY()
 	TSubclassOf<UGameplayEffect> PresageEffectClass;
-	FActiveGameplayEffectHandle PresageEffectHandle;
 
 	UPROPERTY()
 	TObjectPtr<UPresageSubsystem> CachedPresage;
-
-	UPROPERTY()
-	TSet<AActor*> Combatants;
-
-	UPROPERTY(EditDefaultsOnly, Category = "Combat Settings")
-	TMap<FGameplayTag, float> ModeTimeDilationMap; // Possibly implement as a data asset in the future
 };
