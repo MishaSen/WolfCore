@@ -2,6 +2,8 @@
 
 #include "CoreMinimal.h"
 #include "Kismet/BlueprintFunctionLibrary.h"
+#include "Engine/Engine.h"
+#include "Engine/EngineTypes.h"
 #include "WolfFunctionLibrary.generated.h"
 
 UCLASS()

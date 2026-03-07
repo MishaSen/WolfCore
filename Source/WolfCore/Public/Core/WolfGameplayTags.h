@@ -38,6 +38,9 @@ struct FWolfGameplayTags
 	FGameplayTag Attribute_FlowGauge;
 	FGameplayTag Attribute_Adrenaline;
 
+	// --- Effects ---
+	FGameplayTag Effect_Combat;
+
 	// --- Event Tags ---
 	FGameplayTag Event_ModeSwitchReady;
 	FGameplayTag Event_Ability_Attack;

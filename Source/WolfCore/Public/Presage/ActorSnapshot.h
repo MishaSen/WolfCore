@@ -64,7 +64,7 @@ struct FActorSnapshot
 	float MontagePosition = 0.f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Actor State")
-	TMap<FGameplayAttribute, float> Attributes;
+	TArray<float> AttributeValues; // Use Attributes from StatConfig
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Actor State")
 	TArray<FStoredEffect> ActiveEffects;

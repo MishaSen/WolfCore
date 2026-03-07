@@ -37,6 +37,9 @@ void FWolfGameplayTags::InitializeNativeGameplayTags()
 	AddNativeTag(GameplayTags.Attribute_FlowGauge, FName("Attribute.FlowGauge"), TEXT("Flow gauge attribute."));
 	AddNativeTag(GameplayTags.Attribute_Adrenaline, FName("Attribute.Adrenaline"), TEXT("Adrenaline attribute."));
 
+	// --- Effects ---
+	AddNativeTag(GameplayTags.Effect_Combat, FName("Effect.Combat"), TEXT("Combat effect tag."));
+
 	// --- Event Tags ---
 	AddNativeTag(GameplayTags.Event_ModeSwitchReady, FName("Event.ModeSwitch"), TEXT("Event tag for mode switching."));
 	AddNativeTag(GameplayTags.Event_Ability_Attack, FName("Event.Ability.Attack"), TEXT("Event tag for attacking."));

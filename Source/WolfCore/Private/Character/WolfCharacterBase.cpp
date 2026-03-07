@@ -386,18 +386,26 @@ void AWolfCharacterBase::SnapshotPhysics(FActorSnapshot& Snapshot) const
 
 void AWolfCharacterBase::SnapshotGAS(FActorSnapshot& Snapshot) const
 {
-	if (!ASC || !StatConfig) return;
+	if (!IsValid(ASC) || !IsValid(StatConfig)) return;
 
+	Snapshot.AttributeValues.Reset();
+	Snapshot.AttributeValues.Reserve(StatConfig->DefaultStats.Num());
 	for (const auto& Pair : StatConfig->DefaultStats)
 	{
+		auto ValueToStore = 0.f; // Default in case attribute is invalid
 		if (auto Attribute = UWolfAttributeSet::GetAttributeByTag(Pair.Key); Attribute.IsValid())
 		{
-			Snapshot.Attributes.Add(Attribute, ASC->GetNumericAttributeBase(Attribute));
+			ValueToStore = ASC->GetNumericAttributeBase(Attribute);
 		}
+		Snapshot.AttributeValues.Add(ValueToStore);
 	}
 
-	for (auto ActiveHandles = ASC->GetActiveEffects(FGameplayEffectQuery());
-	     const auto& Handle : ActiveHandles)
+	Snapshot.ActiveEffects.Reset();
+	const FGameplayEffectQuery Query;
+	const auto ActiveHandles = ASC->GetActiveEffects(Query);
+	Snapshot.ActiveEffects.Reserve(ActiveHandles.Num());
+	
+	for (const auto& Handle : ActiveHandles)
 	{
 		if (const auto* Effect = ASC->GetActiveGameplayEffect(Handle))
 		{
@@ -462,26 +470,36 @@ void AWolfCharacterBase::RestorePhysics(const FActorSnapshot& Snapshot)
 
 void AWolfCharacterBase::RestoreGAS(const FActorSnapshot& Snapshot)
 {
-	if (!ASC) return;
+	if (!IsValid(ASC) || !IsValid(StatConfig)) return;
 	ASC->SetTagMapCount(FWolfGameplayTags::Get().InputState_Dead, 0);
 
-	for (const TPair<FGameplayAttribute, float>& AttrPair : Snapshot.Attributes)
+	int32 StatIndex = 0;
+	for (const auto& Pair : StatConfig->DefaultStats)
 	{
-		const auto& Attribute = AttrPair.Key;
-		const auto AttributeValue = AttrPair.Value;
+		if (!Snapshot.AttributeValues.IsValidIndex(StatIndex)) break;
 
-		if (FMath::IsNearlyEqual(ASC->GetNumericAttributeBase(Attribute), AttributeValue)) continue;
-		ASC->SetNumericAttributeBase(Attribute, AttributeValue);
+		if (auto Attribute = UWolfAttributeSet::GetAttributeByTag(Pair.Key); Attribute.IsValid())
+		{
+			const float SavedValue = Snapshot.AttributeValues[StatIndex];
+			if (!FMath::IsNearlyEqual(ASC->GetNumericAttributeBase(Attribute), SavedValue))
+			{
+				ASC->SetNumericAttributeBase(Attribute, SavedValue);
+			}
+		}
+		StatIndex++;
 	}
 
-	ASC->RemoveActiveEffects(FGameplayEffectQuery());
-	for (const FStoredEffect& Effect : Snapshot.ActiveEffects)
+	FGameplayEffectQuery Query;
+	FGameplayTagContainer TagContainer;
+	TagContainer.AddTag(FWolfGameplayTags::Get().Effect_Combat);
+	Query.OwningTagQuery = FGameplayTagQuery::MakeQuery_MatchAnyTags(TagContainer);
+	ASC->RemoveActiveEffects(Query); // Don't want to remove effects like Presage
+	
+	for (const auto& Effect : Snapshot.ActiveEffects)
 	{
 		if (!Effect.EffectClass) continue;
 
-		const auto Context = ASC->MakeEffectContext();
-		auto SpecHandle = ASC->MakeOutgoingSpec(Effect.EffectClass, Effect.Level, Context);
-
+		auto SpecHandle = ASC->MakeOutgoingSpec(Effect.EffectClass, Effect.Level, ASC->MakeEffectContext());
 		if (!SpecHandle.IsValid()) continue;
 
 		SpecHandle.Data->SetStackCount(Effect.Stacks);
@@ -490,7 +508,6 @@ void AWolfCharacterBase::RestoreGAS(const FActorSnapshot& Snapshot)
 		{
 			SpecHandle.Data->Duration = Effect.RemainingDuration;
 		}
-
 		ASC->ApplyGameplayEffectSpecToSelf(*SpecHandle.Data.Get());
 	}
 
