@@ -124,6 +124,9 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Presage")
 	void QueueAbilityRequest(const FPresageAbilityRequest& Request);
 
+	void SetParticipantMode(AWolfCharacterBase* Character, bool bIsTurnBased);
+	void RemoveParticipant(AWolfCharacterBase* Character);
+
 	UPROPERTY(BlueprintReadOnly, Category = "Presage")
 	TArray<FPresageTimelineEvent> CurrentPredictedTimeline;
 

@@ -247,24 +247,6 @@ void UPresageSubsystem::UpdateTimelinePrediction()
 {
 	CurrentPredictedTimeline.Empty();
 
-	const auto* CMS = GetWorld()->GetSubsystem<UCombatModeSubsystem>();
-	if (!CMS) return;
-
-	const auto& Combatants = CMS->GetTrackedCombatants();
-	RTParticipants.Reset();
-	TBParticipants.Reset();
-	for (const auto& Combatant : Combatants)
-	{
-		if (auto* Character = Combatant.Get())
-		{
-			auto* ASC = Character->GetAbilitySystemComponent();
-			if (!ASC) continue;
-
-			if (ASC->HasMatchingGameplayTag(WolfTags->InputState_TB)) TBParticipants.Add(Character);
-			else RTParticipants.Add(Character);
-		}
-	}
-	
 	BakeSimulation();
 
 	TArray<FPresageTimelineEvent> PotentialEvents;
@@ -301,6 +283,23 @@ float UPresageSubsystem::CalculateImpactFromSequence(const TArray<FCombatPeriod>
 		TimeAccumulator += Period.Duration;
 	}
 	return -1.f;
+}
+
+void UPresageSubsystem::SetParticipantMode(AWolfCharacterBase* Character, bool bIsTurnBased)
+{
+	if (!IsValid(Character)) return;
+
+	RTParticipants.RemoveSwap(Character); // Ensure no dupes
+	TBParticipants.RemoveSwap(Character); // RemoveSwap() messes with array order but faster than Remove()
+
+	if (bIsTurnBased) TBParticipants.Add(Character);
+	else RTParticipants.Add(Character);
+}
+
+void UPresageSubsystem::RemoveParticipant(AWolfCharacterBase* Character)
+{
+	RTParticipants.Remove(Character);
+	TBParticipants.Remove(Character);
 }
 
 void UPresageSubsystem::GatherRTEvents(TArray<FPresageTimelineEvent>& Events)

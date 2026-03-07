@@ -64,12 +64,14 @@ void UCombatModeSubsystem::RegisterCombatant(AWolfCharacterBase* Character)
 	if (Character && !TrackedCombatants.Contains(Character))
 	{
 		TrackedCombatants.Add(Character);
+		ApplyModeToActor(Character, CurrentMode); // Adds Actor to Presage
 	}
 }
 
 void UCombatModeSubsystem::UnregisterCombatant(AWolfCharacterBase* Character)
 {
 	TrackedCombatants.RemoveSingleSwap(Character); // Remove() already handles if check
+	if (CachedPresage) CachedPresage->RemoveParticipant(Character);
 }
 
 void UCombatModeSubsystem::SetMode(FGameplayTag NewMode)
@@ -146,6 +148,15 @@ void UCombatModeSubsystem::ApplyModeToActor(AActor* Combatant, FGameplayTag NewM
 	WOLF_LOG(Verbose, TEXT("Removing Mode Tags: %s"), *ModeTags.ToString());
 	ASC->AddLooseGameplayTag(ActualModeForActor);
 	WOLF_LOG(Verbose, TEXT("Adding Mode Tag: %s"), *ActualModeForActor.ToString());
+
+	if (CachedPresage)
+	{
+		if (auto* WolfChar = Cast<AWolfCharacterBase>(Combatant))
+		{
+			const bool bIsTB = ActualModeForActor == WolfTag.InputState_TB;
+			CachedPresage->SetParticipantMode(WolfChar, bIsTB);
+		}
+	}
 
 	if (bIsPlayer)
 	{
