@@ -8,6 +8,7 @@
 #include "Subsystems/WorldSubsystem.h"
 #include "CombatModeSubsystem.generated.h"
 
+class AWolfCharacterBase;
 struct FStreamableHandle;
 class UPresageSubsystem;
 /**
@@ -31,6 +32,10 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Combat")
 	FGameplayTag GetCurrentMode() const { return CurrentMode; }
 
+	void RegisterCombatant(AWolfCharacterBase* Character);
+	void UnregisterCombatant(AWolfCharacterBase* Character);
+	const TArray<TWeakObjectPtr<AWolfCharacterBase>>& GetTrackedCombatants() const { return TrackedCombatants; }
+
 public:
 	UPROPERTY(BlueprintAssignable, Category = "Combat")
 	FOnCombatModeChanged OnCombatModeChanged;
@@ -44,6 +49,9 @@ private:
 
 	UAbilitySystemComponent* GetPlayerASC() const;
 	static float GetDilationForMode(const FGameplayTag& Mode);
+
+	UPROPERTY()
+	TArray<TWeakObjectPtr<AWolfCharacterBase>> TrackedCombatants;
 	
 private:
 	FGameplayTag CurrentMode;

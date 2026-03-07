@@ -145,7 +145,6 @@ private:
 
 	TArray<TWeakObjectPtr<AWolfCharacterBase>> TBParticipants;
 	TArray<TWeakObjectPtr<AWolfCharacterBase>> RTParticipants;
-	void RefreshParticipants();
 
 	void GatherRTEvents(TArray<FPresageTimelineEvent>& Events);
 	void GatherTBEvents(TArray<FPresageTimelineEvent>& Events);

@@ -17,6 +17,7 @@
 #include "Algo/ForEach.h"
 #include "Character/WolfCharacterBase.h"
 #include "GameFramework/CharacterMovementComponent.h"
+#include "Systems/CombatModeSubsystem.h"
 
 void UPresageSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {
@@ -139,7 +140,7 @@ void UPresageSubsystem::BakeSimulation()
 	auto ProcessParticipant = [this, NumSteps](const TWeakObjectPtr<AWolfCharacterBase>& Character)
 	{
 		auto* SimulatedCharacter = Character.Get();
-		if (!SimulatedCharacter) return;
+		if (!IsValid(SimulatedCharacter)) return;
 
 		const auto* Mesh = SimulatedCharacter->GetMesh();
 		const auto* AnimInst = Mesh ? Mesh->GetAnimInstance() : nullptr;
@@ -150,7 +151,8 @@ void UPresageSubsystem::BakeSimulation()
 		const float MontagePlayRate = AnimInst && Montage ? AnimInst->Montage_GetPlayRate(Montage) : 1.f;
 
 		auto& Track = VisualTracks.FindOrAdd(SimulatedCharacter);
-		Track.Frames.Empty(NumSteps);
+		Track.Frames.Reset();
+		Track.Frames.Reserve(NumSteps);
 
 		for (float SimTime = 0.f; SimTime <= FlowTime; SimTime += PredictionTimeStep)
 		{
@@ -203,34 +205,6 @@ void UPresageSubsystem::ScrubToTime(float Time)
 }
 
 
-void UPresageSubsystem::RefreshParticipants()
-// TODO: Combine method with CharacterSnapshot since they both get all characters
-{
-	TBParticipants.Empty();
-	RTParticipants.Empty();
-
-	TArray<AActor*> AllCharacters;
-	UGameplayStatics::GetAllActorsOfClass(GetWorld(), AWolfCharacterBase::StaticClass(), AllCharacters);
-
-	for (auto* Actor : AllCharacters)
-	{
-		auto* Character = Cast<AWolfCharacterBase>(Actor);
-		if (!Character) continue;
-
-		auto* ASC = Character->GetAbilitySystemComponent();
-		if (!ASC) continue;
-
-		if (ASC->HasMatchingGameplayTag(WolfTags->InputState_TB))
-		{
-			TBParticipants.Add(Character);
-		}
-		else if (ASC->HasMatchingGameplayTag(WolfTags->InputState_RT))
-		{
-			RTParticipants.Add(Character);
-		}
-	}
-}
-
 void UPresageSubsystem::OnFlowTimerTick()
 {
 	RevertCharacterStates();
@@ -246,15 +220,17 @@ void UPresageSubsystem::CharacterSnapshot()
 {
 	OriginalCharacterStates.Empty();
 
-	TArray<AActor*> Actors;
-	UGameplayStatics::GetAllActorsWithInterface(GetWorld(), USnapshot::StaticClass(), Actors);
+	const auto* CMS = GetWorld()->GetSubsystem<UCombatModeSubsystem>();
+	if (!CMS) return;
 
-	for (auto* Actor : Actors)
+	for (const auto& Combatant : CMS->GetTrackedCombatants())
 	{
-		FActorSnapshot NewSnapshot;
-
-		Execute_CreateSnapshot(Actor, NewSnapshot);
-		OriginalCharacterStates.Add(NewSnapshot);
+		if (auto* Actor = Combatant.Get())
+		{
+			FActorSnapshot NewSnap;
+			Execute_CreateSnapshot(Actor, NewSnap);
+			OriginalCharacterStates.Add(NewSnap);
+		}
 	}
 }
 
@@ -270,7 +246,25 @@ void UPresageSubsystem::RevertCharacterStates()
 void UPresageSubsystem::UpdateTimelinePrediction()
 {
 	CurrentPredictedTimeline.Empty();
-	RefreshParticipants(); // Refreshes the arrays used in the following functions
+
+	const auto* CMS = GetWorld()->GetSubsystem<UCombatModeSubsystem>();
+	if (!CMS) return;
+
+	const auto& Combatants = CMS->GetTrackedCombatants();
+	RTParticipants.Reset();
+	TBParticipants.Reset();
+	for (const auto& Combatant : Combatants)
+	{
+		if (auto* Character = Combatant.Get())
+		{
+			auto* ASC = Character->GetAbilitySystemComponent();
+			if (!ASC) continue;
+
+			if (ASC->HasMatchingGameplayTag(WolfTags->InputState_TB)) TBParticipants.Add(Character);
+			else RTParticipants.Add(Character);
+		}
+	}
+	
 	BakeSimulation();
 
 	TArray<FPresageTimelineEvent> PotentialEvents;

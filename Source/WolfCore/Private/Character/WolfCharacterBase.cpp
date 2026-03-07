@@ -60,14 +60,24 @@ void AWolfCharacterBase::BeginPlay()
 
 	if (auto* CMS = UWolfFunctionLibrary::GetWorldSubsystem<UCombatModeSubsystem>(this))
 	{
+		CMS->RegisterCombatant(this);
 		CMS->OnCombatModeChanged.AddDynamic(this, &AWolfCharacterBase::HandleCombatModeChanged);
-		CMS->ApplyModeToActor(this, CMS->GetCurrentMode());
 	}
 
 	if (HasAuthority() && !IsValid(ASC))
 	{
 		SetupAbilitySystem();
 	}
+}
+
+void AWolfCharacterBase::EndPlay(const EEndPlayReason::Type EndPlayReason)
+{
+	if (auto* CMS = GetWorld()->GetSubsystem<UCombatModeSubsystem>())
+	{	// RemoveDynamic is safe, but the UE delegate macro should handle this automatically
+		CMS->OnCombatModeChanged.RemoveDynamic(this, &AWolfCharacterBase::HandleCombatModeChanged);
+		CMS->UnregisterCombatant(this);
+	}
+	Super::EndPlay(EndPlayReason);
 }
 
 void AWolfCharacterBase::HandleCombatModeChanged(FGameplayTag NewMode)

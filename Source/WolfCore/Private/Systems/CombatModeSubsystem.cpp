@@ -59,6 +59,19 @@ void UCombatModeSubsystem::OnPresageEffectLoaded()
 	}
 }
 
+void UCombatModeSubsystem::RegisterCombatant(AWolfCharacterBase* Character)
+{
+	if (Character && !TrackedCombatants.Contains(Character))
+	{
+		TrackedCombatants.Add(Character);
+	}
+}
+
+void UCombatModeSubsystem::UnregisterCombatant(AWolfCharacterBase* Character)
+{
+	TrackedCombatants.RemoveSingleSwap(Character); // Remove() already handles if check
+}
+
 void UCombatModeSubsystem::SetMode(FGameplayTag NewMode)
 {
 	if (CurrentMode == NewMode) return;

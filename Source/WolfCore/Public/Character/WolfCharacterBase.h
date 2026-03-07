@@ -97,6 +97,7 @@ protected:
 	UFUNCTION()
 	void HandleCombatModeChanged(FGameplayTag NewMode);
 	virtual void BeginPlay() override;
+	void EndPlay(EEndPlayReason::Type EndPlayReason);
 	virtual void Tick(float DeltaTime) override;
 	virtual void SetupPlayerInputComponent(class UInputComponent* PlayerInputComponent) override;
 	void SetupAbilitySystem();
