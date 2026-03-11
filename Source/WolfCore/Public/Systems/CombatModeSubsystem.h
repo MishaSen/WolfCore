@@ -10,7 +10,6 @@
 
 class AWolfCharacterBase;
 struct FStreamableHandle;
-class UPresageSubsystem;
 /**
  * 
  */
@@ -60,7 +59,4 @@ private:
 
 	UPROPERTY()
 	TSubclassOf<UGameplayEffect> PresageEffectClass;
-
-	UPROPERTY()
-	TObjectPtr<UPresageSubsystem> CachedPresage;
 };

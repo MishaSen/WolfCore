@@ -18,11 +18,9 @@
 #include "Engine/AssetManager.h"
 #include "Interfaces/CombatModeListener.h"
 #include "Kismet/GameplayStatics.h"
-#include "Presage/PresageSubsystem.h"
 
 void UCombatModeSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {
-	Collection.InitializeDependency<UPresageSubsystem>();
 	Super::Initialize(Collection);
 }
 
@@ -39,7 +37,6 @@ void UCombatModeSubsystem::OnWorldBeginPlay(UWorld& InWorld)
 void UCombatModeSubsystem::InitializeSubsystemDefaults()
 {
 	WolfTag = FWolfGameplayTags::Get();
-	CachedPresage = UWolfFunctionLibrary::GetWorldSubsystem<UPresageSubsystem>(GetWorld());
 
 	if (const auto* Settings = GetDefault<UWolfCombatSettings>())
 	{
@@ -71,7 +68,6 @@ void UCombatModeSubsystem::RegisterCombatant(AWolfCharacterBase* Character)
 void UCombatModeSubsystem::UnregisterCombatant(AWolfCharacterBase* Character)
 {
 	TrackedCombatants.RemoveSingleSwap(Character); // Remove() already handles if check
-	if (CachedPresage) CachedPresage->RemoveParticipant(Character);
 }
 
 void UCombatModeSubsystem::SetMode(FGameplayTag NewMode)
@@ -81,12 +77,6 @@ void UCombatModeSubsystem::SetMode(FGameplayTag NewMode)
 
 	UGameplayStatics::SetGlobalTimeDilation(GetWorld(), GetDilationForMode(NewMode));
 	OnCombatModeChanged.Broadcast(NewMode);
-
-	if (CachedPresage)
-	{
-		const bool bIsTurnBased = NewMode == WolfTag.InputState_TB;
-		bIsTurnBased ? CachedPresage->StartLoop() : CachedPresage->StopLoop();
-	}
 }
 
 void UCombatModeSubsystem::SwitchCombatMode()
@@ -148,15 +138,6 @@ void UCombatModeSubsystem::ApplyModeToActor(AActor* Combatant, FGameplayTag NewM
 	WOLF_LOG(Verbose, TEXT("Removing Mode Tags: %s"), *ModeTags.ToString());
 	ASC->AddLooseGameplayTag(ActualModeForActor);
 	WOLF_LOG(Verbose, TEXT("Adding Mode Tag: %s"), *ActualModeForActor.ToString());
-
-	if (CachedPresage)
-	{
-		if (auto* WolfChar = Cast<AWolfCharacterBase>(Combatant))
-		{
-			const bool bIsTB = ActualModeForActor == WolfTag.InputState_TB;
-			CachedPresage->SetParticipantMode(WolfChar, bIsTB);
-		}
-	}
 
 	if (bIsPlayer)
 	{
