@@ -23,41 +23,7 @@ void UPresageSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {
 	Super::Initialize(Collection);
 
-	if (const auto* World = GetWorld())
-	{
-		World->GetTimerManager().SetTimerForNextTick(this, &UPresageSubsystem::BindToModeSwitchEvent);
-	}
-
 	WolfTags = &FWolfGameplayTags::Get();
-}
-
-void UPresageSubsystem::BindToModeSwitchEvent()
-{
-	if (auto* ASC = UAbilitySystemBlueprintLibrary::GetAbilitySystemComponent(
-		UGameplayStatics::GetPlayerPawn(GetWorld(), 0)))
-	{
-		FGameplayTagContainer EventTagContainer;
-		EventTagContainer.AddTag(WolfTags->Event_ModeSwitchReady);
-
-		const auto Delegate = FGameplayEventTagMulticastDelegate::FDelegate::CreateUObject(
-			this, &ThisClass::OnModeSwitchEventReceived);
-		ASC->AddGameplayEventTagContainerDelegate(EventTagContainer, Delegate);
-	}
-}
-
-void UPresageSubsystem::OnModeSwitchEventReceived(FGameplayTag GameplayTag, const FGameplayEventData* GameplayEventData)
-{
-	if (!GameplayEventData) return;
-	const auto& TargetTags = GameplayEventData->TargetTags;
-
-	if (TargetTags.HasTag(WolfTags->InputState_TB))
-	{
-		StartLoop();
-	}
-	else
-	{
-		StopLoop();
-	}
 }
 
 void UPresageSubsystem::Deinitialize()

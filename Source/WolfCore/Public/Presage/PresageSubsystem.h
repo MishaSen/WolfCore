@@ -96,9 +96,7 @@ public:
 
 	UFUNCTION(BlueprintCallable)
 	void ScrubToTime(float Time);
-	
-	void OnModeSwitchEventReceived(FGameplayTag GameplayTag, const FGameplayEventData* GameplayEventData);
-	void BindToModeSwitchEvent();
+
 	// --- Subsystem Lifecycle ---
 	virtual void Initialize(FSubsystemCollectionBase& Collection) override;
 	virtual void Deinitialize() override;
