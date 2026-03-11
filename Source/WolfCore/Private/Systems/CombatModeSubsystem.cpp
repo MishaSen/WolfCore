@@ -102,7 +102,7 @@ void UCombatModeSubsystem::HandlePresageDrainEffect(UAbilitySystemComponent* ASC
 {
 	auto* WolfChar = Cast<AWolfCharacterBase>(ASC->GetAvatarActor());
 	if (!WolfChar) return;
-	
+
 	const bool bShouldHaveEffect = CurrentActorMode == WolfTag.InputState_TB;
 
 	// If GE and GTag match, skip. We want to remove or add the GE if there's a mismatch.
@@ -136,13 +136,13 @@ void UCombatModeSubsystem::ApplyModeToActor(AActor* Combatant, FGameplayTag NewM
 	const bool bCanChangeMode = bIsPlayer || ASC->HasMatchingGameplayTag(WolfTag.Status_Link);
 	const auto ActualModeForActor = bCanChangeMode ? NewMode : WolfTag.InputState_RT;
 
-	static const auto ModeTags = FGameplayTagContainer::CreateFromArray(TArray<FGameplayTag>{
-		FWolfGameplayTags::Get().InputState_RT,
-		FWolfGameplayTags::Get().InputState_TB,
-		FWolfGameplayTags::Get().InputState_OOC
-		/* Apparently using WolfTags will crash because static cannot reference non-static members
-		 * Add more input states as needed */
-	});
+	static const auto ModeTags = []{
+		FGameplayTagContainer Container;
+		Container.AddTag(FWolfGameplayTags::Get().InputState_RT);
+		Container.AddTag(FWolfGameplayTags::Get().InputState_TB);
+		Container.AddTag(FWolfGameplayTags::Get().InputState_OOC);
+		return Container;
+	}();
 
 	ASC->RemoveLooseGameplayTags(ModeTags);
 	WOLF_LOG(Verbose, TEXT("Removing Mode Tags: %s"), *ModeTags.ToString());
