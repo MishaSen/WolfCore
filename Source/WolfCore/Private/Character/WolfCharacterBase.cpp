@@ -395,7 +395,7 @@ void AWolfCharacterBase::SnapshotGAS(FActorSnapshot& Snapshot) const
 		auto ValueToStore = 0.f; // Default in case attribute is invalid
 		if (auto Attribute = UWolfAttributeSet::GetAttributeByTag(Pair.Key); Attribute.IsValid())
 		{
-			ValueToStore = ASC->GetNumericAttributeBase(Attribute);
+			ValueToStore = ASC->GetNumericAttribute(Attribute);
 		}
 		Snapshot.AttributeValues.Add(ValueToStore);
 	}
@@ -473,7 +473,7 @@ void AWolfCharacterBase::RestoreGAS(const FActorSnapshot& Snapshot)
 	if (!IsValid(ASC) || !IsValid(StatConfig)) return;
 	ASC->SetTagMapCount(FWolfGameplayTags::Get().InputState_Dead, 0);
 
-	int32 StatIndex = 0;
+	int32 StatIndex = 0; // TODO: Might need to deprecate if prediction system takes care of this
 	for (const auto& Pair : StatConfig->DefaultStats)
 	{
 		if (!Snapshot.AttributeValues.IsValidIndex(StatIndex)) break;
@@ -481,7 +481,7 @@ void AWolfCharacterBase::RestoreGAS(const FActorSnapshot& Snapshot)
 		if (auto Attribute = UWolfAttributeSet::GetAttributeByTag(Pair.Key); Attribute.IsValid())
 		{
 			const float SavedValue = Snapshot.AttributeValues[StatIndex];
-			if (!FMath::IsNearlyEqual(ASC->GetNumericAttributeBase(Attribute), SavedValue))
+			if (!FMath::IsNearlyEqual(ASC->GetNumericAttribute(Attribute), SavedValue))
 			{
 				ASC->SetNumericAttributeBase(Attribute, SavedValue);
 			}

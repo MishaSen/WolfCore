@@ -5,6 +5,7 @@
 #include "CoreMinimal.h"
 #include "AbilitySystemComponent.h"
 #include "Core/WolfGameplayTags.h"
+#include "Presage/WolfTemporalStates.h"
 #include "Subsystems/WorldSubsystem.h"
 #include "CombatModeSubsystem.generated.h"
 
@@ -31,6 +32,9 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Combat")
 	FGameplayTag GetCurrentMode() const { return CurrentMode; }
 
+	UFUNCTION(BlueprintCallable, Category = "Wolf|Combat|Snapshots")
+	FWolfTemporalStates CaptureCurrentWorldState(float Timestamp);
+
 	void RegisterCombatant(AWolfCharacterBase* Character);
 	void UnregisterCombatant(AWolfCharacterBase* Character);
 	const TArray<TWeakObjectPtr<AWolfCharacterBase>>& GetTrackedCombatants() const { return TrackedCombatants; }
@@ -38,6 +42,10 @@ public:
 public:
 	UPROPERTY(BlueprintAssignable, Category = "Combat")
 	FOnCombatModeChanged OnCombatModeChanged;
+
+protected:
+	UPROPERTY()
+	FWolfTemporalStates MasterStartSnapshot;
 
 private:
 	void OnPresageEffectLoaded();

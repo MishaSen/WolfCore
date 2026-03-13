@@ -37,17 +37,17 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Wolf|Presage")
 	float GetTimeToNextHitImpact() const;
 
+	virtual void CreateSnapshot_Implementation(FActorSnapshot& OutSnapshot) override;
+
+	// NOTE: May need boolean to silence delegates that trigger animations and sounds based on attribute changes
+	virtual void RestoreSnapshot_Implementation(const FActorSnapshot& InSnapshot) override;
+
 	void GetPresageCollisionDimensions(float& OutRadius, float& OutHalfHeight) const;
 	bool IsInvulnerableAt(float RelativeTime) const;
 	class UBaseCombatAbility* GetActiveCombatAbility() const;
 	
 protected:
 	static FTransform ExtractRootMotionAtTime(UAnimMontage* Montage, float Time);
-
-	virtual void CreateSnapshot_Implementation(FActorSnapshot& OutSnapshot) override;
-
-	// NOTE: May need boolean to silence delegates that trigger animations and sounds based on attribute changes
-	virtual void RestoreSnapshot_Implementation(const FActorSnapshot& InSnapshot) override;
 
 	// --- Snapshot Helpers ---
 	void SnapshotPhysics(FActorSnapshot& Snapshot) const;

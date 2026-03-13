@@ -70,12 +70,53 @@ void UCombatModeSubsystem::UnregisterCombatant(AWolfCharacterBase* Character)
 	TrackedCombatants.RemoveSingleSwap(Character); // Remove() already handles if check
 }
 
+FWolfTemporalStates UCombatModeSubsystem::CaptureCurrentWorldState(float Timestamp)
+{
+	FWolfTemporalStates NewState;
+	NewState.TimelineTimestamp = Timestamp;
+
+	WOLF_LOG(Log, TEXT("=== Starting World Snapshot at Timestamp: %.2f ==="), Timestamp);
+
+	for (auto It = TrackedCombatants.CreateIterator(); It; ++It)
+	{
+		auto* WolfChar = It->Get();
+		if (WolfChar)
+		{
+			FActorSnapshot ActorState;
+			if (WolfChar->Implements<USnapshot>())
+			{
+				ISnapshot::Execute_CreateSnapshot(WolfChar, ActorState);
+			}
+			else
+			{
+				WolfChar->CreateSnapshot_Implementation(ActorState);
+			}
+			WOLF_LOG(Verbose, TEXT("Snapshotted [%s] at %s"), *WolfChar->GetName(), *ActorState.Location.ToString());
+			NewState.ActorStates.Add(WolfChar, ActorState);
+		}
+		else
+		{
+			It.RemoveCurrent();
+		}
+	}
+	WOLF_LOG(Log, TEXT("Snapshot Complete. Captured %d combatants."), NewState.ActorStates.Num());
+	return NewState;
+}
+
 void UCombatModeSubsystem::SetMode(FGameplayTag NewMode)
 {
 	if (CurrentMode == NewMode) return;
 	CurrentMode = NewMode;
 
 	UGameplayStatics::SetGlobalTimeDilation(GetWorld(), GetDilationForMode(NewMode));
+
+	if (NewMode == WolfTag.InputState_TB)
+	{
+		MasterStartSnapshot = CaptureCurrentWorldState(0.f);
+		WOLF_LOG(Log, TEXT("TB started. Master Snapshot captured for %d actors."), MasterStartSnapshot.ActorStates.Num());
+	}
+	else MasterStartSnapshot.ActorStates.Empty();
+	
 	OnCombatModeChanged.Broadcast(NewMode);
 }
 
