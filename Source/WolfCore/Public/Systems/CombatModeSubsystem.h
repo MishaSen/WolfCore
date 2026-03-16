@@ -35,6 +35,10 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Wolf|Combat|Snapshots")
 	FWolfTemporalStates CaptureCurrentWorldState(float Timestamp);
 
+	UFUNCTION(BlueprintCallable, Category = "Wolf|Combat")
+	void ScrubTimeline(float NewTime);
+	const FWolfTemporalStates& GetMasterSnapshot() const { return MasterStartSnapshot; }
+
 	void RegisterCombatant(AWolfCharacterBase* Character);
 	void UnregisterCombatant(AWolfCharacterBase* Character);
 	const TArray<TWeakObjectPtr<AWolfCharacterBase>>& GetTrackedCombatants() const { return TrackedCombatants; }
@@ -47,6 +51,12 @@ protected:
 	UPROPERTY()
 	FWolfTemporalStates MasterStartSnapshot;
 
+	UPROPERTY(BlueprintReadOnly, Category = "Wolf|Timeline")
+	float CurrentTimelineTime = 0.f;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Wolf|Timeline")
+	float MaxTimelineDuration = 5.f;
+
 private:
 	void OnPresageEffectLoaded();
 	void InitializeSubsystemDefaults();
@@ -57,9 +67,6 @@ private:
 	UAbilitySystemComponent* GetPlayerASC() const;
 	static float GetDilationForMode(const FGameplayTag& Mode);
 
-	UPROPERTY()
-	TArray<TWeakObjectPtr<AWolfCharacterBase>> TrackedCombatants;
-	
 private:
 	FGameplayTag CurrentMode;
 	FWolfGameplayTags WolfTag;
@@ -67,4 +74,7 @@ private:
 
 	UPROPERTY()
 	TSubclassOf<UGameplayEffect> PresageEffectClass;
+	
+	UPROPERTY()
+	TArray<TWeakObjectPtr<AWolfCharacterBase>> TrackedCombatants;
 };

@@ -114,6 +114,9 @@ void UCombatModeSubsystem::SetMode(FGameplayTag NewMode)
 	{
 		MasterStartSnapshot = CaptureCurrentWorldState(0.f);
 		WOLF_LOG(Log, TEXT("TB started. Master Snapshot captured for %d actors."), MasterStartSnapshot.ActorStates.Num());
+
+		ScrubTimeline(15.f);
+		ScrubTimeline(0.f);
 	}
 	else MasterStartSnapshot.ActorStates.Empty();
 	
@@ -127,6 +130,20 @@ void UCombatModeSubsystem::SwitchCombatMode()
 		                     : WolfTag.InputState_RT;
 
 	SetMode(NewMode);
+}
+
+void UCombatModeSubsystem::ScrubTimeline(float NewTime)
+{
+	CurrentTimelineTime = FMath::Clamp(NewTime, 0.f, MaxTimelineDuration);
+	WOLF_LOG(Log, TEXT("Scrubbing Timeline to %.2f"), CurrentTimelineTime);
+
+	for (auto It = TrackedCombatants.CreateIterator(); It; ++It)
+	{
+		if (auto* WolfChar = It->Get()) WolfChar->UpdateTemporalPreview(CurrentTimelineTime);
+		else It.RemoveCurrent();
+	}
+
+	WOLF_LOG(Log, TEXT("Timeline Scrubbed to : %.2f"), CurrentTimelineTime);
 }
 
 void UCombatModeSubsystem::HandlePresageDrainEffect(UAbilitySystemComponent* ASC, FGameplayTag CurrentActorMode)

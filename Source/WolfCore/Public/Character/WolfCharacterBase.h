@@ -46,6 +46,8 @@ public:
 	bool IsInvulnerableAt(float RelativeTime) const;
 	class UBaseCombatAbility* GetActiveCombatAbility() const;
 	
+	void UpdateTemporalPreview(float PreviewTime);
+	
 protected:
 	static FTransform ExtractRootMotionAtTime(UAnimMontage* Montage, float Time);
 
@@ -116,10 +118,4 @@ private:
 
 	UFUNCTION(BlueprintCallable, Category = "Abilities")
 	void AddCharacterAbilities();
-
-	UPROPERTY(EditDefaultsOnly, Category = "GAS | Effects")
-	TSubclassOf<UGameplayEffect> PassiveAdrenalineGE;
-
-	UPROPERTY(EditDefaultsOnly, Category = "GAS | Effects")
-	TSubclassOf<UGameplayEffect> PassiveFlowGaugeGE;
 };

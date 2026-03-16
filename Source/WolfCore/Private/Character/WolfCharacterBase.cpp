@@ -73,7 +73,8 @@ void AWolfCharacterBase::BeginPlay()
 void AWolfCharacterBase::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
 	if (auto* CMS = GetWorld()->GetSubsystem<UCombatModeSubsystem>())
-	{	// RemoveDynamic is safe, but the UE delegate macro should handle this automatically
+	{
+		// RemoveDynamic is safe, but the UE delegate macro should handle this automatically
 		CMS->OnCombatModeChanged.RemoveDynamic(this, &AWolfCharacterBase::HandleCombatModeChanged);
 		CMS->UnregisterCombatant(this);
 	}
@@ -138,10 +139,7 @@ void AWolfCharacterBase::SetupAbilitySystem()
 		ASC->RegisterComponent();
 		WOLF_LOG(Log, TEXT("Created AbilitySystemComponent for %s"), *GetName());
 	}
-	else
-	{
-		WOLF_ERROR(TEXT("Failed to create AbilitySystemComponent for %s"), *GetName());
-	}
+	else WOLF_ERROR(TEXT("Failed to create AbilitySystemComponent for %s"), *GetName());
 }
 
 void AWolfCharacterBase::ApplyDefaultAttributes()
@@ -161,42 +159,12 @@ void AWolfCharacterBase::ApplyDefaultAttributes()
 		if (!UWolfAttributeSet::GetAttributeByTag(Tag).IsValid())
 		{
 			WOLF_WARN(TEXT("Attribute Tag [%s] is in StatConfig but NOT registered in UWolfAttributeSet mapping!"
-				          "Snapshots/Presage will ignore this stat."), *Tag.ToString());
+				           "Snapshots/Presage will ignore this stat."), *Tag.ToString());
 		}
 	}
 
 	ASC->ApplyGameplayEffectSpecToSelf(*DefaultStatsHandle.Data.Get());
 	WOLF_LOG(Log, TEXT("Applied all attributes from StatConfig to %s"), *GetName());
-
-	/* DEPRECATED:
-	 * Unless we want passive effects for these attributes, functionality moved to CombatModeSubsystem
-	 *
-
-	if (!PassiveAdrenalineGE)
-	{
-		WOLF_WARN(TEXT("PassiveAdrenalineGE is invalid for %s"), *GetName());
-	}
-
-	if (const auto PassiveAdrenalineHandle = ASC->MakeOutgoingSpec(PassiveAdrenalineGE, 1.f, ASC->MakeEffectContext());
-		PassiveAdrenalineHandle.IsValid())
-	{
-		PassiveAdrenalineHandle.Data->SetSetByCallerMagnitude(FWolfGameplayTags::Get().Data_Amount, -2.f);
-		ASC->ApplyGameplayEffectSpecToSelf(*PassiveAdrenalineHandle.Data.Get());
-
-		WOLF_LOG(Log, TEXT("Applied PassiveAdrenalineGE to %s"), *GetName());
-	}
-
-	if (!PassiveFlowGaugeGE)
-	{
-		WOLF_WARN(TEXT("PassiveFlowGaugeGE is invalid for %s"), *GetName());
-	}
-
-	if (const auto PassiveFlowGaugeHandle = ASC->MakeOutgoingSpec(PassiveFlowGaugeGE, 1.f, ASC->MakeEffectContext());
-		PassiveFlowGaugeHandle.IsValid())
-	{
-		PassiveFlowGaugeHandle.Data->SetSetByCallerMagnitude(FWolfGameplayTags::Get().Data_Amount, -2.f);
-		ASC->ApplyGameplayEffectSpecToSelf(*PassiveFlowGaugeHandle.Data.Get());
-	}*/
 }
 
 void AWolfCharacterBase::PossessedBy(AController* NewController)
@@ -205,68 +173,55 @@ void AWolfCharacterBase::PossessedBy(AController* NewController)
 
 	if (HasAuthority())
 	{
-		if (!IsValid(ASC))
-		{
-			SetupAbilitySystem();
-		}
-		if (IsValid(ASC))
-		{
-			ASC->InitAbilityActorInfo(this, this);
-			ApplyDefaultAttributes();
-			AddCharacterAbilities();
-			WOLF_INFO(TEXT("Character %s possessed and GAS initialized."), *GetName());
-		}
-		else
-		{
-			WOLF_ERROR(TEXT("PossessedBy failed: ASC invalid for %s"), *GetName());
-		}
+		if (!IsValid(ASC)) SetupAbilitySystem();
+		
+		ASC->InitAbilityActorInfo(this, this);
+		ApplyDefaultAttributes();
+		AddCharacterAbilities();
+		WOLF_INFO(TEXT("Character %s possessed and GAS initialized."), *GetName());
 	}
 }
 
 void AWolfCharacterBase::AddCharacterAbilities()
 {
 	if (!HasAuthority()) return;
+	
 	if (auto* WolfASC = Cast<UWolfAbilitySystemComponent>(ASC))
 	{
 		WolfASC->AddCharacterAbilities(StartupAbilities);
 		WOLF_LOG(Log, TEXT("Added %d startup abilities to %s"), StartupAbilities.Num(), *GetName());
 	}
-	else
-	{
-		WOLF_WARN(TEXT("AddCharacterAbilities failed: ASC missing or not a WolfASC for %s"), *GetName());
-	}
+	else WOLF_WARN(TEXT("AddCharacterAbilities failed: ASC missing or not a WolfASC for %s"), *GetName());
 }
 
 #pragma region Presage System
 
 FTransform AWolfCharacterBase::GetProjectedTransform(float FutureTimeDelta) const
 {
-	FVector ProjectedLocation;
-	const auto CurrentTransform = GetActorTransform();
-	auto* AnimInstance = GetMesh() ? GetMesh()->GetAnimInstance() : nullptr;
+	const auto* CMS = UWolfFunctionLibrary::GetWorldSubsystem<UCombatModeSubsystem>(this);
+	if (!CMS) return GetActorTransform();
 
-	if (!AnimInstance || !AnimInstance->IsAnyMontagePlaying())
+	const auto* ActorStates = &CMS->GetMasterSnapshot().ActorStates;
+	if (!ActorStates->Contains(this)) return GetActorTransform();
+
+	const auto& AnchorState = (*ActorStates)[this];
+	if (!AnchorState.CurrentMontage.IsValid())
 	{
-		ProjectedLocation = GetActorLocation() + GetVelocity() * FutureTimeDelta;
-		return FTransform(GetActorRotation(), ProjectedLocation, GetActorScale3D());
+		const auto ProjectedLocation = AnchorState.Location + AnchorState.Velocity * FutureTimeDelta;
+		return FTransform(AnchorState.Rotation, ProjectedLocation, GetActorScale3D());
 	}
 
-	auto* CurrentMontage = AnimInstance->GetCurrentActiveMontage();
+	const auto* Montage = AnchorState.CurrentMontage.Get();
+	const float TargetPosition = AnchorState.MontagePosition + FutureTimeDelta;
 
-	if (!CurrentMontage || !CurrentMontage->HasRootMotion())
-	{
-		ProjectedLocation = GetActorLocation() + GetVelocity() * FutureTimeDelta;
-		return FTransform(GetActorRotation(), ProjectedLocation, GetActorScale3D());
-	}
+	const auto RootMotionDelta = Montage->ExtractRootMotionFromRange(
+		AnchorState.MontagePosition,
+		TargetPosition,
+		FAnimExtractContext()
+		);
 
-	const auto CurrentMontagePosition = AnimInstance->Montage_GetPosition(CurrentMontage);
-	const auto TargetMontagePosition = CurrentMontagePosition + FutureTimeDelta;
-
-	const auto RootMotionDelta = CurrentMontage->ExtractRootMotionFromRange(CurrentMontagePosition,
-	                                                                        TargetMontagePosition,
-	                                                                        FAnimExtractContext());
-
-	return RootMotionDelta * CurrentTransform;
+	const FTransform AnchorTransform(AnchorState.Rotation, AnchorState.Location, GetActorScale3D());
+	return RootMotionDelta * AnchorTransform;
 }
 
 float AWolfCharacterBase::GetTimeToNextHitImpact() const
@@ -404,7 +359,7 @@ void AWolfCharacterBase::SnapshotGAS(FActorSnapshot& Snapshot) const
 	const FGameplayEffectQuery Query;
 	const auto ActiveHandles = ASC->GetActiveEffects(Query);
 	Snapshot.ActiveEffects.Reserve(ActiveHandles.Num());
-	
+
 	for (const auto& Handle : ActiveHandles)
 	{
 		if (const auto* Effect = ASC->GetActiveGameplayEffect(Handle))
@@ -494,7 +449,7 @@ void AWolfCharacterBase::RestoreGAS(const FActorSnapshot& Snapshot)
 	TagContainer.AddTag(FWolfGameplayTags::Get().Effect_Combat);
 	Query.OwningTagQuery = FGameplayTagQuery::MakeQuery_MatchAnyTags(TagContainer);
 	ASC->RemoveActiveEffects(Query); // Don't want to remove effects like Presage
-	
+
 	for (const auto& Effect : Snapshot.ActiveEffects)
 	{
 		if (!Effect.EffectClass) continue;
@@ -523,6 +478,27 @@ void AWolfCharacterBase::RestoreAnim(const FActorSnapshot& Snapshot)
 
 		AnimInst->Montage_Play(Snapshot.CurrentMontage.Get(), 1.f);
 		AnimInst->Montage_SetPosition(Snapshot.CurrentMontage.Get(), Snapshot.MontagePosition);
+	}
+}
+
+void AWolfCharacterBase::UpdateTemporalPreview(float PreviewTime)
+{
+	const auto* CMS = UWolfFunctionLibrary::GetWorldSubsystem<UCombatModeSubsystem>(this);
+	if (!CMS) return;
+	
+	if (PreviewTime <= 0.f)
+	{
+		const auto* ActorStates = &CMS->GetMasterSnapshot().ActorStates;
+		if (ActorStates->Contains(this))
+		{
+			const auto& MyStart = (*ActorStates)[this];
+			WOLF_LOG(Log, TEXT("%s back at Start Anchor. Snapshot Pos: %s"), *GetName(), *MyStart.Location.ToString());
+		}
+	}
+	else
+	{
+		const auto FutureTransform = GetProjectedTransform(PreviewTime);
+		WOLF_LOG(Log, TEXT("%s predicting pos at %.2f: %s"), *GetName(), PreviewTime, *FutureTransform.GetLocation().ToString());
 	}
 }
 
