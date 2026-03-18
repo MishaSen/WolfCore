@@ -47,10 +47,19 @@ public:
 	class UBaseCombatAbility* GetActiveCombatAbility() const;
 	
 	void UpdateTemporalPreview(float PreviewTime);
+
+	void ClearPredictionBuffer() { PredictionBuffer.Empty(); }
+
+	const FActorSnapshot* GetSnapshotAtTime(float RelativeTime) const;
+
+	void SimulateTick(float DeltaTime);
 	
 protected:
 	static FTransform ExtractRootMotionAtTime(UAnimMontage* Montage, float Time);
 
+	void SimulatePhysicsStep(float DeltaTime);
+	void SimulateAnimationStep(float DeltaTime);
+	
 	// --- Snapshot Helpers ---
 	void SnapshotPhysics(FActorSnapshot& Snapshot) const;
 	void SnapshotGAS(FActorSnapshot& Snapshot) const;
@@ -60,6 +69,11 @@ protected:
 	void RestoreGAS(const FActorSnapshot& Snapshot);
 	void RestoreAnim(const FActorSnapshot& Snapshot);
 
+	UPROPERTY()
+	TArray<FActorSnapshot> PredictionBuffer;
+
+	const float SimFrequency = 10.f;
+	
 private:
 	bool bIsRestoringSnapshot = false;
 	

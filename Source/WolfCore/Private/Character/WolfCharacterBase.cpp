@@ -139,7 +139,8 @@ void AWolfCharacterBase::SetupAbilitySystem()
 		ASC->RegisterComponent();
 		WOLF_LOG(Log, TEXT("Created AbilitySystemComponent for %s"), *GetName());
 	}
-	else WOLF_ERROR(TEXT("Failed to create AbilitySystemComponent for %s"), *GetName());
+	else
+		WOLF_ERROR(TEXT("Failed to create AbilitySystemComponent for %s"), *GetName());
 }
 
 void AWolfCharacterBase::ApplyDefaultAttributes()
@@ -159,7 +160,7 @@ void AWolfCharacterBase::ApplyDefaultAttributes()
 		if (!UWolfAttributeSet::GetAttributeByTag(Tag).IsValid())
 		{
 			WOLF_WARN(TEXT("Attribute Tag [%s] is in StatConfig but NOT registered in UWolfAttributeSet mapping!"
-				           "Snapshots/Presage will ignore this stat."), *Tag.ToString());
+				          "Snapshots/Presage will ignore this stat."), *Tag.ToString());
 		}
 	}
 
@@ -174,7 +175,7 @@ void AWolfCharacterBase::PossessedBy(AController* NewController)
 	if (HasAuthority())
 	{
 		if (!IsValid(ASC)) SetupAbilitySystem();
-		
+
 		ASC->InitAbilityActorInfo(this, this);
 		ApplyDefaultAttributes();
 		AddCharacterAbilities();
@@ -185,13 +186,14 @@ void AWolfCharacterBase::PossessedBy(AController* NewController)
 void AWolfCharacterBase::AddCharacterAbilities()
 {
 	if (!HasAuthority()) return;
-	
+
 	if (auto* WolfASC = Cast<UWolfAbilitySystemComponent>(ASC))
 	{
 		WolfASC->AddCharacterAbilities(StartupAbilities);
 		WOLF_LOG(Log, TEXT("Added %d startup abilities to %s"), StartupAbilities.Num(), *GetName());
 	}
-	else WOLF_WARN(TEXT("AddCharacterAbilities failed: ASC missing or not a WolfASC for %s"), *GetName());
+	else
+		WOLF_WARN(TEXT("AddCharacterAbilities failed: ASC missing or not a WolfASC for %s"), *GetName());
 }
 
 #pragma region Presage System
@@ -218,7 +220,7 @@ FTransform AWolfCharacterBase::GetProjectedTransform(float FutureTimeDelta) cons
 		AnchorState.MontagePosition,
 		TargetPosition,
 		FAnimExtractContext()
-		);
+	);
 
 	const FTransform AnchorTransform(AnchorState.Rotation, AnchorState.Location, GetActorScale3D());
 	return RootMotionDelta * AnchorTransform;
@@ -481,24 +483,90 @@ void AWolfCharacterBase::RestoreAnim(const FActorSnapshot& Snapshot)
 	}
 }
 
+const FActorSnapshot* AWolfCharacterBase::GetSnapshotAtTime(float RelativeTime) const
+{
+	if (PredictionBuffer.Num() == 0) return nullptr;
+
+	const int32 Index = FMath::Clamp(FMath::RoundToInt(RelativeTime * SimFrequency),
+	                           0,
+	                           PredictionBuffer.Num() - 1);
+
+	return &PredictionBuffer[Index];
+}
+
+
 void AWolfCharacterBase::UpdateTemporalPreview(float PreviewTime)
 {
-	const auto* CMS = UWolfFunctionLibrary::GetWorldSubsystem<UCombatModeSubsystem>(this);
-	if (!CMS) return;
-	
-	if (PreviewTime <= 0.f)
-	{
-		const auto* ActorStates = &CMS->GetMasterSnapshot().ActorStates;
-		if (ActorStates->Contains(this))
-		{
-			const auto& MyStart = (*ActorStates)[this];
-			WOLF_LOG(Log, TEXT("%s back at Start Anchor. Snapshot Pos: %s"), *GetName(), *MyStart.Location.ToString());
-		}
-	}
-	else
+	const auto* BakedState = GetSnapshotAtTime(PreviewTime);
+	if (!BakedState)
 	{
 		const auto FutureTransform = GetProjectedTransform(PreviewTime);
-		WOLF_LOG(Log, TEXT("%s predicting pos at %.2f: %s"), *GetName(), PreviewTime, *FutureTransform.GetLocation().ToString());
+		WOLF_LOG(Log, TEXT("%s [FALLBACK MATH] pos at %.2f: %s"), *GetName(), PreviewTime, *FutureTransform.GetLocation().ToString());
+		return;
+	}
+	
+	WOLF_LOG(Log, TEXT("%s [BAKED] pos at %.2f: %s"), *GetName(), PreviewTime, *BakedState->Location.ToString());
+	
+}
+
+void AWolfCharacterBase::SimulateTick(float DeltaTime)
+{
+	SimulatePhysicsStep(DeltaTime);
+	SimulateAnimationStep(DeltaTime);
+
+	FActorSnapshot FutureFrame;
+	CreateSnapshot_Implementation(FutureFrame);
+	PredictionBuffer.Add(FutureFrame);
+}
+
+void AWolfCharacterBase::SimulatePhysicsStep(float DeltaTime)
+{
+	auto* MoveComp = GetCharacterMovement();
+	if (!MoveComp) return;
+
+	const auto Delta = MoveComp->Velocity * DeltaTime;
+	if (Delta.IsNearlyZero()) return;
+
+	FHitResult Hit(1.f);
+	MoveComp->SafeMoveUpdatedComponent(Delta, GetActorRotation(), true, Hit);
+
+	if (!Hit.IsValidBlockingHit()) return;
+
+	const auto RemainingDelta = Delta * (1.f - Hit.Time);
+	const auto SlideDelta = FVector::VectorPlaneProject(RemainingDelta, Hit.Normal);
+
+	if (!SlideDelta.IsNearlyZero())
+	{
+		FHitResult SlideHit(1.f);
+		MoveComp->SafeMoveUpdatedComponent(SlideDelta, GetActorRotation(), true, SlideHit);
+	}
+}
+
+void AWolfCharacterBase::SimulateAnimationStep(float DeltaTime)
+{
+	auto* AnimInst = GetMesh()->GetAnimInstance();
+	if (!AnimInst) return;
+
+	const auto* CurrentMontage = AnimInst->GetCurrentActiveMontage();
+	if (!CurrentMontage) return;
+
+	const auto CurrentPos = AnimInst->Montage_GetPosition(CurrentMontage);
+	const auto NewPos = CurrentPos + DeltaTime;
+
+	AnimInst->Montage_SetPosition(CurrentMontage, NewPos);
+
+	if (CurrentMontage->HasRootMotion())
+	{
+		const auto RootMotionDelta = CurrentMontage->ExtractRootMotionFromRange(CurrentPos, NewPos, FAnimExtractContext());
+		const auto WorldDelta = GetActorRotation().RotateVector(RootMotionDelta.GetLocation());
+
+		FHitResult Hit;
+		GetCharacterMovement()->SafeMoveUpdatedComponent(WorldDelta, GetActorRotation(), true, Hit);
+	}
+
+	if (NewPos >= CurrentMontage->GetPlayLength())
+	{
+		AnimInst->Montage_Stop(0.1f, CurrentMontage); // If seeing t-poses, set to idle state
 	}
 }
 
