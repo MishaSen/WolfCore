@@ -21,19 +21,3 @@ AWolfChar::AWolfChar()
 	FollowCamera->SetupAttachment(CameraBoom, USpringArmComponent::SocketName);
 	FollowCamera->bUsePawnControlRotation = false; // Camera does not need to rotate relative to boom
 }
-
-void AWolfChar::Tick(float DeltaTime)
-{
-	Super::Tick(DeltaTime);
-}
-
-void AWolfChar::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)
-{
-	Super::SetupPlayerInputComponent(PlayerInputComponent);
-}
-
-void AWolfChar::BeginPlay()
-{
-	Super::BeginPlay();
-}
-

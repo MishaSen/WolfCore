@@ -2,27 +2,20 @@
 
 #include "WolfCore/Public/Character/WolfCharacterBase.h"
 
-#include "AIController.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "Animation/AnimInstance.h"
-#include "Abilities/AbilityConfig.h"
 #include "AbilitySystem/WolfAttributeSet.h"
 #include "AttributeSet.h"
-#include "Abilities/RTCombatAbility.h"
 #include "AbilitySystem/CharacterStatConfig.h"
-#include "BehaviorTree/BehaviorTreeComponent.h"
 #include "Components/CapsuleComponent.h"
 #include "Core/WolfFunctionLibrary.h"
 #include "Core/WolfGameplayTags.h"
 #include "Debug/WolfDebug.h"
 #include "GameFramework/CharacterMovementComponent.h"
-#include "Kismet/GameplayStatics.h"
-#include "Perception/AIPerceptionComponent.h"
 #include "Presage/ActorSnapshot.h"
 #include "Systems/CombatModeSubsystem.h"
 #include "WolfCore/Public/AbilitySystem/WolfAbilitySystemComponent.h"
 #include "WolfCore/Public/Presage/PresageAbilityRequest.h"
-#include "WolfCore/Public/Presage/PresageSubsystem.h"
 
 AWolfCharacterBase::AWolfCharacterBase()
 {
@@ -39,26 +32,25 @@ AWolfCharacterBase::AWolfCharacterBase()
 	GetCharacterMovement()->bUseControllerDesiredRotation = true;
 }
 
-UAbilitySystemComponent* AWolfCharacterBase::GetAbilitySystemComponent() const
-{
-	return ASC.Get();
-}
-
-FGameplayAbilitySpecHandle AWolfCharacterBase::GetAbilitySpecHandle(
-	const TSubclassOf<UGameplayAbility>& AbilityClass) const
-{
-	if (GrantedAbilityHandles.Contains(AbilityClass))
-	{
-		return GrantedAbilityHandles[AbilityClass];
-	}
-	return FGameplayAbilitySpecHandle();
-}
-
 void AWolfCharacterBase::BeginPlay()
 {
 	Super::BeginPlay();
 
-	if (auto* CMS = UWolfFunctionLibrary::GetWorldSubsystem<UCombatModeSubsystem>(this))
+	CachedMoveComp = Cast<UCharacterMovementComponent>(GetCharacterMovement());
+	CachedAnimInst = GetMesh() ? GetMesh()->GetAnimInstance() : nullptr;
+
+	if (IsValid(StatConfig))
+	{
+		CachedAttributes.Empty();
+		for (const auto& Pair : StatConfig->DefaultStats)
+		{
+			auto Attribute = UWolfAttributeSet::GetAttributeByTag(Pair.Key);
+			if (Attribute.IsValid()) CachedAttributes.Add(Attribute);
+		}
+	}
+	else WOLF_WARN(TEXT("No StatConfig set for %s"), *GetName());
+
+	if (auto* CMS = GetCMS())
 	{
 		CMS->RegisterCombatant(this);
 		CMS->OnCombatModeChanged.AddDynamic(this, &AWolfCharacterBase::HandleCombatModeChanged);
@@ -72,18 +64,33 @@ void AWolfCharacterBase::BeginPlay()
 
 void AWolfCharacterBase::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
-	if (auto* CMS = GetWorld()->GetSubsystem<UCombatModeSubsystem>())
+	if (auto* CMS = GetCMS())
 	{
-		// RemoveDynamic is safe, but the UE delegate macro should handle this automatically
+		// RemoveDynamic is fine here, but the UE delegate macro should handle this automatically
 		CMS->OnCombatModeChanged.RemoveDynamic(this, &AWolfCharacterBase::HandleCombatModeChanged);
 		CMS->UnregisterCombatant(this);
 	}
 	Super::EndPlay(EndPlayReason);
 }
 
+void AWolfCharacterBase::PossessedBy(AController* NewController)
+{
+	Super::PossessedBy(NewController);
+
+	if (HasAuthority())
+	{
+		if (!IsValid(ASC)) SetupAbilitySystem();
+
+		ASC->InitAbilityActorInfo(this, this);
+		ApplyDefaultAttributes();
+		AddCharacterAbilities();
+		WOLF_INFO(TEXT("Character %s possessed and GAS initialized."), *GetName());
+	}
+}
+
 void AWolfCharacterBase::HandleCombatModeChanged(FGameplayTag NewMode)
 {
-	if (auto* CMS = UWolfFunctionLibrary::GetWorldSubsystem<UCombatModeSubsystem>(this))
+	if (auto* CMS = GetCMS())
 	{
 		CMS->ApplyModeToActor(this, NewMode);
 	}
@@ -114,14 +121,22 @@ void AWolfCharacterBase::Die_Implementation()
 	WOLF_INFO(TEXT("Character %s has died."), *GetName());
 }
 
-void AWolfCharacterBase::Tick(float DeltaTime)
+FGameplayAbilitySpecHandle AWolfCharacterBase::GetAbilitySpecHandle(const TSubclassOf<UGameplayAbility>& AbilityClass) const
 {
-	Super::Tick(DeltaTime);
+	if (GrantedAbilityHandles.Contains(AbilityClass))
+	{
+		return GrantedAbilityHandles[AbilityClass];
+	}
+	return FGameplayAbilitySpecHandle();
 }
 
-void AWolfCharacterBase::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)
+UCombatModeSubsystem* AWolfCharacterBase::GetCMS() const
 {
-	Super::SetupPlayerInputComponent(PlayerInputComponent);
+	if (!CachedCMS.IsValid())
+	{
+		const_cast<AWolfCharacterBase*>(this)->CachedCMS = UWolfFunctionLibrary::GetWorldSubsystem<UCombatModeSubsystem>(this);
+	}
+	return CachedCMS.Get();
 }
 
 void AWolfCharacterBase::SetupAbilitySystem()
@@ -160,27 +175,11 @@ void AWolfCharacterBase::ApplyDefaultAttributes()
 		if (!UWolfAttributeSet::GetAttributeByTag(Tag).IsValid())
 		{
 			WOLF_WARN(TEXT("Attribute Tag [%s] is in StatConfig but NOT registered in UWolfAttributeSet mapping!"
-				          "Snapshots/Presage will ignore this stat."), *Tag.ToString());
+				           "Snapshots/Presage will ignore this stat."), *Tag.ToString());
 		}
 	}
-
 	ASC->ApplyGameplayEffectSpecToSelf(*DefaultStatsHandle.Data.Get());
 	WOLF_LOG(Log, TEXT("Applied all attributes from StatConfig to %s"), *GetName());
-}
-
-void AWolfCharacterBase::PossessedBy(AController* NewController)
-{
-	Super::PossessedBy(NewController);
-
-	if (HasAuthority())
-	{
-		if (!IsValid(ASC)) SetupAbilitySystem();
-
-		ASC->InitAbilityActorInfo(this, this);
-		ApplyDefaultAttributes();
-		AddCharacterAbilities();
-		WOLF_INFO(TEXT("Character %s possessed and GAS initialized."), *GetName());
-	}
 }
 
 void AWolfCharacterBase::AddCharacterAbilities()
@@ -196,11 +195,9 @@ void AWolfCharacterBase::AddCharacterAbilities()
 		WOLF_WARN(TEXT("AddCharacterAbilities failed: ASC missing or not a WolfASC for %s"), *GetName());
 }
 
-#pragma region Presage System
-
 FTransform AWolfCharacterBase::GetProjectedTransform(float FutureTimeDelta) const
 {
-	const auto* CMS = UWolfFunctionLibrary::GetWorldSubsystem<UCombatModeSubsystem>(this);
+	const auto* CMS = GetCMS();
 	if (!CMS) return GetActorTransform();
 
 	const auto* ActorStates = &CMS->GetMasterSnapshot().ActorStates;
@@ -226,90 +223,84 @@ FTransform AWolfCharacterBase::GetProjectedTransform(float FutureTimeDelta) cons
 	return RootMotionDelta * AnchorTransform;
 }
 
-float AWolfCharacterBase::GetTimeToNextHitImpact() const
+void AWolfCharacterBase::UpdateTemporalPreview(float PreviewTime)
 {
-	auto* AnimInstance = GetMesh() ? GetMesh()->GetAnimInstance() : nullptr;
-	if (!AnimInstance) return -1.f;
-
-	auto* Montage = AnimInstance->GetCurrentActiveMontage();
-	if (!Montage) return -1.f;
-
-	auto CurrentMontagePosition = AnimInstance->Montage_GetPosition(Montage);
-
-	for (const auto& NotifyEvent : Montage->Notifies)
+	const auto* BakedState = GetSnapshotAtTime(PreviewTime);
+	if (!BakedState)
 	{
-		if (NotifyEvent.GetTriggerTime() > CurrentMontagePosition)
-		{
-			return NotifyEvent.GetTriggerTime() - CurrentMontagePosition;
-		}
-	}
-
-	return -1.f;
-}
-
-void AWolfCharacterBase::GetPresageCollisionDimensions(float& OutRadius, float& OutHalfHeight) const
-{
-	const auto* Capsule = GetCapsuleComponent();
-	if (!Capsule)
-	{
-		OutRadius = 0.f;
-		OutHalfHeight = 0.f;
+		const auto FutureTransform = GetProjectedTransform(PreviewTime);
+		WOLF_LOG(Log, TEXT("%s [FALLBACK MATH] pos at %.2f: %s"), *GetName(), PreviewTime, *FutureTransform.GetLocation().ToString());
 		return;
 	}
-
-	OutRadius = Capsule->GetScaledCapsuleRadius();
-	OutHalfHeight = Capsule->GetScaledCapsuleHalfHeight();
+	WOLF_LOG(Log, TEXT("%s [BAKED] pos at %.2f: %s"), *GetName(), PreviewTime, *BakedState->Location.ToString());
 }
 
-FTransform AWolfCharacterBase::ExtractRootMotionAtTime(UAnimMontage* Montage, float Time)
+const FActorSnapshot* AWolfCharacterBase::GetSnapshotAtTime(float RelativeTime) const
 {
-	if (!Montage) return FTransform::Identity;
+	if (PredictionBuffer.Num() == 0) return nullptr;
 
-	return Montage->ExtractRootMotionFromRange(0.f, Time, FAnimExtractContext());
+	const int32 Index = FMath::Clamp(FMath::RoundToInt(RelativeTime * SimFrequency),
+								// Assumes SimulateTick is always called with a DeltaTime = 1/SimFrequency.
+								// Snapshot lookup will drift if the Subsystem uses a variable step or different fixed rate.
+							   0,
+							   PredictionBuffer.Num() - 1);
+	return &PredictionBuffer[Index];
 }
 
-bool AWolfCharacterBase::IsInvulnerableAt(float RelativeTime) const
+void AWolfCharacterBase::SimulateTick(float DeltaTime)
 {
-	if (auto* CurrentAbility = GetActiveCombatAbility())
+	SimulatePhysicsStep(DeltaTime);
+	SimulateAnimationStep(DeltaTime);
+
+	FActorSnapshot FutureFrame;
+	CreateSnapshot_Implementation(FutureFrame);
+	PredictionBuffer.Add(FutureFrame); // Remember to clear PredictionBuffer in CombatModeSubsystem
+}
+
+void AWolfCharacterBase::SimulatePhysicsStep(float DeltaTime)
+{
+	if (!CachedCMS.IsValid() || CachedMoveComp->Velocity.IsNearlyZero()) return;
+
+	const auto Delta = CachedMoveComp->Velocity * DeltaTime;
+	FHitResult Hit(1.f);
+	CachedMoveComp->SafeMoveUpdatedComponent(Delta, GetActorRotation(), true, Hit);
+
+	if (Hit.IsValidBlockingHit())
 	{
-		return CurrentAbility->IsInvulnerableAt(RelativeTime);
-	}
+		const auto RemainingDelta = Delta * (1.f - Hit.Time);
+		const auto SlideDelta = FVector::VectorPlaneProject(RemainingDelta, Hit.Normal);
 
-	return false;
-}
-
-class UBaseCombatAbility* AWolfCharacterBase::GetActiveCombatAbility() const
-{
-	if (!ASC) return nullptr;
-
-	for (const auto& Spec : ASC->GetActivatableAbilities())
-	{
-		if (!Spec.IsActive()) continue;
-
-		for (auto* Instance : Spec.GetAbilityInstances())
+		if (!SlideDelta.IsNearlyZero())
 		{
-			if (auto* CombatAbility = Cast<UBaseCombatAbility>(Instance))
-			{
-				return CombatAbility;
-			}
+			FHitResult SlideHit(1.f);
+			CachedMoveComp->SafeMoveUpdatedComponent(SlideDelta, GetActorRotation(), true, SlideHit);
 		}
 	}
-	return nullptr;
+}
 
-	/*TArray<FGameplayAbilitySpec> ActiveAbilities = ASC->GetActivatableAbilities();
+void AWolfCharacterBase::SimulateAnimationStep(float DeltaTime)
+{
+	const auto* CurrentMontage = GetWolfCurrentMontage();
+	if (!IsValid(CurrentMontage)) return;
 
-	for (const auto& Spec : ActiveAbilities)
+	const auto CurrentPos = CachedAnimInst->Montage_GetPosition(CurrentMontage);
+	const auto NewPos = CurrentPos + DeltaTime;
+
+	CachedAnimInst->Montage_SetPosition(CurrentMontage, NewPos);
+
+	if (CurrentMontage->HasRootMotion())
 	{
-		if (!Spec.IsActive()) continue;
+		const auto RootMotionDelta = CurrentMontage->ExtractRootMotionFromRange(CurrentPos, NewPos, FAnimExtractContext());
+		const auto WorldDelta = GetActorRotation().RotateVector(RootMotionDelta.GetLocation());
 
-		TArray<UGameplayAbility*> AbilityInstances = Spec.GetAbilityInstances();
-		for (auto* AbilityInstance : AbilityInstances)
-		{
-			if (auto* TBAbility = Cast<UTBCombatAbility>(AbilityInstance)) return TBAbility;
-		}
+		FHitResult Hit;
+		GetCharacterMovement()->SafeMoveUpdatedComponent(WorldDelta, GetActorRotation(), true, Hit);
 	}
 
-	return nullptr;*/
+	if (NewPos >= CurrentMontage->GetPlayLength())
+	{
+		CachedAnimInst->Montage_Stop(0.1f, CurrentMontage); // If seeing t-poses, set to idle state
+	}
 }
 
 void AWolfCharacterBase::CreateSnapshot_Implementation(FActorSnapshot& OutSnapshot)
@@ -337,24 +328,18 @@ void AWolfCharacterBase::SnapshotPhysics(FActorSnapshot& Snapshot) const
 	Snapshot.Location = GetActorLocation();
 	Snapshot.Rotation = GetActorRotation();
 	Snapshot.Velocity = GetVelocity();
-	Snapshot.MovementMode = GetCharacterMovement()->MovementMode;
-	Snapshot.CustomMovementMode = GetCharacterMovement()->CustomMovementMode;
+	Snapshot.MovementMode = CachedMoveComp->MovementMode;
+	Snapshot.CustomMovementMode = CachedMoveComp->CustomMovementMode;
 }
 
 void AWolfCharacterBase::SnapshotGAS(FActorSnapshot& Snapshot) const
 {
-	if (!IsValid(ASC) || !IsValid(StatConfig)) return;
+	if (!IsValid(ASC)) return;
 
-	Snapshot.AttributeValues.Reset();
-	Snapshot.AttributeValues.Reserve(StatConfig->DefaultStats.Num());
-	for (const auto& Pair : StatConfig->DefaultStats)
+	Snapshot.AttributeValues.Empty(CachedAttributes.Num());
+	for (const auto& Attribute : CachedAttributes)
 	{
-		auto ValueToStore = 0.f; // Default in case attribute is invalid
-		if (auto Attribute = UWolfAttributeSet::GetAttributeByTag(Pair.Key); Attribute.IsValid())
-		{
-			ValueToStore = ASC->GetNumericAttribute(Attribute);
-		}
-		Snapshot.AttributeValues.Add(ValueToStore);
+		Snapshot.AttributeValues.Add(ASC->GetNumericAttribute(Attribute));
 	}
 
 	Snapshot.ActiveEffects.Reset();
@@ -381,13 +366,10 @@ void AWolfCharacterBase::SnapshotGAS(FActorSnapshot& Snapshot) const
 
 void AWolfCharacterBase::SnapshotAnim(FActorSnapshot& Snapshot) const
 {
-	const auto* AnimInst = GetMesh()->GetAnimInstance();
-	if (!AnimInst) return;
-
-	if (auto* AnimMontage = AnimInst->GetCurrentActiveMontage())
+	if (auto* CurrentMontage = GetWolfCurrentMontage())
 	{
-		Snapshot.CurrentMontage = AnimMontage;
-		Snapshot.MontagePosition = AnimInst->Montage_GetPosition(AnimMontage);
+		Snapshot.CurrentMontage = CurrentMontage;
+		Snapshot.MontagePosition = CachedAnimInst->Montage_GetPosition(CurrentMontage);
 	}
 }
 
@@ -408,14 +390,14 @@ void AWolfCharacterBase::RestorePhysics(const FActorSnapshot& Snapshot)
 		Capsule->SetCollisionProfileName(UCollisionProfile::Pawn_ProfileName);
 	}
 
-	if (auto* MoveComp = GetCharacterMovement())
+	if (CachedMoveComp)
 	{
-		MoveComp->SetComponentTickEnabled(true);
-		MoveComp->Activate();
+		CachedMoveComp->SetComponentTickEnabled(true);
+		CachedMoveComp->Activate();
 
-		MoveComp->SetMovementMode(Snapshot.MovementMode, Snapshot.CustomMovementMode);
-		MoveComp->Velocity = Snapshot.Velocity;
-		MoveComp->UpdateComponentVelocity();
+		CachedMoveComp->SetMovementMode(Snapshot.MovementMode, Snapshot.CustomMovementMode);
+		CachedMoveComp->Velocity = Snapshot.Velocity;
+		CachedMoveComp->UpdateComponentVelocity();
 	}
 
 	if (auto* PrimitiveComp = Cast<UPrimitiveComponent>(GetRootComponent()))
@@ -430,20 +412,17 @@ void AWolfCharacterBase::RestoreGAS(const FActorSnapshot& Snapshot)
 	if (!IsValid(ASC) || !IsValid(StatConfig)) return;
 	ASC->SetTagMapCount(FWolfGameplayTags::Get().InputState_Dead, 0);
 
-	int32 StatIndex = 0; // TODO: Might need to deprecate if prediction system takes care of this
-	for (const auto& Pair : StatConfig->DefaultStats)
+	for (int32 StatIndex = 0; StatIndex < CachedAttributes.Num(); ++StatIndex)
 	{
 		if (!Snapshot.AttributeValues.IsValidIndex(StatIndex)) break;
 
-		if (auto Attribute = UWolfAttributeSet::GetAttributeByTag(Pair.Key); Attribute.IsValid())
+		const auto& Attribute = CachedAttributes[StatIndex];
+		const auto SavedValue = Snapshot.AttributeValues[StatIndex];
+
+		if (!FMath::IsNearlyEqual(ASC->GetNumericAttribute(Attribute), SavedValue))
 		{
-			const float SavedValue = Snapshot.AttributeValues[StatIndex];
-			if (!FMath::IsNearlyEqual(ASC->GetNumericAttribute(Attribute), SavedValue))
-			{
-				ASC->SetNumericAttributeBase(Attribute, SavedValue);
-			}
+			ASC->SetNumericAttributeBase(Attribute, SavedValue);
 		}
-		StatIndex++;
 	}
 
 	FGameplayEffectQuery Query;
@@ -473,101 +452,76 @@ void AWolfCharacterBase::RestoreGAS(const FActorSnapshot& Snapshot)
 
 void AWolfCharacterBase::RestoreAnim(const FActorSnapshot& Snapshot)
 {
-	if (auto* AnimInst = GetMesh()->GetAnimInstance())
+	if (CachedAnimInst)
 	{
-		AnimInst->StopAllMontages(0.f);
+		CachedAnimInst->StopAllMontages(0.f);
 		if (!Snapshot.CurrentMontage.IsValid()) return;
 
-		AnimInst->Montage_Play(Snapshot.CurrentMontage.Get(), 1.f);
-		AnimInst->Montage_SetPosition(Snapshot.CurrentMontage.Get(), Snapshot.MontagePosition);
+		CachedAnimInst->Montage_Play(Snapshot.CurrentMontage.Get(), 1.f);
+		CachedAnimInst->Montage_SetPosition(Snapshot.CurrentMontage.Get(), Snapshot.MontagePosition);
 	}
 }
 
-const FActorSnapshot* AWolfCharacterBase::GetSnapshotAtTime(float RelativeTime) const
+float AWolfCharacterBase::GetTimeToNextHitImpact() const
 {
-	if (PredictionBuffer.Num() == 0) return nullptr;
+	auto* CurrentMontage = GetWolfCurrentMontage();
+	if (!CurrentMontage) return -1.f;
 
-	const int32 Index = FMath::Clamp(FMath::RoundToInt(RelativeTime * SimFrequency),
-	                           0,
-	                           PredictionBuffer.Num() - 1);
+	const auto CurrentMontagePosition = CachedAnimInst->Montage_GetPosition(CurrentMontage);
 
-	return &PredictionBuffer[Index];
+	for (const auto& NotifyEvent : CurrentMontage->Notifies)
+	{
+		if (NotifyEvent.GetTriggerTime() > CurrentMontagePosition)
+		{
+			return NotifyEvent.GetTriggerTime() - CurrentMontagePosition;
+		}
+	}
+	return -1.f;
 }
 
-
-void AWolfCharacterBase::UpdateTemporalPreview(float PreviewTime)
+void AWolfCharacterBase::GetPresageCollisionDimensions(float& OutRadius, float& OutHalfHeight) const
 {
-	const auto* BakedState = GetSnapshotAtTime(PreviewTime);
-	if (!BakedState)
+	const auto* Capsule = GetCapsuleComponent();
+	if (!Capsule)
 	{
-		const auto FutureTransform = GetProjectedTransform(PreviewTime);
-		WOLF_LOG(Log, TEXT("%s [FALLBACK MATH] pos at %.2f: %s"), *GetName(), PreviewTime, *FutureTransform.GetLocation().ToString());
+		OutRadius = 0.f;
+		OutHalfHeight = 0.f;
 		return;
 	}
-	
-	WOLF_LOG(Log, TEXT("%s [BAKED] pos at %.2f: %s"), *GetName(), PreviewTime, *BakedState->Location.ToString());
-	
+
+	OutRadius = Capsule->GetScaledCapsuleRadius();
+	OutHalfHeight = Capsule->GetScaledCapsuleHalfHeight();
 }
 
-void AWolfCharacterBase::SimulateTick(float DeltaTime)
+FTransform AWolfCharacterBase::ExtractRootMotionAtTime(UAnimMontage* Montage, float Time)
 {
-	SimulatePhysicsStep(DeltaTime);
-	SimulateAnimationStep(DeltaTime);
+	if (!Montage) return FTransform::Identity;
 
-	FActorSnapshot FutureFrame;
-	CreateSnapshot_Implementation(FutureFrame);
-	PredictionBuffer.Add(FutureFrame);
+	return Montage->ExtractRootMotionFromRange(0.f, Time, FAnimExtractContext());
 }
 
-void AWolfCharacterBase::SimulatePhysicsStep(float DeltaTime)
+bool AWolfCharacterBase::IsInvulnerableAt(float RelativeTime) const
 {
-	auto* MoveComp = GetCharacterMovement();
-	if (!MoveComp) return;
-
-	const auto Delta = MoveComp->Velocity * DeltaTime;
-	if (Delta.IsNearlyZero()) return;
-
-	FHitResult Hit(1.f);
-	MoveComp->SafeMoveUpdatedComponent(Delta, GetActorRotation(), true, Hit);
-
-	if (!Hit.IsValidBlockingHit()) return;
-
-	const auto RemainingDelta = Delta * (1.f - Hit.Time);
-	const auto SlideDelta = FVector::VectorPlaneProject(RemainingDelta, Hit.Normal);
-
-	if (!SlideDelta.IsNearlyZero())
+	if (const auto* CurrentAbility = GetActiveCombatAbility())
 	{
-		FHitResult SlideHit(1.f);
-		MoveComp->SafeMoveUpdatedComponent(SlideDelta, GetActorRotation(), true, SlideHit);
-	}
-}
-
-void AWolfCharacterBase::SimulateAnimationStep(float DeltaTime)
-{
-	auto* AnimInst = GetMesh()->GetAnimInstance();
-	if (!AnimInst) return;
-
-	const auto* CurrentMontage = AnimInst->GetCurrentActiveMontage();
-	if (!CurrentMontage) return;
-
-	const auto CurrentPos = AnimInst->Montage_GetPosition(CurrentMontage);
-	const auto NewPos = CurrentPos + DeltaTime;
-
-	AnimInst->Montage_SetPosition(CurrentMontage, NewPos);
-
-	if (CurrentMontage->HasRootMotion())
-	{
-		const auto RootMotionDelta = CurrentMontage->ExtractRootMotionFromRange(CurrentPos, NewPos, FAnimExtractContext());
-		const auto WorldDelta = GetActorRotation().RotateVector(RootMotionDelta.GetLocation());
-
-		FHitResult Hit;
-		GetCharacterMovement()->SafeMoveUpdatedComponent(WorldDelta, GetActorRotation(), true, Hit);
+		return CurrentAbility->IsInvulnerableAt(RelativeTime);
 	}
 
-	if (NewPos >= CurrentMontage->GetPlayLength())
-	{
-		AnimInst->Montage_Stop(0.1f, CurrentMontage); // If seeing t-poses, set to idle state
-	}
+	return false;
 }
 
-#pragma endregion Presage System
+UBaseCombatAbility* AWolfCharacterBase::GetActiveCombatAbility() const
+{
+	if (!ASC) return nullptr;
+
+	for (const auto& Spec : ASC->GetActivatableAbilities())
+	{
+		if (!Spec.IsActive()) continue;
+
+		for (auto* Instance : Spec.GetAbilityInstances())
+		{
+			if (auto* CombatAbility = Cast<UBaseCombatAbility>(Instance)) return CombatAbility;
+		}
+	}
+	return nullptr;
+}

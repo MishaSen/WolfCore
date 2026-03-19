@@ -17,8 +17,6 @@ class WOLFCORE_API AWolfChar : public AWolfCharacterBase
 
 public:
 	AWolfChar();
-	virtual void Tick(float DeltaTime) override;
-	virtual void SetupPlayerInputComponent(class UInputComponent* PlayerInputComponent) override;
 
 	// --- Camera ---
 	UPROPERTY(VisibleAnywhere, Category = "Camera")
@@ -28,5 +26,4 @@ public:
 	TObjectPtr<UCameraComponent> FollowCamera;
 
 protected:
-	virtual void BeginPlay() override;
 };
