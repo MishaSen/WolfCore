@@ -129,8 +129,6 @@ protected:
 	UPROPERTY()
 	TArray<FActorSnapshot> PredictionBuffer;
 
-	const float SimFrequency = 10.f;
-
 private:
 	bool bIsRestoringSnapshot = false;
 

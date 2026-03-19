@@ -11,7 +11,6 @@
 #include "Abilities/Effects/PresageMode.h"
 #include "Character/WolfCharacterBase.h"
 #include "Core/WolfCombatSettings.h"
-#include "Core/WolfFunctionLibrary.h"
 #include "Core/WolfGameInstance.h"
 #include "Core/WolfGameplayTags.h"
 #include "Debug/WolfDebug.h"
@@ -70,10 +69,10 @@ void UCombatModeSubsystem::UnregisterCombatant(AWolfCharacterBase* Character)
 	TrackedCombatants.RemoveSingleSwap(Character); // Remove() already handles if check
 }
 
-FWolfTemporalStates UCombatModeSubsystem::CaptureCurrentWorldState(float Timestamp)
+FTemporalStates UCombatModeSubsystem::CaptureCurrentWorldState(float Timestamp)
 {
-	FWolfTemporalStates NewState;
-	NewState.TimelineTimestamp = Timestamp;
+	FTemporalStates NewState;
+	NewState.WorldTimeAnchor = Timestamp;
 
 	WOLF_LOG(Log, TEXT("=== Starting World Snapshot at Timestamp: %.2f ==="), Timestamp);
 

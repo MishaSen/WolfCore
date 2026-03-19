@@ -17,7 +17,7 @@
 #include "WolfCore/Public/AbilitySystem/WolfAbilitySystemComponent.h"
 #include "WolfCore/Public/Presage/PresageAbilityRequest.h"
 
-AWolfCharacterBase::AWolfCharacterBase()
+AWolfCharacterBase::AWolfCharacterBase() // TODO: Fat Class. Split.
 {
 	PrimaryActorTick.bCanEverTick = true;
 
@@ -154,8 +154,7 @@ void AWolfCharacterBase::SetupAbilitySystem()
 		ASC->RegisterComponent();
 		WOLF_LOG(Log, TEXT("Created AbilitySystemComponent for %s"), *GetName());
 	}
-	else
-		WOLF_ERROR(TEXT("Failed to create AbilitySystemComponent for %s"), *GetName());
+	else WOLF_ERROR(TEXT("Failed to create AbilitySystemComponent for %s"), *GetName());
 }
 
 void AWolfCharacterBase::ApplyDefaultAttributes()
@@ -191,8 +190,7 @@ void AWolfCharacterBase::AddCharacterAbilities()
 		WolfASC->AddCharacterAbilities(StartupAbilities);
 		WOLF_LOG(Log, TEXT("Added %d startup abilities to %s"), StartupAbilities.Num(), *GetName());
 	}
-	else
-		WOLF_WARN(TEXT("AddCharacterAbilities failed: ASC missing or not a WolfASC for %s"), *GetName());
+	else WOLF_WARN(TEXT("AddCharacterAbilities failed: ASC missing or not a WolfASC for %s"), *GetName());
 }
 
 FTransform AWolfCharacterBase::GetProjectedTransform(float FutureTimeDelta) const
@@ -239,8 +237,7 @@ const FActorSnapshot* AWolfCharacterBase::GetSnapshotAtTime(float RelativeTime) 
 {
 	if (PredictionBuffer.Num() == 0) return nullptr;
 
-	const int32 Index = FMath::Clamp(FMath::RoundToInt(RelativeTime * SimFrequency),
-								// Assumes SimulateTick is always called with a DeltaTime = 1/SimFrequency.
+	const int32 Index = FMath::Clamp(FMath::RoundToInt(RelativeTime * WolfSimConfig::Frequency),
 								// Snapshot lookup will drift if the Subsystem uses a variable step or different fixed rate.
 							   0,
 							   PredictionBuffer.Num() - 1);

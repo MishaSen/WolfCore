@@ -5,7 +5,6 @@
 #include "CoreMinimal.h"
 #include "GameplayTagContainer.h"
 #include "Engine/EngineTypes.h"
-#include "AttributeSet.h"
 
 #include "ActorSnapshot.generated.h"
 
@@ -13,6 +12,12 @@ class UGameplayEffect;
 class AActor;
 class UAnimSequence;
 class UAnimMontage;
+
+namespace WolfSimConfig
+{
+	static constexpr float Frequency = 10.f;
+	static constexpr float Step = 0.1f;
+}
 
 USTRUCT(BlueprintType)
 struct FStoredEffect
@@ -40,7 +45,7 @@ struct FActorSnapshot
 	FActorSnapshot() = default;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Actor State")
-	TObjectPtr<AActor> ActorRef = nullptr;
+	TWeakObjectPtr<AActor> ActorRef = nullptr;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Actor State")
 	FVector Location = FVector::ZeroVector;
@@ -71,4 +76,16 @@ struct FActorSnapshot
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Actor State")
 	FGameplayTagContainer Tags;
+};
+
+USTRUCT(BlueprintType)
+struct FTemporalStates
+{
+	GENERATED_BODY()
+
+	UPROPERTY()
+	float WorldTimeAnchor = 0.f;
+
+	UPROPERTY()
+	TMap<AActor*, FActorSnapshot> ActorStates;
 };

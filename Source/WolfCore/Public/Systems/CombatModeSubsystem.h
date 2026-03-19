@@ -5,7 +5,7 @@
 #include "CoreMinimal.h"
 #include "AbilitySystemComponent.h"
 #include "Core/WolfGameplayTags.h"
-#include "Presage/WolfTemporalStates.h"
+#include "Presage/ActorSnapshot.h"
 #include "Subsystems/WorldSubsystem.h"
 #include "CombatModeSubsystem.generated.h"
 
@@ -33,15 +33,20 @@ public:
 	FGameplayTag GetCurrentMode() const { return CurrentMode; }
 
 	UFUNCTION(BlueprintCallable, Category = "Wolf|Combat|Snapshots")
-	FWolfTemporalStates CaptureCurrentWorldState(float Timestamp);
+	FTemporalStates CaptureCurrentWorldState(float Timestamp);
 
 	UFUNCTION(BlueprintCallable, Category = "Wolf|Combat")
 	void ScrubTimeline(float NewTime);
-	const FWolfTemporalStates& GetMasterSnapshot() const { return MasterStartSnapshot; }
+	const FTemporalStates& GetMasterSnapshot() const { return MasterStartSnapshot; }
 
 	void RegisterCombatant(AWolfCharacterBase* Character);
 	void UnregisterCombatant(AWolfCharacterBase* Character);
 	const TArray<TWeakObjectPtr<AWolfCharacterBase>>& GetTrackedCombatants() const { return TrackedCombatants; }
+
+	UFUNCTION(BlueprintCallable, Category = "Wolf|Presage")
+	void GenerateFutureState(float Duration);
+
+	void TickSimulationStep(float DeltaTime);
 
 public:
 	UPROPERTY(BlueprintAssignable, Category = "Combat")
@@ -49,7 +54,7 @@ public:
 
 protected:
 	UPROPERTY()
-	FWolfTemporalStates MasterStartSnapshot;
+	FTemporalStates MasterStartSnapshot;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wolf|Timeline")
 	float CurrentTimelineTime = 0.f;
