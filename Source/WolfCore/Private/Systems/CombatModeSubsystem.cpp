@@ -107,14 +107,15 @@ void UCombatModeSubsystem::SetMode(FGameplayTag NewMode)
 	if (CurrentMode == NewMode) return;
 	CurrentMode = NewMode;
 
-	UGameplayStatics::SetGlobalTimeDilation(GetWorld(), GetDilationForMode(NewMode));
+	const auto* World = GetWorld();
+	if (IsValid(World)) UGameplayStatics::SetGlobalTimeDilation(World, GetDilationForMode(NewMode));
 
 	if (NewMode == WolfTag.InputState_TB)
 	{
-		MasterStartSnapshot = CaptureCurrentWorldState(0.f);
+		MasterStartSnapshot = CaptureCurrentWorldState(World->GetTimeSeconds());
 		WOLF_LOG(Log, TEXT("TB started. Master Snapshot captured for %d actors."), MasterStartSnapshot.ActorStates.Num());
 
-		ScrubTimeline(15.f);
+		GenerateFutureState(MaxTimelineDuration);
 		ScrubTimeline(0.f);
 	}
 	else MasterStartSnapshot.ActorStates.Empty();
@@ -138,10 +139,14 @@ void UCombatModeSubsystem::ScrubTimeline(float NewTime)
 
 	for (auto It = TrackedCombatants.CreateIterator(); It; ++It)
 	{
-		if (auto* WolfChar = It->Get()) WolfChar->UpdateTemporalPreview(CurrentTimelineTime);
+		auto* WolfChar = It->Get();
+		if (IsValid(WolfChar))
+		{
+			const auto* BakedFrame = WolfChar->GetSnapshotAtTime(CurrentTimelineTime);
+			if (BakedFrame) WolfChar->RestoreSnapshot_Implementation(*BakedFrame);
+		}
 		else It.RemoveCurrent();
 	}
-
 	WOLF_LOG(Log, TEXT("Timeline Scrubbed to : %.2f"), CurrentTimelineTime);
 }
 
@@ -255,4 +260,26 @@ float UCombatModeSubsystem::GetDilationForMode(const FGameplayTag& Mode)
 
 	WOLF_WARN(TEXT("Dilation Map missing tag: %s. Defaulting to 1.f"), *Mode.ToString());
 	return 1.f;
+}
+
+void UCombatModeSubsystem::GenerateFutureState(float Duration)
+{
+	for (auto It = TrackedCombatants.CreateIterator(); It; ++It)
+	{
+		if (auto* WolfChar = It->Get()) WolfChar->ClearPredictionBuffer();
+		else It.RemoveCurrent();
+	}
+
+	constexpr float Step = WolfSimConfig::Step;
+	const int32 TotalSteps = FMath::CeilToInt(Duration / Step);
+
+	WOLF_LOG(Log, TEXT("Baking Future: %d steps over %.2fs"), TotalSteps, Duration);
+
+	for (int32 i = 0; i < TotalSteps; ++i)
+	{
+		for (auto& Combatant : TrackedCombatants)
+		{
+			if (auto* WolfChar = Combatant.Get()) WolfChar->SimulateTick(Step);
+		}
+	}
 }

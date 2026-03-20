@@ -1,4 +1,4 @@
-// Fill out your copyright notice in the Description page of Project Settings.
+// Fill out your copyright notice in the Description page of Project Settings.d
 
 #pragma once
 
@@ -45,8 +45,6 @@ public:
 
 	UFUNCTION(BlueprintCallable, Category = "Wolf|Presage")
 	void GenerateFutureState(float Duration);
-
-	void TickSimulationStep(float DeltaTime);
 
 public:
 	UPROPERTY(BlueprintAssignable, Category = "Combat")

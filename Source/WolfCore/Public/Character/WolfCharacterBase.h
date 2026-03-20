@@ -53,7 +53,7 @@ public:
 	float GetTimeToNextHitImpact() const;
 
 	void UpdateTemporalPreview(float PreviewTime);
-	void ClearPredictionBuffer(float PreviewTime) { PredictionBuffer.Empty(); }
+	void ClearPredictionBuffer() { PredictionBuffer.Empty(); }
 	const FActorSnapshot* GetSnapshotAtTime(float RelativeTime) const;
 
 	void GetPresageCollisionDimensions(float& OutRadius, float& OutHalfHeight) const;
