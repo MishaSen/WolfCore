@@ -8,6 +8,7 @@
 #include "Engine/LocalPlayer.h"
 #include "Engine/Engine.h"
 #include "AbilitySystemBlueprintLibrary.h"
+#include "Core/WolfFunctionLibrary.h"
 #include "Core/WolfGameplayTags.h"
 #include "Debug/WolfDebug.h"
 #include "GameFramework/Character.h"
@@ -61,6 +62,7 @@ void AWolfPlayerController::SetupInputComponent()
 		if (Action) WolfInputComponent->BindAction(Action, ETriggerEvent::Triggered, this, Method);
 	};
 
+	BindInputAction(ScrubAction, &ThisClass::ScrubTimeline);
 	BindInputAction(MoveAction, &ThisClass::Move);
 	BindInputAction(LookAction, &ThisClass::Look);
 
@@ -113,6 +115,21 @@ void AWolfPlayerController::AbilityInputTagReleased(const FGameplayTag InputTag)
 void AWolfPlayerController::AbilityInputTagHeld(const FGameplayTag InputTag)
 {
 	WolfASC->AbilityInputTagHeld(InputTag);
+}
+
+void AWolfPlayerController::ScrubTimeline(const FInputActionValue& Value)
+{
+	const auto AxisValue = Value.Get<float>();
+	if (FMath::IsNearlyZero(AxisValue)) return;
+
+	if (auto* CMS = UWolfFunctionLibrary::GetWorldSubsystem<UCombatModeSubsystem>(this))
+	{
+		if (!CMS->bIsInTB) return;
+
+		const auto NewTime = CMS->GetCurrentTimelineTime() + AxisValue * 0.1f;
+		CMS->ScrubTimeline(NewTime);
+		WOLF_LOG(Log, TEXT("Scrubbed timeline to %f"), NewTime);
+	}
 }
 
 void AWolfPlayerController::Move(const FInputActionValue& Value)

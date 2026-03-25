@@ -45,6 +45,7 @@ protected:
 #pragma region Input Behavior
 	
 private:
+	void ScrubTimeline(const FInputActionValue& Value);
 	void Move(const FInputActionValue& Value);
 	void Look(const FInputActionValue& Value);
 	void AbilityInputTagPressed(const FGameplayTag InputTag);
@@ -85,6 +86,9 @@ private:
 	TMap<FGameplayTag, TObjectPtr<UInputMappingContext>> CombatModeMappings;
 
 	// Input Actions
+
+	UPROPERTY(EditAnywhere, Category = "Input")
+	TObjectPtr<UInputAction> ScrubAction;
 
 	UPROPERTY(EditAnywhere, Category = "Input")
 	TObjectPtr<UInputAction> MoveAction;

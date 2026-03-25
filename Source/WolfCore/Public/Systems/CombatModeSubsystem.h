@@ -32,6 +32,11 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Combat")
 	FGameplayTag GetCurrentMode() const { return CurrentMode; }
 
+	UFUNCTION(BlueprintPure, Category = "Combat")
+	float GetCurrentTimelineTime() const { return CurrentTimelineTime; }
+
+	bool bIsInTB;
+
 	UFUNCTION(BlueprintCallable, Category = "Wolf|Combat|Snapshots")
 	FTemporalStates CaptureCurrentWorldState(float Timestamp);
 

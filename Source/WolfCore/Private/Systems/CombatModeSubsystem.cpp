@@ -113,13 +113,18 @@ void UCombatModeSubsystem::SetMode(FGameplayTag NewMode)
 
 	if (NewMode == WolfTag.InputState_TB)
 	{
+		bIsInTB = true;
 		MasterStartSnapshot = CaptureCurrentWorldState(World->GetTimeSeconds());
 		WOLF_LOG(Log, TEXT("TB started. Master Snapshot captured for %d actors."), MasterStartSnapshot.ActorStates.Num());
 
 		GenerateFutureState(MaxTimelineDuration);
 		ScrubTimeline(0.f);
 	}
-	else MasterStartSnapshot.ActorStates.Empty();
+	else
+	{
+		MasterStartSnapshot.ActorStates.Empty();
+		bIsInTB = false;
+	}
 	
 	OnCombatModeChanged.Broadcast(NewMode);
 }
