@@ -204,8 +204,8 @@ void UPresageSubsystem::RevertCharacterStates()
 {
 	for (const auto& Snapshot : OriginalCharacterStates)
 	{
-		if (!Snapshot.ActorRef) return;
-		Execute_RestoreSnapshot(Snapshot.ActorRef, Snapshot);
+		if (!Snapshot.ActorRef.Get()) return;
+		Execute_RestoreSnapshot(Snapshot.ActorRef.Get(), Snapshot);
 	}
 }
 

@@ -15,6 +15,7 @@
 #include "Core/WolfGameplayTags.h"
 #include "Debug/WolfDebug.h"
 #include "Engine/AssetManager.h"
+#include "GameFramework/CharacterMovementComponent.h"
 #include "Interfaces/CombatModeListener.h"
 #include "Kismet/GameplayStatics.h"
 
@@ -266,7 +267,15 @@ void UCombatModeSubsystem::GenerateFutureState(float Duration)
 {
 	for (auto It = TrackedCombatants.CreateIterator(); It; ++It)
 	{
-		if (auto* WolfChar = It->Get()) WolfChar->ClearPredictionBuffer();
+		if (auto* WolfChar = It->Get())
+		{
+			WolfChar->ClearPredictionBuffer();
+
+			if (auto* MoveComp = WolfChar->GetCharacterMovement())
+			{
+				if (!WolfChar->GetCurrentMontage()) MoveComp->StopMovementImmediately();
+			}
+		}
 		else It.RemoveCurrent();
 	}
 
