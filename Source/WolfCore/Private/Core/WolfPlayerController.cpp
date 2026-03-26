@@ -62,7 +62,7 @@ void AWolfPlayerController::SetupInputComponent()
 		if (Action) WolfInputComponent->BindAction(Action, ETriggerEvent::Triggered, this, Method);
 	};
 
-	BindInputAction(ScrubAction, &ThisClass::ScrubTimeline);
+	BindInputAction(ScrubAction, &ThisClass::HandleScrubInput);
 	BindInputAction(MoveAction, &ThisClass::Move);
 	BindInputAction(LookAction, &ThisClass::Look);
 
@@ -117,7 +117,7 @@ void AWolfPlayerController::AbilityInputTagHeld(const FGameplayTag InputTag)
 	WolfASC->AbilityInputTagHeld(InputTag);
 }
 
-void AWolfPlayerController::ScrubTimeline(const FInputActionValue& Value)
+void AWolfPlayerController::HandleScrubInput(const FInputActionValue& Value)
 {
 	const auto AxisValue = Value.Get<float>();
 	if (FMath::IsNearlyZero(AxisValue)) return;
@@ -128,7 +128,6 @@ void AWolfPlayerController::ScrubTimeline(const FInputActionValue& Value)
 
 		const auto NewTime = CMS->GetCurrentTimelineTime() + AxisValue * 0.1f;
 		CMS->ScrubTimeline(NewTime);
-		WOLF_LOG(Log, TEXT("Scrubbed timeline to %f"), NewTime);
 	}
 }
 

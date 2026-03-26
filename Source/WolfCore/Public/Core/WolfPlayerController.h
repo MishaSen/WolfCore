@@ -45,7 +45,7 @@ protected:
 #pragma region Input Behavior
 	
 private:
-	void ScrubTimeline(const FInputActionValue& Value);
+	void HandleScrubInput(const FInputActionValue& Value);
 	void Move(const FInputActionValue& Value);
 	void Look(const FInputActionValue& Value);
 	void AbilityInputTagPressed(const FGameplayTag InputTag);

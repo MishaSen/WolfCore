@@ -140,8 +140,9 @@ void UCombatModeSubsystem::SwitchCombatMode()
 
 void UCombatModeSubsystem::ScrubTimeline(float NewTime)
 {
-	CurrentTimelineTime = FMath::Clamp(NewTime, 0.f, MaxTimelineDuration);
-	WOLF_LOG(Log, TEXT("Scrubbing Timeline to %.2f"), CurrentTimelineTime);
+	const auto ClampedTime = FMath::Clamp(NewTime, 0.f, MaxTimelineDuration);
+	if (FMath::IsNearlyEqual(ClampedTime, CurrentTimelineTime)) return; // No time change; no snapshot change
+	CurrentTimelineTime = ClampedTime;
 
 	for (auto It = TrackedCombatants.CreateIterator(); It; ++It)
 	{
@@ -153,7 +154,7 @@ void UCombatModeSubsystem::ScrubTimeline(float NewTime)
 		}
 		else It.RemoveCurrent();
 	}
-	WOLF_LOG(Log, TEXT("Timeline Scrubbed to : %.2f"), CurrentTimelineTime);
+	WOLF_LOG(Log, TEXT("Timeline Scrubbed to : %.2fs /  %.2fs"), CurrentTimelineTime, MaxTimelineDuration);
 }
 
 void UCombatModeSubsystem::HandlePresageDrainEffect(UAbilitySystemComponent* ASC, FGameplayTag CurrentActorMode)
