@@ -8,6 +8,7 @@
 
 #include "ActorSnapshot.generated.h"
 
+class UBTNode;
 class UGameplayEffect;
 class AActor;
 class UAnimSequence;
@@ -76,6 +77,15 @@ struct FActorSnapshot
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Actor State")
 	FGameplayTagContainer Tags;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Actor State")
+	UBTNode* ActiveNode; // We might want to see what node was running
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Actor State")
+	FVector AIMoveTarget = FVector::ZeroVector;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Actor State")
+	bool bIsMoving = false;
 };
 
 USTRUCT(BlueprintType)

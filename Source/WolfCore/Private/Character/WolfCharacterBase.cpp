@@ -2,16 +2,19 @@
 
 #include "WolfCore/Public/Character/WolfCharacterBase.h"
 
+#include "AIController.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "Animation/AnimInstance.h"
 #include "AbilitySystem/WolfAttributeSet.h"
 #include "AttributeSet.h"
 #include "AbilitySystem/CharacterStatConfig.h"
+#include "BehaviorTree/BehaviorTreeComponent.h"
 #include "Components/CapsuleComponent.h"
 #include "Core/WolfFunctionLibrary.h"
 #include "Core/WolfGameplayTags.h"
 #include "Debug/WolfDebug.h"
 #include "GameFramework/CharacterMovementComponent.h"
+#include "Navigation/PathFollowingComponent.h"
 #include "Presage/ActorSnapshot.h"
 #include "Systems/CombatModeSubsystem.h"
 #include "WolfCore/Public/AbilitySystem/WolfAbilitySystemComponent.h"
@@ -90,9 +93,26 @@ void AWolfCharacterBase::PossessedBy(AController* NewController)
 
 void AWolfCharacterBase::HandleCombatModeChanged(FGameplayTag NewMode)
 {
-	if (auto* CMS = GetCMS())
+	auto* CMS = GetCMS();
+	if (CMS) CMS->ApplyModeToActor(this, NewMode);
+
+	if (const auto* AIControl = Cast<AAIController>(GetController()))
 	{
-		CMS->ApplyModeToActor(this, NewMode);
+		auto* BTComp = Cast<UBehaviorTreeComponent>(AIControl->GetBrainComponent());
+		auto* PathFollowComp = AIControl->GetPathFollowingComponent();
+		if (!IsValid(BTComp) || !PathFollowComp) return;
+
+		if (CMS->bIsInTB)
+		{
+			BTComp->PauseLogic(TEXT("Entering TB"));
+			PathFollowComp->PauseMove();
+		}
+		else
+		{
+			BTComp->ResumeLogic(TEXT("Exiting TB"));
+			PathFollowComp->ResumeMove();
+		}
+
 	}
 }
 
@@ -327,6 +347,15 @@ void AWolfCharacterBase::SnapshotPhysics(FActorSnapshot& Snapshot) const
 	Snapshot.Velocity = GetVelocity();
 	Snapshot.MovementMode = CachedMoveComp->MovementMode;
 	Snapshot.CustomMovementMode = CachedMoveComp->CustomMovementMode;
+
+	if (const auto* AICont = Cast<AAIController>(GetController()))
+	{
+		if (const auto* PathFollowComp = AICont->GetPathFollowingComponent())
+		{
+			Snapshot.AIMoveTarget = PathFollowComp->GetPathDestination();
+			Snapshot.bIsMoving = PathFollowComp->GetStatus() == EPathFollowingStatus::Moving;
+		}
+	}
 }
 
 void AWolfCharacterBase::SnapshotGAS(FActorSnapshot& Snapshot) const
