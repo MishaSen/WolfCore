@@ -94,13 +94,14 @@ void AWolfCharacterBase::PossessedBy(AController* NewController)
 void AWolfCharacterBase::HandleCombatModeChanged(FGameplayTag NewMode)
 {
 	auto* CMS = GetCMS();
-	if (CMS) CMS->ApplyModeToActor(this, NewMode);
+	if (!IsValid(CMS)) return;
+	CMS->ApplyModeToActor(this, NewMode);
 
 	if (const auto* AIControl = Cast<AAIController>(GetController()))
 	{
 		auto* BTComp = Cast<UBehaviorTreeComponent>(AIControl->GetBrainComponent());
 		auto* PathFollowComp = AIControl->GetPathFollowingComponent();
-		if (!IsValid(BTComp) || !PathFollowComp) return;
+		if (!IsValid(BTComp) || !PathFollowComp) return; // PFComp should be valid; separate check if buggy.
 
 		if (CMS->bIsInTB)
 		{
@@ -112,7 +113,6 @@ void AWolfCharacterBase::HandleCombatModeChanged(FGameplayTag NewMode)
 			BTComp->ResumeLogic(TEXT("Exiting TB"));
 			PathFollowComp->ResumeMove();
 		}
-
 	}
 }
 
@@ -350,11 +350,15 @@ void AWolfCharacterBase::SnapshotPhysics(FActorSnapshot& Snapshot) const
 
 	if (const auto* AICont = Cast<AAIController>(GetController()))
 	{
-		if (const auto* PathFollowComp = AICont->GetPathFollowingComponent())
-		{
-			Snapshot.AIMoveTarget = PathFollowComp->GetPathDestination();
-			Snapshot.bIsMoving = PathFollowComp->GetStatus() == EPathFollowingStatus::Moving;
-		}
+		const auto* PathFollowComp = AICont->GetPathFollowingComponent();
+		if (!PathFollowComp || PathFollowComp->GetStatus() != EPathFollowingStatus::Moving) return;
+		
+		Snapshot.AIMoveTarget = PathFollowComp->GetPathDestination();
+		Snapshot.bIsMoving = true;
+		WOLF_LOG(Log, TEXT("Character %s has Path Destination %s. IsMoving = %s."),
+				*GetName(),
+				*Snapshot.AIMoveTarget.ToString(),
+				Snapshot.bIsMoving ? TEXT ("True") : TEXT("False"));
 	}
 }
 

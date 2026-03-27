@@ -206,7 +206,7 @@ void UCombatModeSubsystem::ApplyModeToActor(AActor* Combatant, FGameplayTag NewM
 	ASC->RemoveLooseGameplayTags(ModeTags);
 	WOLF_LOG(Log, TEXT("Removing Mode Tags: %s"), *ModeTags.ToString());
 	ASC->AddLooseGameplayTag(ActualModeForActor);
-	WOLF_LOG(Log, TEXT("Adding Mode Tag: %s"), *ActualModeForActor.ToString());
+	WOLF_LOG(Log, TEXT("Adding Mode Tag %s for %s"), *ActualModeForActor.ToString(), *Combatant->GetName());
 
 	if (bIsPlayer)
 	{

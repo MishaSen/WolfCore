@@ -79,7 +79,7 @@ struct FActorSnapshot
 	FGameplayTagContainer Tags;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Actor State")
-	UBTNode* ActiveNode; // We might want to see what node was running
+	TWeakObjectPtr<UBTNode> ActiveNode = nullptr; // We might want to see what node was running
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Actor State")
 	FVector AIMoveTarget = FVector::ZeroVector;
