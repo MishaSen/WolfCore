@@ -355,6 +355,10 @@ void AWolfCharacterBase::SnapshotPhysics(FActorSnapshot& Snapshot) const
 		
 		Snapshot.AIMoveTarget = PathFollowComp->GetPathDestination();
 		Snapshot.bIsMoving = true;
+		
+		DrawDebugSphere(GetWorld(), Snapshot.AIMoveTarget, 25.f, 12, FColor::Red, false, 5.f);
+		DrawDebugLine(GetWorld(), GetActorLocation(), Snapshot.AIMoveTarget, FColor::Red,
+			false, 5.f, 0, 2.f);
 		WOLF_LOG(Log, TEXT("Character %s has Path Destination %s. IsMoving = %s."),
 				*GetName(),
 				*Snapshot.AIMoveTarget.ToString(),
