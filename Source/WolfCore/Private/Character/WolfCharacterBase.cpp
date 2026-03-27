@@ -177,42 +177,6 @@ void AWolfCharacterBase::SetupAbilitySystem()
 	else WOLF_ERROR(TEXT("Failed to create AbilitySystemComponent for %s"), *GetName());
 }
 
-void AWolfCharacterBase::ApplyDefaultAttributes()
-{
-	if (!IsValid(ASC) || !DefaultAttributes || !StatConfig) return;
-
-	auto EffectContext = ASC->MakeEffectContext();
-	EffectContext.AddSourceObject(this);
-
-	const auto DefaultStatsHandle = ASC->MakeOutgoingSpec(DefaultAttributes, 1, EffectContext);
-	if (!DefaultStatsHandle.IsValid()) return;
-
-	for (const auto& [Tag, Value] : StatConfig->DefaultStats)
-	{
-		DefaultStatsHandle.Data->SetSetByCallerMagnitude(Tag, Value);
-
-		if (!UWolfAttributeSet::GetAttributeByTag(Tag).IsValid())
-		{
-			WOLF_WARN(TEXT("Attribute Tag [%s] is in StatConfig but NOT registered in UWolfAttributeSet mapping!"
-				           "Snapshots/Presage will ignore this stat."), *Tag.ToString());
-		}
-	}
-	ASC->ApplyGameplayEffectSpecToSelf(*DefaultStatsHandle.Data.Get());
-	WOLF_LOG(Log, TEXT("Applied all attributes from StatConfig to %s"), *GetName());
-}
-
-void AWolfCharacterBase::AddCharacterAbilities()
-{
-	if (!HasAuthority()) return;
-
-	if (auto* WolfASC = Cast<UWolfAbilitySystemComponent>(ASC))
-	{
-		WolfASC->AddCharacterAbilities(StartupAbilities);
-		WOLF_LOG(Log, TEXT("Added %d startup abilities to %s"), StartupAbilities.Num(), *GetName());
-	}
-	else WOLF_WARN(TEXT("AddCharacterAbilities failed: ASC missing or not a WolfASC for %s"), *GetName());
-}
-
 FTransform AWolfCharacterBase::GetProjectedTransform(float FutureTimeDelta) const
 {
 	const auto* CMS = GetCMS();
