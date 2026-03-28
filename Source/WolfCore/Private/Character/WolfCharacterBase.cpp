@@ -10,6 +10,7 @@
 #include "AbilitySystem/CharacterStatConfig.h"
 #include "BehaviorTree/BehaviorTreeComponent.h"
 #include "Components/CapsuleComponent.h"
+#include "Core/WolfAbilityComponent.h"
 #include "Core/WolfFunctionLibrary.h"
 #include "Core/WolfGameplayTags.h"
 #include "Debug/WolfDebug.h"
@@ -25,7 +26,7 @@ AWolfCharacterBase::AWolfCharacterBase() // TODO: Fat Class. Split.
 	PrimaryActorTick.bCanEverTick = true;
 
 	AbilitySystemComponentClass = UWolfAbilitySystemComponent::StaticClass();
-	AttributeSet = CreateDefaultSubobject<UWolfAttributeSet>("AttributeSet");
+	AbilityControl = CreateDefaultSubobject<UWolfAbilityComponent>(TEXT("AbilityControl"));
 
 	bUseControllerRotationPitch = false;
 	bUseControllerRotationYaw = true;
@@ -42,26 +43,10 @@ void AWolfCharacterBase::BeginPlay()
 	CachedMoveComp = Cast<UCharacterMovementComponent>(GetCharacterMovement());
 	CachedAnimInst = GetMesh() ? GetMesh()->GetAnimInstance() : nullptr;
 
-	if (IsValid(StatConfig))
-	{
-		CachedAttributes.Empty();
-		for (const auto& Pair : StatConfig->DefaultStats)
-		{
-			auto Attribute = UWolfAttributeSet::GetAttributeByTag(Pair.Key);
-			if (Attribute.IsValid()) CachedAttributes.Add(Attribute);
-		}
-	}
-	else WOLF_WARN(TEXT("No StatConfig set for %s"), *GetName());
-
 	if (auto* CMS = GetCMS())
 	{
 		CMS->RegisterCombatant(this);
 		CMS->OnCombatModeChanged.AddDynamic(this, &AWolfCharacterBase::HandleCombatModeChanged);
-	}
-
-	if (HasAuthority() && !IsValid(ASC))
-	{
-		SetupAbilitySystem();
 	}
 }
 
@@ -80,14 +65,18 @@ void AWolfCharacterBase::PossessedBy(AController* NewController)
 {
 	Super::PossessedBy(NewController);
 
-	if (HasAuthority())
+	if (HasAuthority() && IsValid(AbilityControl))
 	{
-		if (!IsValid(ASC)) SetupAbilitySystem();
+		AbilityControl->InitializeAbilitySystem(this);
 
-		ASC->InitAbilityActorInfo(this, this);
-		ApplyDefaultAttributes();
-		AddCharacterAbilities();
-		WOLF_INFO(TEXT("Character %s possessed and GAS initialized."), *GetName());
+		if (auto* ASC = AbilityControl->GetWolfASC())
+		{
+			ASC->InitAbilityActorInfo(this, this);
+		}
+		AbilityControl->ApplyDefaultAttributes();
+		AbilityControl->AddStartupAbilities(StartupAbilities);
+
+		WOLF_LOG(Log, TEXT("Character %s has been possessed by %s."), *GetName(), *NewController->GetName());
 	}
 }
 
@@ -118,7 +107,8 @@ void AWolfCharacterBase::HandleCombatModeChanged(FGameplayTag NewMode)
 
 void AWolfCharacterBase::Die_Implementation()
 {
-	if (ASC && ASC->HasMatchingGameplayTag(FWolfGameplayTags::Get().InputState_Dead)) return; // Already dead.
+	auto* WolfASC = AbilityControl ? AbilityControl->GetWolfASC() : nullptr;
+	if (WolfASC && WolfASC->HasMatchingGameplayTag(FWolfGameplayTags::Get().InputState_Dead)) return; // Already dead.
 
 	if (auto* Capsule = GetCapsuleComponent())
 	{
@@ -132,10 +122,10 @@ void AWolfCharacterBase::Die_Implementation()
 		MoveComp->DisableMovement();
 	}
 
-	if (IsValid(ASC))
+	if (IsValid(WolfASC))
 	{
-		ASC->CancelAllAbilities();
-		ASC->AddLooseGameplayTag(FWolfGameplayTags::Get().InputState_Dead);
+		WolfASC->CancelAllAbilities();
+		WolfASC->AddLooseGameplayTag(FWolfGameplayTags::Get().InputState_Dead);
 	}
 
 	WOLF_INFO(TEXT("Character %s has died."), *GetName());
@@ -157,24 +147,6 @@ UCombatModeSubsystem* AWolfCharacterBase::GetCMS() const
 		const_cast<AWolfCharacterBase*>(this)->CachedCMS = UWolfFunctionLibrary::GetWorldSubsystem<UCombatModeSubsystem>(this);
 	}
 	return CachedCMS.Get();
-}
-
-void AWolfCharacterBase::SetupAbilitySystem()
-{
-	if (!AbilitySystemComponentClass)
-	{
-		WOLF_ERROR(TEXT("No AbilitySystemComponent set for %s"), *GetName());
-		return;
-	}
-
-	ASC = NewObject<UWolfAbilitySystemComponent>(this, AbilitySystemComponentClass, TEXT("ASC"));
-	if (ASC)
-	{
-		ASC->SetIsReplicated(false);
-		ASC->RegisterComponent();
-		WOLF_LOG(Log, TEXT("Created AbilitySystemComponent for %s"), *GetName());
-	}
-	else WOLF_ERROR(TEXT("Failed to create AbilitySystemComponent for %s"), *GetName());
 }
 
 FTransform AWolfCharacterBase::GetProjectedTransform(float FutureTimeDelta) const

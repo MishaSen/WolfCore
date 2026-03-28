@@ -59,7 +59,7 @@ void UWolfAbilityComponent::ApplyDefaultAttributes()
 		}
 	}
 	AbilitySystemComponent->ApplyGameplayEffectSpecToSelf(*SpecHandle.Data.Get());
-	WOLF_LOG(Log, TEXT("Applied all attributes from StatConfig to %s"), *GetName());
+	WOLF_LOG(Log, TEXT("Applied all attributes from StatConfig to %s"), *GetOwner()->GetName());
 }
 
 void UWolfAbilityComponent::AddStartupAbilities(const TArray<TSubclassOf<UGameplayAbility>>& Abilities)

@@ -16,6 +16,7 @@
 
 #include "WolfCharacterBase.generated.h"
 
+class UWolfAbilityComponent;
 class UCharacterStatConfig;
 class UAbilityConfig;
 class UGameplayAbility;
@@ -37,8 +38,6 @@ public:
 	virtual void BeginPlay() override;
 	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 	virtual void PossessedBy(AController* NewController) override;
-
-	virtual UAbilitySystemComponent* GetAbilitySystemComponent() const override { return ASC.Get(); }
 
 	UFUNCTION(BlueprintPure, Category = "Wolf|Abilities")
 	FGameplayAbilitySpecHandle GetAbilitySpecHandle(const TSubclassOf<UGameplayAbility>& AbilityClass) const;
@@ -81,12 +80,6 @@ protected:
 	void RestoreGAS(const FActorSnapshot& Snapshot);
 	void RestoreAnim(const FActorSnapshot& Snapshot);
 
-	void SetupAbilitySystem();
-	void ApplyDefaultAttributes();
-
-	UFUNCTION(BlueprintCallable, Category = "Wolf|Abilities")
-	void AddCharacterAbilities();
-
 	UFUNCTION()
 	void HandleCombatModeChanged(FGameplayTag NewMode);
 
@@ -96,6 +89,9 @@ protected:
 	UAnimMontage* GetWolfCurrentMontage() const { return CachedAnimInst ? CachedAnimInst->GetCurrentActiveMontage() : nullptr; }
 
 protected:
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wolf|Abilities")
+	TObjectPtr<UWolfAbilityComponent> AbilityControl;
+	
 	UPROPERTY(EditDefaultsOnly, Category = "Wolf|GAS|Setup")
 	TSubclassOf<UWolfAbilitySystemComponent> AbilitySystemComponentClass;
 
@@ -108,23 +104,8 @@ protected:
 	UPROPERTY(BlueprintReadOnly, Category = "Wolf|Cache")
 	TObjectPtr<UAnimInstance> CachedAnimInst;
 
-	UPROPERTY(BlueprintReadOnly, Category = "Wolf|Cache")
-	TArray<FGameplayAttribute> CachedAttributes;
-
-	UPROPERTY(EditDefaultsOnly, Category = "Wolf|GAS|Attributes")
-	TSubclassOf<UGameplayEffect> DefaultAttributes;
-
 	UPROPERTY(EditDefaultsOnly, Category = "Wolf|GAS|Abilities")
 	TObjectPtr<UAbilityConfig> AbilityConfig;
-
-	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Wolf|GAS|Abilities")
-	TObjectPtr<UCharacterStatConfig> StatConfig;
-
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wolf|GAS")
-	TObjectPtr<UWolfAbilitySystemComponent> ASC;
-
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wolf|GAS")
-	TObjectPtr<UWolfAttributeSet> AttributeSet;
 
 	UPROPERTY()
 	TArray<FActorSnapshot> PredictionBuffer;
