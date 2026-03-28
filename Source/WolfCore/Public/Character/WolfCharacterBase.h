@@ -10,12 +10,15 @@
 #include "GameplayAbilitySpecHandle.h"
 #include "GameplayTagContainer.h"
 #include "AbilitySystem/WolfAbilitySystemComponent.h"
+#include "Core/WolfAbilityComponent.h"
 #include "Interfaces/CombatModeListener.h"
 #include "Presage/ActorSnapshot.h"
 #include "Presage/Snapshot.h"
+#include "Systems/CombatModeSubsystem.h"
 
 #include "WolfCharacterBase.generated.h"
 
+class UWolfPresageComponent;
 class UWolfAbilityComponent;
 class UCharacterStatConfig;
 class UAbilityConfig;
@@ -37,7 +40,10 @@ public:
 
 	virtual void BeginPlay() override;
 	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
+	UCombatModeSubsystem* GetCMS() const;
 	virtual void PossessedBy(AController* NewController) override;
+
+	virtual UAbilitySystemComponent* GetAbilitySystemComponent() const override { return AbilityControl ? AbilityControl->GetWolfASC() : nullptr; }
 
 	UFUNCTION(BlueprintPure, Category = "Wolf|Abilities")
 	FGameplayAbilitySpecHandle GetAbilitySpecHandle(const TSubclassOf<UGameplayAbility>& AbilityClass) const;
@@ -52,63 +58,49 @@ public:
 	float GetTimeToNextHitImpact() const;
 
 	void UpdateTemporalPreview(float PreviewTime);
-	void ClearPredictionBuffer() { PredictionBuffer.Empty(); }
-	const FActorSnapshot* GetSnapshotAtTime(float RelativeTime) const;
 
 	void GetPresageCollisionDimensions(float& OutRadius, float& OutHalfHeight) const;
 	bool IsInvulnerableAt(float RelativeTime) const;
-	class UBaseCombatAbility* GetActiveCombatAbility() const;
+	UBaseCombatAbility* GetActiveCombatAbility() const;
 
 	virtual void CreateSnapshot_Implementation(FActorSnapshot& NewSnapshot) override;
-	virtual void RestoreSnapshot_Implementation(const FActorSnapshot& StoredSnapshot) override;
+	virtual void RestoreSnapshot_Implementation(const FActorSnapshot& Snapshot) override;
 
 	void SimulateTick(float DeltaTime);
+	void ClearPredictionBuffer();
+	const FActorSnapshot* GetSnapshotAtTime(float RelativeTime) const;
 
 public:
 	FActiveGameplayEffectHandle PresageEffectHandle;
 
 protected:
-	void SimulatePhysicsStep(float DeltaTime);
-	void SimulateAnimationStep(float DeltaTime);
 	static FTransform ExtractRootMotionAtTime(UAnimMontage* Montage, float Time);
-
-	void SnapshotPhysics(FActorSnapshot& Snapshot) const;
-	void SnapshotGAS(FActorSnapshot& Snapshot) const;
-	void SnapshotAnim(FActorSnapshot& Snapshot) const;
-
-	void RestorePhysics(const FActorSnapshot& Snapshot);
-	void RestoreGAS(const FActorSnapshot& Snapshot);
-	void RestoreAnim(const FActorSnapshot& Snapshot);
 
 	UFUNCTION()
 	void HandleCombatModeChanged(FGameplayTag NewMode);
-
-	class UCombatModeSubsystem* GetCMS() const;
+	
 	FORCEINLINE UCharacterMovementComponent* GetMoveComp() const { return CachedMoveComp; }
 	FORCEINLINE UAnimInstance* GetAnimInst() const { return CachedAnimInst; }
 	UAnimMontage* GetWolfCurrentMontage() const { return CachedAnimInst ? CachedAnimInst->GetCurrentActiveMontage() : nullptr; }
-
+	
 protected:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wolf|Abilities")
 	TObjectPtr<UWolfAbilityComponent> AbilityControl;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wolf|Abilities")
+	TObjectPtr<UWolfPresageComponent> PresageControl;
 	
-	UPROPERTY(EditDefaultsOnly, Category = "Wolf|GAS|Setup")
-	TSubclassOf<UWolfAbilitySystemComponent> AbilitySystemComponentClass;
-
-	UPROPERTY(BlueprintReadOnly, Category = "Wolf|Cache")
-	TWeakObjectPtr<UCombatModeSubsystem> CachedCMS;
-
-	UPROPERTY(BlueprintReadOnly, Category = "Wolf|Cache")
-	TObjectPtr<UCharacterMovementComponent> CachedMoveComp;
-
-	UPROPERTY(BlueprintReadOnly, Category = "Wolf|Cache")
-	TObjectPtr<UAnimInstance> CachedAnimInst;
-
 	UPROPERTY(EditDefaultsOnly, Category = "Wolf|GAS|Abilities")
 	TObjectPtr<UAbilityConfig> AbilityConfig;
 
 	UPROPERTY()
-	TArray<FActorSnapshot> PredictionBuffer;
+	TObjectPtr<UCharacterMovementComponent> CachedMoveComp;
+
+	UPROPERTY()
+	TObjectPtr<UAnimInstance> CachedAnimInst;
+
+	UPROPERTY()
+	mutable TWeakObjectPtr<UCombatModeSubsystem> CachedCMS;
 
 private:
 	bool bIsRestoringSnapshot = false;

@@ -27,6 +27,9 @@ public:
 	void ApplyDefaultAttributes();
 	void AddStartupAbilities(const TArray<TSubclassOf<UGameplayAbility>>& Abilities);
 
+	FORCEINLINE const TArray<FGameplayAttribute>& GetCachedAttributes() const { return CachedAttributes; }
+	FORCEINLINE const UCharacterStatConfig* GetStatConfig() const { return StatConfig; }
+
 protected:
 	UPROPERTY()
 	TObjectPtr<UWolfAbilitySystemComponent> AbilitySystemComponent;
