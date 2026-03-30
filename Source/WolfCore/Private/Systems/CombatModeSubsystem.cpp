@@ -271,18 +271,18 @@ float UCombatModeSubsystem::GetDilationForMode(const FGameplayTag& Mode)
 
 void UCombatModeSubsystem::GenerateFutureState(float Duration)
 {
-	for (auto It = TrackedCombatants.CreateIterator(); It; ++It)
+	for (auto Combatant : TrackedCombatants)
 	{
-		if (auto* WolfChar = It->Get())
+		if (auto* WolfChar = Combatant.Get())
 		{
 			WolfChar->ClearPredictionBuffer(MaxTimelineDuration);
+			WolfChar->SetIsSimulating(true);
 
 			if (auto* MoveComp = WolfChar->GetCharacterMovement())
 			{
-				if (!WolfChar->GetCurrentMontage()) MoveComp->StopMovementImmediately();
+				if (!IsValid(WolfChar->GetCurrentMontage())) MoveComp->StopMovementImmediately();
 			}
 		}
-		else It.RemoveCurrent();
 	}
 
 	constexpr float Step = WolfSimConfig::Step;
@@ -296,5 +296,10 @@ void UCombatModeSubsystem::GenerateFutureState(float Duration)
 		{
 			if (auto* WolfChar = Combatant.Get()) WolfChar->SimulateTick(Step);
 		}
+	}
+
+	for (auto& Combatant : TrackedCombatants)
+	{
+		if (auto* WolfChar = Combatant.Get()) WolfChar->SetIsSimulating(false);
 	}
 }

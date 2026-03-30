@@ -11,6 +11,7 @@
 #include "GameplayTagContainer.h"
 #include "AbilitySystem/WolfAbilitySystemComponent.h"
 #include "Core/WolfAbilityComponent.h"
+#include "Core/WolfPresageComponent.h"
 #include "Interfaces/CombatModeListener.h"
 #include "Presage/ActorSnapshot.h"
 #include "Presage/Snapshot.h"
@@ -67,6 +68,7 @@ public:
 	virtual void CreateSnapshot_Implementation(FActorSnapshot& NewSnapshot) override;
 	virtual void RestoreSnapshot_Implementation(const FActorSnapshot& Snapshot) override;
 
+	void SetIsSimulating(bool bState) { if (PresageControl) PresageControl->bIsSimulating = bState; }
 	void SimulateTick(float DeltaTime);
 	void ClearPredictionBuffer(float PredictionWindow);
 	const FActorSnapshot* GetSnapshotAtTime(float RelativeTime) const;

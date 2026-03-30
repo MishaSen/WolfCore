@@ -32,6 +32,9 @@ public:
 	virtual void CreateSnapshot_Implementation(FActorSnapshot& OutSnapshot) override;
 	virtual void RestoreSnapshot_Implementation(const FActorSnapshot& Snapshot) override;
 
+public:
+	bool bIsSimulating = false;
+	
 private:
 	void SimulatePhysicsStep(float DeltaTime);
 	void SimulateAnimationStep(float DeltaTime);
@@ -46,6 +49,9 @@ private:
 
 	FORCEINLINE FVector GetOwnerLocation() const { return CharacterOwner ? CharacterOwner->GetActorLocation() : FVector::ZeroVector; }
 	FORCEINLINE	FRotator GetOwnerRotation() const { return CharacterOwner ? CharacterOwner->GetActorRotation() : FRotator::ZeroRotator; }
+	FORCEINLINE FVector GetSimLocation() const { return bIsSimulating ? SimulationTransform.GetLocation() : GetOwnerLocation(); }
+	FORCEINLINE FRotator GetSimRotation() const { return bIsSimulating ? SimulationTransform.GetRotation() : GetOwnerRotation(); }
+	
 	FORCEINLINE UCharacterMovementComponent* GetMoveComp() const { return CharacterOwner->GetCharacterMovement(); }
 	FORCEINLINE UWolfAbilitySystemComponent* GetASC() const { return CachedASC; }
 	FORCEINLINE UAnimInstance* GetAnimInst() const { return CharacterOwner->GetAnimInst(); }
@@ -56,6 +62,8 @@ private:
 	UPROPERTY(Transient, VisibleInstanceOnly, Category = "Wolf|Internal")
 	TObjectPtr<AWolfCharacterBase> CharacterOwner;
 
+	FTransform SimulationTransform;
+	
 	UPROPERTY(Transient, VisibleInstanceOnly, Category = "Wolf|Internal")
 	TObjectPtr<UWolfAbilityComponent> AbilityControl;
 	

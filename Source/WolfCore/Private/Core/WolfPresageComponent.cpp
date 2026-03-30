@@ -49,8 +49,35 @@ void UWolfPresageComponent::SimulatePhysicsStep(float DeltaTime)
 {
 	if (!IsValid(GetCMS()) || GetMoveComp()->Velocity.IsNearlyZero()) return;
 
-	const auto Delta = GetMoveComp()->Velocity * DeltaTime;
+	const FVector Start = SimulationTransform.GetLocation();
+	const FVector Delta = GetMoveComp()->Velocity * DeltaTime;
+	const FVector End = Start + Delta;
+
 	FHitResult Hit(1.f);
+	FCollisionQueryParams Params;
+	Params.AddIgnoredActor(CharacterOwner);
+
+	const bool bHit = GetWorld()->SweepSingleByChannel(Hit, Start, End,
+		SimulationTransform.GetRotation(),
+		ECC_Pawn,
+		CharacterOwner->GetCapsuleComponent()->GetCollisionShape(),
+		Params);
+
+	if (bHit)
+	{
+		const auto RemainingDelta = Delta * (1.f - Hit.Time);
+		const auto SlideDelta = FVector::VectorPlaneProject(RemainingDelta, Hit.Normal);
+
+		if (!SlideDelta.IsNearlyZero())
+		{
+			FHitResult SlideHit;
+			SimulationTransform.SetLocation(Hit.Location + SlideDelta);
+		}
+		else SimulationTransform.SetLocation(Hit.Location);
+	}
+	else SimulationTransform.SetLocation(End);
+	
+	/* DEPRECATED: Now implementing simulated transform without moving actual actor.
 	GetMoveComp()->SafeMoveUpdatedComponent(Delta, GetOwnerRotation(), true, Hit);
 
 	if (Hit.IsValidBlockingHit())
@@ -63,7 +90,7 @@ void UWolfPresageComponent::SimulatePhysicsStep(float DeltaTime)
 			FHitResult SlideHit(1.f);
 			GetMoveComp()->SafeMoveUpdatedComponent(SlideDelta, GetOwnerRotation(), true, SlideHit);
 		}
-	}
+	}*/
 }
 
 void UWolfPresageComponent::SimulateAnimationStep(float DeltaTime)
@@ -116,8 +143,8 @@ void UWolfPresageComponent::RestoreSnapshot_Implementation(const FActorSnapshot&
 
 void UWolfPresageComponent::SnapshotPhysics(FActorSnapshot& Snapshot) const
 {
-	Snapshot.Location = GetOwnerLocation();
-	Snapshot.Rotation = GetOwnerRotation();
+	Snapshot.Location = GetSimLocation();
+	Snapshot.Rotation = GetSimRotation();
 	Snapshot.Velocity = CharacterOwner->GetVelocity();
 	Snapshot.MovementMode = GetMoveComp()->MovementMode;
 	Snapshot.CustomMovementMode = GetMoveComp()->CustomMovementMode;
