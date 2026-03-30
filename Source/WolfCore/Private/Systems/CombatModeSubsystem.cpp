@@ -275,7 +275,7 @@ void UCombatModeSubsystem::GenerateFutureState(float Duration)
 	{
 		if (auto* WolfChar = It->Get())
 		{
-			WolfChar->ClearPredictionBuffer();
+			WolfChar->ClearPredictionBuffer(MaxTimelineDuration);
 
 			if (auto* MoveComp = WolfChar->GetCharacterMovement())
 			{

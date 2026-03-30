@@ -16,11 +16,11 @@ UWolfAbilityComponent::UWolfAbilityComponent()
 
 void UWolfAbilityComponent::InitializeAbilitySystem(AActor* InOwner)
 {
-	if (!IsValid(AbilitySystemComponent))
+	if (!IsValid(CacheASC))
 	{
-		AbilitySystemComponent = NewObject<UWolfAbilitySystemComponent>(InOwner, TEXT("ASC"));
-		AbilitySystemComponent->SetIsReplicated(false);
-		AbilitySystemComponent->RegisterComponent();
+		CacheASC = NewObject<UWolfAbilitySystemComponent>(InOwner, TEXT("ASC"));
+		CacheASC->SetIsReplicated(false);
+		CacheASC->RegisterComponent();
 
 		AttributeSet = NewObject<UWolfAttributeSet>(InOwner, TEXT("AttributeSet"));
 
@@ -40,12 +40,12 @@ void UWolfAbilityComponent::InitializeAbilitySystem(AActor* InOwner)
 
 void UWolfAbilityComponent::ApplyDefaultAttributes()
 {
-	if (!IsValid(AbilitySystemComponent) || !IsValid(DefaultAttributes) || !IsValid(StatConfig)) return;
+	if (!IsValid(CacheASC) || !IsValid(DefaultAttributes) || !IsValid(StatConfig)) return;
 
-	auto EffectContext = AbilitySystemComponent->MakeEffectContext();
+	auto EffectContext = CacheASC->MakeEffectContext();
 	EffectContext.AddSourceObject(GetOwner());
 
-	const auto SpecHandle = AbilitySystemComponent->MakeOutgoingSpec(DefaultAttributes, 1, EffectContext);
+	const auto SpecHandle = CacheASC->MakeOutgoingSpec(DefaultAttributes, 1, EffectContext);
 	if (!SpecHandle.IsValid()) return;
 
 	for (const auto& [Tag, Value] : StatConfig->DefaultStats)
@@ -58,14 +58,14 @@ void UWolfAbilityComponent::ApplyDefaultAttributes()
 						   "Snapshots/Presage will ignore this stat."), *Tag.ToString());
 		}
 	}
-	AbilitySystemComponent->ApplyGameplayEffectSpecToSelf(*SpecHandle.Data.Get());
+	CacheASC->ApplyGameplayEffectSpecToSelf(*SpecHandle.Data.Get());
 	WOLF_LOG(Log, TEXT("Applied all attributes from StatConfig to %s"), *GetOwner()->GetName());
 }
 
 void UWolfAbilityComponent::AddStartupAbilities(const TArray<TSubclassOf<UGameplayAbility>>& Abilities)
 {
-	if (GetOwnerRole() != ROLE_Authority || !IsValid(AbilitySystemComponent)) return;
+	if (GetOwnerRole() != ROLE_Authority || !IsValid(CacheASC)) return;
 	
-	AbilitySystemComponent->AddCharacterAbilities(Abilities);
+	CacheASC->AddCharacterAbilities(Abilities);
 	WOLF_LOG(Log, TEXT("Added %d startup abilities to %s"), Abilities.Num(), *GetOwner()->GetName());
 }

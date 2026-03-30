@@ -44,6 +44,7 @@ public:
 	virtual void PossessedBy(AController* NewController) override;
 
 	virtual UAbilitySystemComponent* GetAbilitySystemComponent() const override { return AbilityControl ? AbilityControl->GetWolfASC() : nullptr; }
+	FORCEINLINE UAnimInstance* GetAnimInst() const { return CachedAnimInst; }
 
 	UFUNCTION(BlueprintPure, Category = "Wolf|Abilities")
 	FGameplayAbilitySpecHandle GetAbilitySpecHandle(const TSubclassOf<UGameplayAbility>& AbilityClass) const;
@@ -67,7 +68,7 @@ public:
 	virtual void RestoreSnapshot_Implementation(const FActorSnapshot& Snapshot) override;
 
 	void SimulateTick(float DeltaTime);
-	void ClearPredictionBuffer();
+	void ClearPredictionBuffer(float PredictionWindow);
 	const FActorSnapshot* GetSnapshotAtTime(float RelativeTime) const;
 
 public:
@@ -79,8 +80,6 @@ protected:
 	UFUNCTION()
 	void HandleCombatModeChanged(FGameplayTag NewMode);
 	
-	FORCEINLINE UCharacterMovementComponent* GetMoveComp() const { return CachedMoveComp; }
-	FORCEINLINE UAnimInstance* GetAnimInst() const { return CachedAnimInst; }
 	UAnimMontage* GetWolfCurrentMontage() const { return CachedAnimInst ? CachedAnimInst->GetCurrentActiveMontage() : nullptr; }
 	
 protected:
@@ -92,9 +91,6 @@ protected:
 	
 	UPROPERTY(EditDefaultsOnly, Category = "Wolf|GAS|Abilities")
 	TObjectPtr<UAbilityConfig> AbilityConfig;
-
-	UPROPERTY()
-	TObjectPtr<UCharacterMovementComponent> CachedMoveComp;
 
 	UPROPERTY()
 	TObjectPtr<UAnimInstance> CachedAnimInst;

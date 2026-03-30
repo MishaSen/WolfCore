@@ -7,7 +7,6 @@
 #include "Character/WolfCharacterBase.h"
 #include "Components/CapsuleComponent.h"
 #include "Core/WolfAbilityComponent.h"
-#include "Core/WolfFunctionLibrary.h"
 #include "Core/WolfGameplayTags.h"
 #include "Debug/WolfDebug.h"
 #include "GameFramework/CharacterMovementComponent.h"
@@ -25,18 +24,9 @@ void UWolfPresageComponent::BeginPlay()
 	CharacterOwner = Cast<AWolfCharacterBase>(GetOwner());
 	if (CharacterOwner)
 	{
+		CachedASC = Cast<UWolfAbilitySystemComponent>(CharacterOwner->GetAbilitySystemComponent());
 		AbilityControl = CharacterOwner->FindComponentByClass<UWolfAbilityComponent>();
-		CachedMoveComp = CharacterOwner->GetCharacterMovement();
-		if (const auto* Mesh = CharacterOwner->GetMesh()) CachedAnimInst = Mesh->GetAnimInstance();
 	}
-}
-
-UWolfAbilitySystemComponent* UWolfPresageComponent::GetWolfASC() const
-{
-	if (IsValid(CachedASC)) return CachedASC;
-
-	if (IsValid(AbilityControl)) const_cast<UWolfPresageComponent*>(this)->CachedASC = AbilityControl->GetWolfASC();
-	return CachedASC;
 }
 
 void UWolfPresageComponent::SimulateTick(float DeltaTime)
@@ -49,13 +39,19 @@ void UWolfPresageComponent::SimulateTick(float DeltaTime)
 	PredictionBuffer.Add(FutureFrame); // Remember to clear PredictionBuffer in CombatModeSubsystem
 }
 
+void UWolfPresageComponent::ClearPredictionBuffer(float MaxDuration)
+{
+	const int32 ExpectedFrames = FMath::CeilToInt(MaxDuration * WolfSimConfig::Frequency);
+	PredictionBuffer.Empty(ExpectedFrames);
+}
+
 void UWolfPresageComponent::SimulatePhysicsStep(float DeltaTime)
 {
-	if (!CachedCMS.IsValid() || CachedMoveComp->Velocity.IsNearlyZero()) return;
+	if (!IsValid(GetCMS()) || GetMoveComp()->Velocity.IsNearlyZero()) return;
 
-	const auto Delta = CachedMoveComp->Velocity * DeltaTime;
+	const auto Delta = GetMoveComp()->Velocity * DeltaTime;
 	FHitResult Hit(1.f);
-	CachedMoveComp->SafeMoveUpdatedComponent(Delta, GetOwnerRotation(), true, Hit);
+	GetMoveComp()->SafeMoveUpdatedComponent(Delta, GetOwnerRotation(), true, Hit);
 
 	if (Hit.IsValidBlockingHit())
 	{
@@ -65,20 +61,23 @@ void UWolfPresageComponent::SimulatePhysicsStep(float DeltaTime)
 		if (!SlideDelta.IsNearlyZero())
 		{
 			FHitResult SlideHit(1.f);
-			CachedMoveComp->SafeMoveUpdatedComponent(SlideDelta, GetOwnerRotation(), true, SlideHit);
+			GetMoveComp()->SafeMoveUpdatedComponent(SlideDelta, GetOwnerRotation(), true, SlideHit);
 		}
 	}
 }
 
 void UWolfPresageComponent::SimulateAnimationStep(float DeltaTime)
 {
-	const auto* CurrentMontage = GetWolfCurrentMontage();
+	auto* AnimInst = GetAnimInst();
+	if (!IsValid(AnimInst)) return;
+	
+	const auto* CurrentMontage = GetCurrentMontage();
 	if (!IsValid(CurrentMontage)) return;
 
-	const auto CurrentPos = CachedAnimInst->Montage_GetPosition(CurrentMontage);
+	const auto CurrentPos = AnimInst->Montage_GetPosition(CurrentMontage);
 	const auto NewPos = CurrentPos + DeltaTime;
 
-	CachedAnimInst->Montage_SetPosition(CurrentMontage, NewPos);
+	AnimInst->Montage_SetPosition(CurrentMontage, NewPos);
 
 	if (CurrentMontage->HasRootMotion())
 	{
@@ -91,7 +90,7 @@ void UWolfPresageComponent::SimulateAnimationStep(float DeltaTime)
 
 	if (NewPos >= CurrentMontage->GetPlayLength())
 	{
-		CachedAnimInst->Montage_Stop(0.1f, CurrentMontage); // If seeing t-poses, set to idle state
+		AnimInst->Montage_Stop(0.1f, CurrentMontage); // If seeing t-poses, set to idle state
 	}
 }
 
@@ -120,8 +119,8 @@ void UWolfPresageComponent::SnapshotPhysics(FActorSnapshot& Snapshot) const
 	Snapshot.Location = GetOwnerLocation();
 	Snapshot.Rotation = GetOwnerRotation();
 	Snapshot.Velocity = CharacterOwner->GetVelocity();
-	Snapshot.MovementMode = CachedMoveComp->MovementMode;
-	Snapshot.CustomMovementMode = CachedMoveComp->CustomMovementMode;
+	Snapshot.MovementMode = GetMoveComp()->MovementMode;
+	Snapshot.CustomMovementMode = GetMoveComp()->CustomMovementMode;
 
 	if (const auto* AICont = Cast<AAIController>(CharacterOwner->GetController()))
 	{
@@ -177,10 +176,10 @@ void UWolfPresageComponent::SnapshotGAS(FActorSnapshot& Snapshot) const
 
 void UWolfPresageComponent::SnapshotAnim(FActorSnapshot& Snapshot) const
 {
-	if (auto* CurrentMontage = GetWolfCurrentMontage())
+	if (auto* CurrentMontage = GetCurrentMontage())
 	{
 		Snapshot.CurrentMontage = CurrentMontage;
-		Snapshot.MontagePosition = CachedAnimInst->Montage_GetPosition(CurrentMontage);
+		Snapshot.MontagePosition = GetAnimInst()->Montage_GetPosition(CurrentMontage);
 	}
 }
 
@@ -202,14 +201,14 @@ void UWolfPresageComponent::RestorePhysics(const FActorSnapshot& Snapshot)
 		Capsule->SetCollisionProfileName(UCollisionProfile::Pawn_ProfileName);
 	}
 
-	if (IsValid(CachedMoveComp))
+	if (IsValid(GetMoveComp()))
 	{
-		CachedMoveComp->SetComponentTickEnabled(true);
-		CachedMoveComp->Activate();
+		GetMoveComp()->SetComponentTickEnabled(true);
+		GetMoveComp()->Activate();
 
-		CachedMoveComp->SetMovementMode(Snapshot.MovementMode, Snapshot.CustomMovementMode);
-		CachedMoveComp->Velocity = Snapshot.Velocity;
-		CachedMoveComp->UpdateComponentVelocity();
+		GetMoveComp()->SetMovementMode(Snapshot.MovementMode, Snapshot.CustomMovementMode);
+		GetMoveComp()->Velocity = Snapshot.Velocity;
+		GetMoveComp()->UpdateComponentVelocity();
 	}
 	
 	auto* PrimitiveComp = Cast<UPrimitiveComponent>(CharacterOwner->GetRootComponent());
@@ -222,7 +221,7 @@ void UWolfPresageComponent::RestorePhysics(const FActorSnapshot& Snapshot)
 
 void UWolfPresageComponent::RestoreGAS(const FActorSnapshot& Snapshot)
 {
-	if (!IsValid(GetWolfASC()) || !AbilityControl->GetStatConfig()) return;
+	if (!IsValid(CachedASC) || !AbilityControl->GetStatConfig()) return;
 
 	const auto& Attributes = AbilityControl->GetCachedAttributes();
 	CachedASC->SetTagMapCount(FWolfGameplayTags::Get().InputState_Dead, 0);
@@ -267,13 +266,13 @@ void UWolfPresageComponent::RestoreGAS(const FActorSnapshot& Snapshot)
 
 void UWolfPresageComponent::RestoreAnim(const FActorSnapshot& Snapshot)
 {
-	if (CachedAnimInst)
+	if (auto* AnimInst = GetAnimInst())
 	{
-		CachedAnimInst->StopAllMontages(0.f);
+		AnimInst->StopAllMontages(0.f);
 		if (!Snapshot.CurrentMontage.IsValid()) return;
 
-		CachedAnimInst->Montage_Play(Snapshot.CurrentMontage.Get(), 1.f);
-		CachedAnimInst->Montage_SetPosition(Snapshot.CurrentMontage.Get(), Snapshot.MontagePosition);
+		AnimInst->Montage_Play(Snapshot.CurrentMontage.Get(), 1.f);
+		AnimInst->Montage_SetPosition(Snapshot.CurrentMontage.Get(), Snapshot.MontagePosition);
 	}
 }
 
@@ -286,16 +285,4 @@ const FActorSnapshot* UWolfPresageComponent::GetSnapshotAtTime(float RelativeTim
 							   0,
 							   PredictionBuffer.Num() - 1);
 	return &PredictionBuffer[Index];
-}
-
-UCombatModeSubsystem* UWolfPresageComponent::GetCMS() const
-{
-	if (CachedCMS.IsValid()) return CachedCMS.Get();
-
-	const auto* World = GetWorld();
-	if (!World) return nullptr;
-
-	auto* Subsystem = UWolfFunctionLibrary::GetWorldSubsystem<UCombatModeSubsystem>(World);
-	this->CachedCMS = Subsystem;
-	return Subsystem;
 }

@@ -39,7 +39,6 @@ void AWolfCharacterBase::BeginPlay()
 {
 	Super::BeginPlay();
 
-	CachedMoveComp = Cast<UCharacterMovementComponent>(GetCharacterMovement());
 	CachedAnimInst = GetMesh() ? GetMesh()->GetAnimInstance() : nullptr;
 
 	if (auto* CMS = GetCMS())
@@ -65,7 +64,7 @@ UCombatModeSubsystem* AWolfCharacterBase::GetCMS() const
 	if (CachedCMS.IsValid()) return CachedCMS.Get();
 
 	const auto* World = GetWorld();
-	if (!World) return nullptr;
+	if (!IsValid(World)) return nullptr;
 
 	auto* Subsystem = UWolfFunctionLibrary::GetWorldSubsystem<UCombatModeSubsystem>(World);
 	this->CachedCMS = Subsystem;
@@ -272,9 +271,9 @@ void AWolfCharacterBase::SimulateTick(float DeltaTime)
 	if (PresageControl) PresageControl->SimulateTick(DeltaTime);
 }
 
-void AWolfCharacterBase::ClearPredictionBuffer()
+void AWolfCharacterBase::ClearPredictionBuffer(float PredictionWindow)
 {
-	if (PresageControl) PresageControl->ClearPredictionBuffer();
+	if (PresageControl) PresageControl->ClearPredictionBuffer(PredictionWindow);
 }
 
 const FActorSnapshot* AWolfCharacterBase::GetSnapshotAtTime(float RelativeTime) const

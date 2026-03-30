@@ -9,7 +9,6 @@
 #include "Presage/Snapshot.h"
 #include "WolfPresageComponent.generated.h"
 
-
 class UWolfAbilitySystemComponent;
 class UCombatModeSubsystem;
 class UCharacterMovementComponent;
@@ -25,18 +24,15 @@ public:
 	UWolfPresageComponent();
 
 	virtual void BeginPlay() override;
-	UWolfAbilitySystemComponent* GetWolfASC() const;
 
 	virtual void SimulateTick(float DeltaTime);
+	void ClearPredictionBuffer(float MaxDuration);
+	const FActorSnapshot* GetSnapshotAtTime(float RelativeTime) const;
 
 	virtual void CreateSnapshot_Implementation(FActorSnapshot& OutSnapshot) override;
 	virtual void RestoreSnapshot_Implementation(const FActorSnapshot& Snapshot) override;
 
-	const FActorSnapshot* GetSnapshotAtTime(float RelativeTime) const;
-	UCombatModeSubsystem* GetCMS() const;
-	void ClearPredictionBuffer() { PredictionBuffer.Empty(); }
-
-protected:
+private:
 	void SimulatePhysicsStep(float DeltaTime);
 	void SimulateAnimationStep(float DeltaTime);
 
@@ -48,36 +44,26 @@ protected:
 	void RestoreGAS(const FActorSnapshot& Snapshot);
 	void RestoreAnim(const FActorSnapshot& Snapshot);
 
-	FORCEINLINE UCharacterMovementComponent* GetMoveComp() const { return CachedMoveComp; }
-	FORCEINLINE UAnimInstance* GetAnimInst() const { return CachedAnimInst; }
-	UAnimMontage* GetWolfCurrentMontage() const { return CachedAnimInst ? CachedAnimInst->GetCurrentActiveMontage() : nullptr; }
-	
-protected:
-	UPROPERTY(BlueprintReadOnly, Category = "Wolf|Cache")
-	TObjectPtr<UCharacterMovementComponent> CachedMoveComp;
-
-	UPROPERTY(BlueprintReadOnly, Category = "Wolf|Cache")
-	TObjectPtr<UAnimInstance> CachedAnimInst;
-
-	UPROPERTY(BlueprintReadOnly, Category = "Wolf|Cache")
-	mutable TWeakObjectPtr<UCombatModeSubsystem> CachedCMS;
-
-	UPROPERTY()
-	TObjectPtr<UWolfAbilitySystemComponent> CachedASC;
+	FORCEINLINE FVector GetOwnerLocation() const { return CharacterOwner ? CharacterOwner->GetActorLocation() : FVector::ZeroVector; }
+	FORCEINLINE	FRotator GetOwnerRotation() const { return CharacterOwner ? CharacterOwner->GetActorRotation() : FRotator::ZeroRotator; }
+	FORCEINLINE UCharacterMovementComponent* GetMoveComp() const { return CharacterOwner->GetCharacterMovement(); }
+	FORCEINLINE UWolfAbilitySystemComponent* GetASC() const { return CachedASC; }
+	FORCEINLINE UAnimInstance* GetAnimInst() const { return CharacterOwner->GetAnimInst(); }
+	FORCEINLINE UAnimMontage* GetCurrentMontage() const { return GetAnimInst() ? GetAnimInst()->GetCurrentActiveMontage() : nullptr; }
+	FORCEINLINE UCombatModeSubsystem* GetCMS() const { return CharacterOwner ? CharacterOwner->GetCMS() : nullptr; }
 
 private:
-	UPROPERTY()
-	TArray<FActorSnapshot> PredictionBuffer;
-
-	UPROPERTY()
-	bool bIsRestoringSnapshot = false;
-
-	UPROPERTY()
+	UPROPERTY(Transient, VisibleInstanceOnly, Category = "Wolf|Internal")
 	TObjectPtr<AWolfCharacterBase> CharacterOwner;
 
-	UPROPERTY()
+	UPROPERTY(Transient, VisibleInstanceOnly, Category = "Wolf|Internal")
 	TObjectPtr<UWolfAbilityComponent> AbilityControl;
-
-	FORCEINLINE FVector GetOwnerLocation() const { return CharacterOwner ? CharacterOwner->GetActorLocation() : FVector::ZeroVector; }
-	FORCEINLINE FRotator GetOwnerRotation() const { return CharacterOwner ? CharacterOwner->GetActorRotation() : FRotator::ZeroRotator;}
+	
+	UPROPERTY(Transient, VisibleInstanceOnly, Category = "Wolf|Internal")
+	TObjectPtr<UWolfAbilitySystemComponent> CachedASC;
+	
+	UPROPERTY(Transient, VisibleInstanceOnly, Category = "Wolf|Internal")
+	TArray<FActorSnapshot> PredictionBuffer;
+	
+	bool bIsRestoringSnapshot = false;
 };

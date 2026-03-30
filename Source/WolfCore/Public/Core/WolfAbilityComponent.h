@@ -21,7 +21,7 @@ public:
 	UWolfAbilityComponent();
 
 	UFUNCTION(BlueprintCallable, Category = "Wolf|Abilities")
-	UWolfAbilitySystemComponent* GetWolfASC() const { return AbilitySystemComponent; }
+	UWolfAbilitySystemComponent* GetWolfASC() const { return CacheASC; }
 
 	void InitializeAbilitySystem(AActor* InOwner);
 	void ApplyDefaultAttributes();
@@ -32,7 +32,7 @@ public:
 
 protected:
 	UPROPERTY()
-	TObjectPtr<UWolfAbilitySystemComponent> AbilitySystemComponent;
+	TObjectPtr<UWolfAbilitySystemComponent> CacheASC;
 
 	UPROPERTY()
 	TObjectPtr<UWolfAttributeSet> AttributeSet;
