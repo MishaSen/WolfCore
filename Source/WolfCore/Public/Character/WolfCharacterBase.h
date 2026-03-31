@@ -52,24 +52,26 @@ public:
 
 	UFUNCTION(BlueprintPure, Category = "Wolf|Abilities")
 	FGameplayAbilitySpecHandle GetAbilitySpecHandle(const TSubclassOf<UGameplayAbility>& AbilityClass) const;
+
+	UFUNCTION(BlueprintCallable, Category = "Wolf|Presage")
+	UWolfPresageComponent* GetPresageComponent() const { return PresageControl; }
 	
 	UBaseCombatAbility* GetActiveCombatAbility() const;
+
+	UFUNCTION(BlueprintPure, Category = "Wolf|Combat")
 	bool IsInvulnerableAt(float RelativeTime) const;
+
+	UFUNCTION(BlueprintPure, Category = "Wolf|Combat")
+	float GetTimeToNextHitImpact() const;
 
 	UFUNCTION(BlueprintPure, Category = "Wolf|Presage")
 	FTransform GetProjectedTransform(float FutureTimeDelta) const;
-
-	UFUNCTION(BlueprintPure, Category = "Wolf|Presage")
-	float GetTimeToNextHitImpact() const;
 	
 	void UpdateTemporalPreview(float PreviewTime);
 	void GetPresageCollisionDimensions(float& OutRadius, float& OutHalfHeight) const;
 
 	virtual void CreateSnapshot_Implementation(FActorSnapshot& NewSnapshot) override;
 	virtual void RestoreSnapshot_Implementation(const FActorSnapshot& Snapshot) override;
-
-	UFUNCTION(BlueprintCallable, Category = "Wolf|Presage")
-	UWolfPresageComponent* GetPresageComponent() const { return PresageControl; }
 	
 	FORCEINLINE UAnimInstance* GetAnimInst() const { return CachedAnimInst; }
 

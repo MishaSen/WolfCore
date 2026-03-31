@@ -156,10 +156,11 @@ FTransform AWolfCharacterBase::GetProjectedTransform(float FutureTimeDelta) cons
 	const auto* CMS = GetCMS();
 	if (!CMS) return GetActorTransform();
 
-	const auto* ActorStates = &CMS->GetMasterSnapshot().ActorStates;
-	if (!ActorStates->Contains(this)) return GetActorTransform();
+	const auto& ActorStates = CMS->GetMasterSnapshot().ActorStates;
+	const auto* AnchorStatePtr = ActorStates.Find(this);
+	if (!AnchorStatePtr) return GetActorTransform();
 
-	const auto& AnchorState = (*ActorStates)[this];
+	const auto& AnchorState = *AnchorStatePtr;
 	if (!AnchorState.CurrentMontage.IsValid())
 	{
 		const auto ProjectedLocation = AnchorState.Location + AnchorState.Velocity * FutureTimeDelta;
@@ -194,15 +195,15 @@ void AWolfCharacterBase::UpdateTemporalPreview(float PreviewTime)
 float AWolfCharacterBase::GetTimeToNextHitImpact() const
 {
 	auto* CurrentMontage = GetWolfCurrentMontage();
-	if (!CurrentMontage) return -1.f;
+	if (!CurrentMontage || !CachedAnimInst) return -1.f;
 
-	const auto CurrentMontagePosition = CachedAnimInst->Montage_GetPosition(CurrentMontage);
+	const auto CurrentPosition = CachedAnimInst->Montage_GetPosition(CurrentMontage);
 
 	for (const auto& NotifyEvent : CurrentMontage->Notifies)
 	{
-		if (NotifyEvent.GetTriggerTime() > CurrentMontagePosition)
+		if (NotifyEvent.GetTriggerTime() > CurrentPosition)
 		{
-			return NotifyEvent.GetTriggerTime() - CurrentMontagePosition;
+			return NotifyEvent.GetTriggerTime() - CurrentPosition; // Could filter for specific hit notifies.
 		}
 	}
 	return -1.f;

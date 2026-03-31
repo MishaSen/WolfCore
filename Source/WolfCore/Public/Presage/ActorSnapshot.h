@@ -97,5 +97,5 @@ struct FTemporalStates
 	float WorldTimeAnchor = 0.f;
 
 	UPROPERTY()
-	TMap<AActor*, FActorSnapshot> ActorStates;
+	TMap<const AActor*, FActorSnapshot> ActorStates;
 };
