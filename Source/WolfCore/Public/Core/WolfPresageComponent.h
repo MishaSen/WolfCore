@@ -13,7 +13,6 @@ class UWolfAbilitySystemComponent;
 class UCombatModeSubsystem;
 class UCharacterMovementComponent;
 class UWolfAbilityComponent;
-class AWolfCharacterBase;
 
 UCLASS(ClassGroup=(Custom), meta=(BlueprintSpawnableComponent))
 class WOLFCORE_API UWolfPresageComponent : public UActorComponent, public ISnapshot
@@ -24,30 +23,27 @@ public:
 	UWolfPresageComponent();
 
 	virtual void BeginPlay() override;
-
-	virtual void SimulateTick(float DeltaTime);
 	void ClearPredictionBuffer(float MaxDuration);
 	const FActorSnapshot* GetSnapshotAtTime(float RelativeTime) const;
+
+	void SetIsSimulating(bool bState) { bIsSimulating = bState; }
+	void SetSimulationTransform(const FTransform& NewTransform) { SimulationTransform = NewTransform; }
+	virtual void SimulateTick(float DeltaTime);
 
 	virtual void CreateSnapshot_Implementation(FActorSnapshot& OutSnapshot) override;
 	virtual void RestoreSnapshot_Implementation(const FActorSnapshot& Snapshot) override;
 
-	void SetIsSimulating(bool bState) { bIsSimulating = bState; }
-	void SetSimulationTransform(const FTransform& NewTransform) { SimulationTransform = NewTransform; }
-
-public:
-	
 private:
 	void SimulatePhysicsStep(float DeltaTime);
-	void SimulateAnimationStep(float DeltaTime);
-
 	void SnapshotPhysics(FActorSnapshot& Snapshot) const;
-	void SnapshotGAS(FActorSnapshot& Snapshot) const;
-	void SnapshotAnim(FActorSnapshot& Snapshot) const;
-
 	void RestorePhysics(const FActorSnapshot& Snapshot);
-	void RestoreGAS(const FActorSnapshot& Snapshot);
+	
+	void SimulateAnimationStep(float DeltaTime);
+	void SnapshotAnim(FActorSnapshot& Snapshot) const;
 	void RestoreAnim(const FActorSnapshot& Snapshot);
+
+	void SnapshotGAS(FActorSnapshot& Snapshot) const;
+	void RestoreGAS(const FActorSnapshot& Snapshot);
 
 	FORCEINLINE FVector GetOwnerLocation() const { return CharacterOwner ? CharacterOwner->GetActorLocation() : FVector::ZeroVector; }
 	FORCEINLINE	FRotator GetOwnerRotation() const { return CharacterOwner ? CharacterOwner->GetActorRotation() : FRotator::ZeroRotator; }
@@ -61,20 +57,20 @@ private:
 	FORCEINLINE UCombatModeSubsystem* GetCMS() const { return CharacterOwner ? CharacterOwner->GetCMS() : nullptr; }
 
 private:
-	UPROPERTY(Transient, VisibleInstanceOnly, Category = "Wolf|Internal")
-	TObjectPtr<AWolfCharacterBase> CharacterOwner;
+	bool bIsRestoringSnapshot = false;
+	bool bIsSimulating = false;
 
 	FTransform SimulationTransform;
+	
+	UPROPERTY(Transient, VisibleInstanceOnly, Category = "Wolf|Internal")
+	TArray<FActorSnapshot> PredictionBuffer;
+	
+	UPROPERTY(Transient, VisibleInstanceOnly, Category = "Wolf|Internal")
+	TObjectPtr<AWolfCharacterBase> CharacterOwner;
 	
 	UPROPERTY(Transient, VisibleInstanceOnly, Category = "Wolf|Internal")
 	TObjectPtr<UWolfAbilityComponent> AbilityControl;
 	
 	UPROPERTY(Transient, VisibleInstanceOnly, Category = "Wolf|Internal")
 	TObjectPtr<UWolfAbilitySystemComponent> CachedASC;
-	
-	UPROPERTY(Transient, VisibleInstanceOnly, Category = "Wolf|Internal")
-	TArray<FActorSnapshot> PredictionBuffer;
-	
-	bool bIsRestoringSnapshot = false;
-	bool bIsSimulating = false;
 };
