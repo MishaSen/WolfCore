@@ -54,10 +54,6 @@ public:
 	
 	UBaseCombatAbility* GetActiveCombatAbility() const;
 	bool IsInvulnerableAt(float RelativeTime) const;
-	
-	void SimulateTick(float DeltaTime);
-	void ClearPredictionBuffer(float PredictionWindow);
-	const FActorSnapshot* GetSnapshotAtTime(float RelativeTime) const;
 
 	UFUNCTION(BlueprintPure, Category = "Wolf|Presage")
 	FTransform GetProjectedTransform(float FutureTimeDelta) const;
@@ -70,8 +66,6 @@ public:
 
 	virtual void CreateSnapshot_Implementation(FActorSnapshot& NewSnapshot) override;
 	virtual void RestoreSnapshot_Implementation(const FActorSnapshot& Snapshot) override;
-
-	void SetIsSimulating(bool bState) { if (PresageControl) PresageControl->SetIsSimulating(bState); }
 
 	UFUNCTION(BlueprintCallable, Category = "Wolf|Presage")
 	UWolfPresageComponent* GetPresageComponent() const { return PresageControl; }

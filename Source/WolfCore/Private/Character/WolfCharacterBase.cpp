@@ -265,18 +265,3 @@ void AWolfCharacterBase::RestoreSnapshot_Implementation(const FActorSnapshot& Sn
 {
 	if (PresageControl) PresageControl->RestoreSnapshot_Implementation(Snapshot);
 }
-
-void AWolfCharacterBase::SimulateTick(float DeltaTime)
-{
-	if (PresageControl) PresageControl->SimulateTick(DeltaTime);
-}
-
-void AWolfCharacterBase::ClearPredictionBuffer(float PredictionWindow)
-{
-	if (PresageControl) PresageControl->ClearPredictionBuffer(PredictionWindow);
-}
-
-const FActorSnapshot* AWolfCharacterBase::GetSnapshotAtTime(float RelativeTime) const
-{
-	return PresageControl ? PresageControl->GetSnapshotAtTime(RelativeTime) : nullptr;
-}

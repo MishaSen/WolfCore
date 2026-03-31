@@ -142,7 +142,7 @@ void UCombatModeSubsystem::ScrubTimeline(float NewTime)
 		auto* WolfChar = It->Get();
 		if (IsValid(WolfChar))
 		{
-			const auto* BakedFrame = WolfChar->GetSnapshotAtTime(CurrentTimelineTime);
+			const auto* BakedFrame = WolfChar->GetPresageComponent()->GetSnapshotAtTime(CurrentTimelineTime);
 			if (BakedFrame) WolfChar->RestoreSnapshot_Implementation(*BakedFrame);
 		}
 		else It.RemoveCurrent();
@@ -266,13 +266,15 @@ void UCombatModeSubsystem::GenerateFutureState(float Duration)
 {
 	for (auto& Combatant : TrackedCombatants)
 	{
-		if (auto* WolfChar = Combatant.Get())
+		if (const auto* WolfChar = Combatant.Get())
 		{
-			WolfChar->ClearPredictionBuffer(MaxTimelineDuration);
-			WolfChar->SetIsSimulating(true);
-
 			auto* Presage = WolfChar->GetPresageComponent();
-			if (IsValid(Presage)) Presage->SetSimulationTransform(WolfChar->GetActorTransform());
+			if (IsValid(Presage))
+			{
+				Presage->ClearPredictionBuffer(Duration);
+				Presage->SetIsSimulating(true);
+				Presage->SetSimulationTransform(WolfChar->GetActorTransform());
+			}
 
 			if (auto* MoveComp = WolfChar->GetCharacterMovement())
 			{
@@ -290,12 +292,18 @@ void UCombatModeSubsystem::GenerateFutureState(float Duration)
 	{
 		for (auto& Combatant : TrackedCombatants)
 		{
-			if (auto* WolfChar = Combatant.Get()) WolfChar->SimulateTick(Step);
+			if (const auto* WolfChar = Combatant.Get())
+			{
+				if (auto* Presage = WolfChar->GetPresageComponent()) Presage->SimulateTick(Step);
+			}
 		}
 	}
 
 	for (auto& Combatant : TrackedCombatants)
 	{
-		if (auto* WolfChar = Combatant.Get()) WolfChar->SetIsSimulating(false);
+		if (const auto* WolfChar = Combatant.Get())
+		{
+			if (auto* Presage = WolfChar->GetPresageComponent()) Presage->SetIsSimulating(false);
+		}
 	}
 }
