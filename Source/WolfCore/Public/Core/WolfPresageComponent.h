@@ -32,6 +32,8 @@ public:
 	virtual void CreateSnapshot_Implementation(FActorSnapshot& OutSnapshot) override;
 	virtual void RestoreSnapshot_Implementation(const FActorSnapshot& Snapshot) override;
 
+	void SetSimulationTransform(const FTransform& NewTransform) { SimulationTransform = NewTransform; }
+
 public:
 	bool bIsSimulating = false;
 	

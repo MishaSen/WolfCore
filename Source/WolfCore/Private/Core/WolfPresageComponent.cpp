@@ -111,8 +111,8 @@ void UWolfPresageComponent::SimulateAnimationStep(float DeltaTime)
 		const auto RootMotionDelta = CurrentMontage->ExtractRootMotionFromRange(CurrentPos,NewPos, FAnimExtractContext());
 		const auto WorldDelta = GetOwnerRotation().RotateVector(RootMotionDelta.GetLocation());
 
-		FHitResult Hit;
-		CharacterOwner->GetCharacterMovement()->SafeMoveUpdatedComponent(WorldDelta, GetOwnerRotation(), true, Hit);
+		if (bIsSimulating) SimulationTransform.AddToTranslation(WorldDelta);
+		else WOLF_WARN(TEXT("SimulateAnimStep() activating during outside of Simulation."));
 	}
 
 	if (NewPos >= CurrentMontage->GetPlayLength())

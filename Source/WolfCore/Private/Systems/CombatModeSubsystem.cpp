@@ -271,12 +271,15 @@ float UCombatModeSubsystem::GetDilationForMode(const FGameplayTag& Mode)
 
 void UCombatModeSubsystem::GenerateFutureState(float Duration)
 {
-	for (auto Combatant : TrackedCombatants)
+	for (auto& Combatant : TrackedCombatants)
 	{
 		if (auto* WolfChar = Combatant.Get())
 		{
 			WolfChar->ClearPredictionBuffer(MaxTimelineDuration);
 			WolfChar->SetIsSimulating(true);
+
+			auto* Presage = WolfChar->GetPresageComponent();
+			if (IsValid(Presage)) Presage->SetSimulationTransform(WolfChar->GetActorTransform());
 
 			if (auto* MoveComp = WolfChar->GetCharacterMovement())
 			{

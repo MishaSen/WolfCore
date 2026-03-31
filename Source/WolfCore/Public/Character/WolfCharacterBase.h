@@ -60,7 +60,7 @@ public:
 	float GetTimeToNextHitImpact() const;
 
 	void UpdateTemporalPreview(float PreviewTime);
-
+	
 	void GetPresageCollisionDimensions(float& OutRadius, float& OutHalfHeight) const;
 	bool IsInvulnerableAt(float RelativeTime) const;
 	UBaseCombatAbility* GetActiveCombatAbility() const;
@@ -72,6 +72,9 @@ public:
 	void SimulateTick(float DeltaTime);
 	void ClearPredictionBuffer(float PredictionWindow);
 	const FActorSnapshot* GetSnapshotAtTime(float RelativeTime) const;
+
+	UFUNCTION(BlueprintCallable, Category = "Wolf|Presage")
+	UWolfPresageComponent* GetPresageComponent() const { return PresageControl; }
 
 public:
 	FActiveGameplayEffectHandle PresageEffectHandle;
