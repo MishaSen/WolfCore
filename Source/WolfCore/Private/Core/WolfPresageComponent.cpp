@@ -102,26 +102,19 @@ void UWolfPresageComponent::SimulatePhysicsStep(float DeltaTime)
 		if (!SlideDelta.IsNearlyZero())
 		{
 			FHitResult SlideHit;
-			SimulationTransform.SetLocation(Hit.Location + SlideDelta);
+			const auto SlideEnd = Hit.Location + SlideDelta;
+
+			GetWorld()->SweepSingleByChannel(SlideHit, Hit.Location, SlideEnd,
+				SimulationTransform.GetRotation(),
+				ECC_Pawn,
+				CharacterOwner->GetCapsuleComponent()->GetCollisionShape(),
+				Params);
+			
+			SimulationTransform.SetLocation(SlideHit.bBlockingHit ? SlideHit.Location : SlideEnd);
 		}
 		else SimulationTransform.SetLocation(Hit.Location);
 	}
 	else SimulationTransform.SetLocation(End);
-	
-	/* DEPRECATED: Now implementing simulated transform without moving actual actor.
-	GetMoveComp()->SafeMoveUpdatedComponent(Delta, GetOwnerRotation(), true, Hit);
-
-	if (Hit.IsValidBlockingHit())
-	{
-		const auto RemainingDelta = Delta * (1.f - Hit.Time);
-		const auto SlideDelta = FVector::VectorPlaneProject(RemainingDelta, Hit.Normal);
-
-		if (!SlideDelta.IsNearlyZero())
-		{
-			FHitResult SlideHit(1.f);
-			GetMoveComp()->SafeMoveUpdatedComponent(SlideDelta, GetOwnerRotation(), true, SlideHit);
-		}
-	}*/
 }
 
 void UWolfPresageComponent::SnapshotPhysics(FActorSnapshot& Snapshot) const
