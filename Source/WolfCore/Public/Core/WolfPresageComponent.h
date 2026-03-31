@@ -3,12 +3,12 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "Character/WolfCharacterBase.h"
 #include "Components/ActorComponent.h"
 #include "Presage/ActorSnapshot.h"
 #include "Presage/Snapshot.h"
 #include "WolfPresageComponent.generated.h"
 
+class AWolfCharacterBase;
 class UWolfAbilitySystemComponent;
 class UCombatModeSubsystem;
 class UCharacterMovementComponent;
@@ -45,16 +45,16 @@ private:
 	void SnapshotGAS(FActorSnapshot& Snapshot) const;
 	void RestoreGAS(const FActorSnapshot& Snapshot);
 
-	FORCEINLINE FVector GetOwnerLocation() const { return CharacterOwner ? CharacterOwner->GetActorLocation() : FVector::ZeroVector; }
-	FORCEINLINE	FRotator GetOwnerRotation() const { return CharacterOwner ? CharacterOwner->GetActorRotation() : FRotator::ZeroRotator; }
-	FORCEINLINE FVector GetSimLocation() const { return bIsSimulating ? SimulationTransform.GetLocation() : GetOwnerLocation(); }
-	FORCEINLINE FRotator GetSimRotation() const { return bIsSimulating ? SimulationTransform.GetRotation() : GetOwnerRotation(); }
+	FORCEINLINE FVector GetOwnerLocation() const;
+	FORCEINLINE	FRotator GetOwnerRotation() const;
+	FORCEINLINE FVector GetSimLocation() const;
+	FORCEINLINE FRotator GetSimRotation() const;
 	
-	FORCEINLINE UCharacterMovementComponent* GetMoveComp() const { return CharacterOwner->GetCharacterMovement(); }
-	FORCEINLINE UWolfAbilitySystemComponent* GetASC() const { return CachedASC; }
-	FORCEINLINE UAnimInstance* GetAnimInst() const { return CharacterOwner->GetAnimInst(); }
-	FORCEINLINE UAnimMontage* GetCurrentMontage() const { return GetAnimInst() ? GetAnimInst()->GetCurrentActiveMontage() : nullptr; }
-	FORCEINLINE UCombatModeSubsystem* GetCMS() const { return CharacterOwner ? CharacterOwner->GetCMS() : nullptr; }
+	FORCEINLINE UCharacterMovementComponent* GetMoveComp() const;
+	FORCEINLINE UWolfAbilitySystemComponent* GetASC() const;
+	FORCEINLINE UAnimInstance* GetAnimInst() const;
+	FORCEINLINE UAnimMontage* GetCurrentMontage() const;
+	FORCEINLINE UCombatModeSubsystem* GetCMS() const;
 
 private:
 	bool bIsRestoringSnapshot = false;

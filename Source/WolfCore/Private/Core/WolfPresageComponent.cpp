@@ -313,3 +313,14 @@ void UWolfPresageComponent::RestoreGAS(const FActorSnapshot& Snapshot)
 
 	// TODO: When we implement the UI Controller, remember to check this bool when doing delegate broadcasts
 }
+
+FVector UWolfPresageComponent::GetOwnerLocation() const { return CharacterOwner ? CharacterOwner->GetActorLocation() : FVector::ZeroVector; }
+FRotator UWolfPresageComponent::GetOwnerRotation() const { return CharacterOwner ? CharacterOwner->GetActorRotation() : FRotator::ZeroRotator; }
+FVector UWolfPresageComponent::GetSimLocation() const { return bIsSimulating ? SimulationTransform.GetLocation() : GetOwnerLocation(); }
+FRotator UWolfPresageComponent::GetSimRotation() const { return bIsSimulating ? SimulationTransform.GetRotation() : GetOwnerRotation(); }
+
+UCharacterMovementComponent* UWolfPresageComponent::GetMoveComp() const { return CharacterOwner ? CharacterOwner->GetCharacterMovement() : nullptr; }
+UWolfAbilitySystemComponent* UWolfPresageComponent::GetASC() const { return CachedASC; }
+UAnimInstance* UWolfPresageComponent::GetAnimInst() const { return CharacterOwner ? CharacterOwner->GetAnimInst() : nullptr; }
+UAnimMontage* UWolfPresageComponent::GetCurrentMontage() const { return GetAnimInst() ? GetAnimInst()->GetCurrentActiveMontage() : nullptr; }
+UCombatModeSubsystem* UWolfPresageComponent::GetCMS() const { return CharacterOwner ? CharacterOwner->GetCMS() : nullptr; }

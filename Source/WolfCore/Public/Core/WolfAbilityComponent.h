@@ -20,30 +20,30 @@ class WOLFCORE_API UWolfAbilityComponent : public UActorComponent
 public:
 	UWolfAbilityComponent();
 
+	void InitializeAbilitySystem(AActor* InOwner);
+	void AddStartupAbilities(const TArray<TSubclassOf<UGameplayAbility>>& Abilities);
+	void ApplyDefaultAttributes();
+	
 	UFUNCTION(BlueprintCallable, Category = "Wolf|Abilities")
 	UWolfAbilitySystemComponent* GetWolfASC() const { return CacheASC; }
-
-	void InitializeAbilitySystem(AActor* InOwner);
-	void ApplyDefaultAttributes();
-	void AddStartupAbilities(const TArray<TSubclassOf<UGameplayAbility>>& Abilities);
 
 	FORCEINLINE const TArray<FGameplayAttribute>& GetCachedAttributes() const { return CachedAttributes; }
 	FORCEINLINE const UCharacterStatConfig* GetStatConfig() const { return StatConfig; }
 
 protected:
-	UPROPERTY()
+	UPROPERTY(VisibleInstanceOnly, Category = "Wolf|Abilities|Internal")
 	TObjectPtr<UWolfAbilitySystemComponent> CacheASC;
 
-	UPROPERTY()
+	UPROPERTY(VisibleInstanceOnly, Category = "Wolf|Abilities|Internal")
 	TObjectPtr<UWolfAttributeSet> AttributeSet;
 
-	UPROPERTY(EditAnywhere, Category = "Wolf|Abilities")
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wolf|Abilities")
 	TObjectPtr<UCharacterStatConfig> StatConfig;
 
-	UPROPERTY(EditAnywhere, Category = "Wolf|Abilities")
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wolf|Abilities")
 	TSubclassOf<UGameplayEffect> DefaultAttributes;
 
 private:
-	UPROPERTY()
+	UPROPERTY(Transient)
 	TArray<FGameplayAttribute> CachedAttributes;
 };
