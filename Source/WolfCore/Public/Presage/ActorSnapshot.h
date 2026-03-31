@@ -82,7 +82,10 @@ struct FActorSnapshot
 	TWeakObjectPtr<UBTNode> ActiveNode = nullptr; // We might want to see what node was running
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Actor State")
-	FVector AIMoveTarget = FVector::ZeroVector;
+	TWeakObjectPtr<AActor> TargetActor = nullptr;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Actor State")
+	FVector Destination = FVector::ZeroVector;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Actor State")
 	bool bIsMoving = false;

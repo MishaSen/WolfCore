@@ -4,6 +4,7 @@
 #include "Core/WolfPresageComponent.h"
 
 #include "AIController.h"
+#include "BehaviorTree/BlackboardComponent.h"
 #include "Character/WolfCharacterBase.h"
 #include "Components/CapsuleComponent.h"
 #include "Core/WolfAbilityComponent.h"
@@ -124,23 +125,37 @@ void UWolfPresageComponent::SnapshotPhysics(FActorSnapshot& Snapshot) const
 	Snapshot.Velocity = CharacterOwner->GetVelocity();
 	Snapshot.MovementMode = GetMoveComp()->MovementMode;
 	Snapshot.CustomMovementMode = GetMoveComp()->CustomMovementMode;
-
-	if (const auto* AICont = Cast<AAIController>(CharacterOwner->GetController()))
+	
+	const auto* AICont = Cast<AAIController>(CharacterOwner->GetController());
+	if (!IsValid(AICont)) return;
+	
+	const auto* PathFollowComp = AICont->GetPathFollowingComponent();
+	if (PathFollowComp && PathFollowComp->GetStatus() == EPathFollowingStatus::Moving)
 	{
-		const auto* PathFollowComp = AICont->GetPathFollowingComponent();
-		if (!PathFollowComp || PathFollowComp->GetStatus() != EPathFollowingStatus::Moving) return;
-		
-		Snapshot.AIMoveTarget = PathFollowComp->GetPathDestination();
+		Snapshot.Destination = PathFollowComp->GetPathDestination();
 		Snapshot.bIsMoving = true;
 		
-		DrawDebugSphere(GetWorld(), Snapshot.AIMoveTarget, 25.f, 12, FColor::Red, false, 5.f);
-		DrawDebugLine(GetWorld(), GetOwnerLocation(), Snapshot.AIMoveTarget, FColor::Red,
+		DrawDebugSphere(GetWorld(), Snapshot.Destination, 25.f, 12, FColor::Red, false, 5.f);
+		DrawDebugLine(GetWorld(), GetOwnerLocation(), Snapshot.Destination, FColor::Red,
 			false, 5.f, 0, 2.f);
-		WOLF_LOG(Log, TEXT("Character %s has Path Destination %s. IsMoving = %s."),
-				*GetName(),
-				*Snapshot.AIMoveTarget.ToString(),
-				Snapshot.bIsMoving ? TEXT ("True") : TEXT("False"));
 	}
+
+	if (const auto* BB = AICont->GetBlackboardComponent())
+	{
+		Snapshot.TargetActor = Cast<AActor>(BB->GetValueAsObject(TEXT("TargetActor")));
+		if (Snapshot.TargetActor.IsValid())
+		{
+			const auto TargetBox = Snapshot.TargetActor->GetRootComponent()->Bounds.GetBox();
+			DrawDebugBox(GetWorld(), TargetBox.GetCenter(), TargetBox.GetExtent(), FColor::Orange, false,
+				5.f, 0, 3.f);
+		}
+	}
+
+	WOLF_LOG(Log, TEXT("Character %s has Path Destination %s targeting %s. IsMoving = %s."),
+		*GetName(),
+		*Snapshot.Destination.ToString(),
+		*Snapshot.TargetActor->GetName(),
+		Snapshot.bIsMoving ? TEXT ("True") : TEXT("False"));
 }
 
 void UWolfPresageComponent::RestorePhysics(const FActorSnapshot& Snapshot)
