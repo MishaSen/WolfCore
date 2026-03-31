@@ -32,10 +32,10 @@ public:
 	virtual void CreateSnapshot_Implementation(FActorSnapshot& OutSnapshot) override;
 	virtual void RestoreSnapshot_Implementation(const FActorSnapshot& Snapshot) override;
 
+	void SetIsSimulating(bool bState) { bIsSimulating = bState; }
 	void SetSimulationTransform(const FTransform& NewTransform) { SimulationTransform = NewTransform; }
 
 public:
-	bool bIsSimulating = false;
 	
 private:
 	void SimulatePhysicsStep(float DeltaTime);
@@ -76,4 +76,5 @@ private:
 	TArray<FActorSnapshot> PredictionBuffer;
 	
 	bool bIsRestoringSnapshot = false;
+	bool bIsSimulating = false;
 };
