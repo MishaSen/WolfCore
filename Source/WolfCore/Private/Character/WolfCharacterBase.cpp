@@ -20,7 +20,7 @@
 #include "WolfCore/Public/AbilitySystem/WolfAbilitySystemComponent.h"
 #include "WolfCore/Public/Presage/PresageAbilityRequest.h"
 
-AWolfCharacterBase::AWolfCharacterBase() // TODO: Fat Class. Split.
+AWolfCharacterBase::AWolfCharacterBase() 
 {
 	PrimaryActorTick.bCanEverTick = true;
 

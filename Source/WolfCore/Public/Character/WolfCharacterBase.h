@@ -41,77 +41,78 @@ public:
 
 	virtual void BeginPlay() override;
 	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
-	UCombatModeSubsystem* GetCMS() const;
 	virtual void PossessedBy(AController* NewController) override;
 
 	virtual UAbilitySystemComponent* GetAbilitySystemComponent() const override { return AbilityControl ? AbilityControl->GetWolfASC() : nullptr; }
-	FORCEINLINE UAnimInstance* GetAnimInst() const { return CachedAnimInst; }
-
-	UFUNCTION(BlueprintPure, Category = "Wolf|Abilities")
-	FGameplayAbilitySpecHandle GetAbilitySpecHandle(const TSubclassOf<UGameplayAbility>& AbilityClass) const;
+	UCombatModeSubsystem* GetCMS() const;
 
 	UFUNCTION(BlueprintNativeEvent, BlueprintCallable, Category = "Wolf|Combat")
 	void Die();
+
+	UFUNCTION(BlueprintPure, Category = "Wolf|Abilities")
+	FGameplayAbilitySpecHandle GetAbilitySpecHandle(const TSubclassOf<UGameplayAbility>& AbilityClass) const;
+	
+	UBaseCombatAbility* GetActiveCombatAbility() const;
+	bool IsInvulnerableAt(float RelativeTime) const;
+	
+	void SimulateTick(float DeltaTime);
+	void ClearPredictionBuffer(float PredictionWindow);
+	const FActorSnapshot* GetSnapshotAtTime(float RelativeTime) const;
 
 	UFUNCTION(BlueprintPure, Category = "Wolf|Presage")
 	FTransform GetProjectedTransform(float FutureTimeDelta) const;
 
 	UFUNCTION(BlueprintPure, Category = "Wolf|Presage")
 	float GetTimeToNextHitImpact() const;
-
-	void UpdateTemporalPreview(float PreviewTime);
 	
+	void UpdateTemporalPreview(float PreviewTime);
 	void GetPresageCollisionDimensions(float& OutRadius, float& OutHalfHeight) const;
-	bool IsInvulnerableAt(float RelativeTime) const;
-	UBaseCombatAbility* GetActiveCombatAbility() const;
 
 	virtual void CreateSnapshot_Implementation(FActorSnapshot& NewSnapshot) override;
 	virtual void RestoreSnapshot_Implementation(const FActorSnapshot& Snapshot) override;
 
 	void SetIsSimulating(bool bState) { if (PresageControl) PresageControl->SetIsSimulating(bState); }
-	void SimulateTick(float DeltaTime);
-	void ClearPredictionBuffer(float PredictionWindow);
-	const FActorSnapshot* GetSnapshotAtTime(float RelativeTime) const;
 
 	UFUNCTION(BlueprintCallable, Category = "Wolf|Presage")
 	UWolfPresageComponent* GetPresageComponent() const { return PresageControl; }
+	
+	FORCEINLINE UAnimInstance* GetAnimInst() const { return CachedAnimInst; }
 
 public:
 	FActiveGameplayEffectHandle PresageEffectHandle;
 
 protected:
-	static FTransform ExtractRootMotionAtTime(UAnimMontage* Montage, float Time);
-
 	UFUNCTION()
 	void HandleCombatModeChanged(FGameplayTag NewMode);
 	
+	static FTransform ExtractRootMotionAtTime(UAnimMontage* Montage, float Time);
 	UAnimMontage* GetWolfCurrentMontage() const { return CachedAnimInst ? CachedAnimInst->GetCurrentActiveMontage() : nullptr; }
 	
 protected:
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wolf|Abilities")
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wolf|Components")
 	TObjectPtr<UWolfAbilityComponent> AbilityControl;
 
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wolf|Abilities")
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wolf|Components")
 	TObjectPtr<UWolfPresageComponent> PresageControl;
 	
-	UPROPERTY(EditDefaultsOnly, Category = "Wolf|GAS|Abilities")
+	UPROPERTY(EditDefaultsOnly, Category = "Wolf|Data")
 	TObjectPtr<UAbilityConfig> AbilityConfig;
 
-	UPROPERTY()
+	UPROPERTY(EditDefaultsOnly, Category = "Wolf|Data")
+	TArray<TSubclassOf<UGameplayAbility>> StartupAbilities;
+
+	UPROPERTY(Transient)
 	TObjectPtr<UAnimInstance> CachedAnimInst;
 
-	UPROPERTY()
+	UPROPERTY(Transient)
 	mutable TWeakObjectPtr<UCombatModeSubsystem> CachedCMS;
 
 private:
-	bool bIsRestoringSnapshot = false;
-
-	UPROPERTY()
+	UPROPERTY(Transient)
 	TMap<TSubclassOf<UGameplayAbility>, FGameplayAbilitySpecHandle> GrantedAbilityHandles;
 
-	UPROPERTY()
+	UPROPERTY(Transient)
 	TArray<FGameplayTag> GrantedAbilityTags;
-
-	UPROPERTY(EditDefaultsOnly, Category = "Wolf|Abilities")
-	TArray<TSubclassOf<UGameplayAbility>> StartupAbilities;
+	
+	bool bIsRestoringSnapshot = false;
 }; 
