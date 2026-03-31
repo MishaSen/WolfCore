@@ -45,6 +45,37 @@ void UWolfPresageComponent::ClearPredictionBuffer(float MaxDuration)
 	PredictionBuffer.Empty(ExpectedFrames);
 }
 
+const FActorSnapshot* UWolfPresageComponent::GetSnapshotAtTime(float RelativeTime) const
+{
+	if (PredictionBuffer.Num() == 0) return nullptr;
+
+	const int32 Index = FMath::Clamp(FMath::RoundToInt(RelativeTime * WolfSimConfig::Frequency),
+								// Snapshot lookup will drift if the Subsystem uses a variable step or different fixed rate.
+							   0,
+							   PredictionBuffer.Num() - 1);
+	return &PredictionBuffer[Index];
+}
+
+void UWolfPresageComponent::CreateSnapshot_Implementation(FActorSnapshot& OutSnapshot)
+{
+	OutSnapshot.ActorRef = CharacterOwner.Get();
+	SnapshotPhysics(OutSnapshot);
+	SnapshotGAS(OutSnapshot);
+	SnapshotAnim(OutSnapshot);
+}
+
+void UWolfPresageComponent::RestoreSnapshot_Implementation(const FActorSnapshot& InSnapshot)
+{
+	bIsRestoringSnapshot = true;
+
+	RestorePhysics(InSnapshot);
+	RestoreGAS(InSnapshot);
+	RestoreAnim(InSnapshot);
+
+	bIsRestoringSnapshot = false;
+	// In UI or animation code, check if (bIsRestoringSnapshot) return; before doing effects
+}
+
 void UWolfPresageComponent::SimulatePhysicsStep(float DeltaTime)
 {
 	if (!IsValid(GetCMS()) || GetMoveComp()->Velocity.IsNearlyZero()) return;
@@ -93,54 +124,6 @@ void UWolfPresageComponent::SimulatePhysicsStep(float DeltaTime)
 	}*/
 }
 
-void UWolfPresageComponent::SimulateAnimationStep(float DeltaTime)
-{
-	auto* AnimInst = GetAnimInst();
-	if (!IsValid(AnimInst)) return;
-	
-	const auto* CurrentMontage = GetCurrentMontage();
-	if (!IsValid(CurrentMontage)) return;
-
-	const auto CurrentPos = AnimInst->Montage_GetPosition(CurrentMontage);
-	const auto NewPos = CurrentPos + DeltaTime;
-
-	AnimInst->Montage_SetPosition(CurrentMontage, NewPos);
-
-	if (CurrentMontage->HasRootMotion())
-	{
-		const auto RootMotionDelta = CurrentMontage->ExtractRootMotionFromRange(CurrentPos,NewPos, FAnimExtractContext());
-		const auto WorldDelta = GetOwnerRotation().RotateVector(RootMotionDelta.GetLocation());
-
-		if (bIsSimulating) SimulationTransform.AddToTranslation(WorldDelta);
-		else WOLF_WARN(TEXT("SimulateAnimStep() activating during outside of Simulation."));
-	}
-
-	if (NewPos >= CurrentMontage->GetPlayLength())
-	{
-		AnimInst->Montage_Stop(0.1f, CurrentMontage); // If seeing t-poses, set to idle state
-	}
-}
-
-void UWolfPresageComponent::CreateSnapshot_Implementation(FActorSnapshot& OutSnapshot)
-{
-	OutSnapshot.ActorRef = CharacterOwner.Get();
-	SnapshotPhysics(OutSnapshot);
-	SnapshotGAS(OutSnapshot);
-	SnapshotAnim(OutSnapshot);
-}
-
-void UWolfPresageComponent::RestoreSnapshot_Implementation(const FActorSnapshot& InSnapshot)
-{
-	bIsRestoringSnapshot = true;
-
-	RestorePhysics(InSnapshot);
-	RestoreGAS(InSnapshot);
-	RestoreAnim(InSnapshot);
-
-	bIsRestoringSnapshot = false;
-	// In UI or animation code, check if (bIsRestoringSnapshot) return; before doing effects
-}
-
 void UWolfPresageComponent::SnapshotPhysics(FActorSnapshot& Snapshot) const
 {
 	Snapshot.Location = GetSimLocation();
@@ -164,49 +147,6 @@ void UWolfPresageComponent::SnapshotPhysics(FActorSnapshot& Snapshot) const
 				*GetName(),
 				*Snapshot.AIMoveTarget.ToString(),
 				Snapshot.bIsMoving ? TEXT ("True") : TEXT("False"));
-	}
-}
-
-void UWolfPresageComponent::SnapshotGAS(FActorSnapshot& Snapshot) const
-{
-	if (!IsValid(CachedASC)) return;
-
-	const auto& Attributes = AbilityControl->GetCachedAttributes();
-	
-	Snapshot.AttributeValues.Empty(Attributes.Num());
-	for (const auto& Attribute : Attributes)
-	{
-		Snapshot.AttributeValues.Add(CachedASC->GetNumericAttribute(Attribute));
-	}
-
-	Snapshot.ActiveEffects.Reset();
-	const FGameplayEffectQuery Query;
-	const auto ActiveHandles = CachedASC->GetActiveEffects(Query);
-	Snapshot.ActiveEffects.Reserve(ActiveHandles.Num());
-
-	for (const auto& Handle : ActiveHandles)
-	{
-		if (const auto* Effect = CachedASC->GetActiveGameplayEffect(Handle))
-		{
-			FStoredEffect StoredEffect;
-			StoredEffect.EffectClass = Effect->Spec.Def.GetClass();
-			StoredEffect.Level = Effect->Spec.GetLevel();
-			StoredEffect.Stacks = Effect->Spec.GetStackCount();
-			StoredEffect.RemainingDuration = Effect->GetDuration() > 0.f
-				                                 ? Effect->GetTimeRemaining(GetWorld()->GetTimeSeconds())
-				                                 : -1.f;
-
-			Snapshot.ActiveEffects.Add(StoredEffect);
-		}
-	}
-}
-
-void UWolfPresageComponent::SnapshotAnim(FActorSnapshot& Snapshot) const
-{
-	if (auto* CurrentMontage = GetCurrentMontage())
-	{
-		Snapshot.CurrentMontage = CurrentMontage;
-		Snapshot.MontagePosition = GetAnimInst()->Montage_GetPosition(CurrentMontage);
 	}
 }
 
@@ -243,6 +183,89 @@ void UWolfPresageComponent::RestorePhysics(const FActorSnapshot& Snapshot)
 	{
 		if (!PrimitiveComp->IsSimulatingPhysics()) return;
 		PrimitiveComp->SetPhysicsLinearVelocity(Snapshot.Velocity);
+	}
+}
+
+void UWolfPresageComponent::SimulateAnimationStep(float DeltaTime)
+{
+	auto* AnimInst = GetAnimInst();
+	if (!IsValid(AnimInst)) return;
+	
+	const auto* CurrentMontage = GetCurrentMontage();
+	if (!IsValid(CurrentMontage)) return;
+
+	const auto CurrentPos = AnimInst->Montage_GetPosition(CurrentMontage);
+	const auto NewPos = CurrentPos + DeltaTime;
+
+	AnimInst->Montage_SetPosition(CurrentMontage, NewPos);
+
+	if (CurrentMontage->HasRootMotion())
+	{
+		const auto RootMotionDelta = CurrentMontage->ExtractRootMotionFromRange(CurrentPos,NewPos, FAnimExtractContext());
+		const auto WorldDelta = GetOwnerRotation().RotateVector(RootMotionDelta.GetLocation());
+
+		if (bIsSimulating) SimulationTransform.AddToTranslation(WorldDelta);
+		else WOLF_WARN(TEXT("SimulateAnimStep() activating during outside of Simulation."));
+	}
+
+	if (NewPos >= CurrentMontage->GetPlayLength())
+	{
+		AnimInst->Montage_Stop(0.1f, CurrentMontage); // If seeing t-poses, set to idle state
+	}
+}
+
+void UWolfPresageComponent::SnapshotAnim(FActorSnapshot& Snapshot) const
+{
+	if (auto* CurrentMontage = GetCurrentMontage())
+	{
+		Snapshot.CurrentMontage = CurrentMontage;
+		Snapshot.MontagePosition = GetAnimInst()->Montage_GetPosition(CurrentMontage);
+	}
+}
+
+void UWolfPresageComponent::RestoreAnim(const FActorSnapshot& Snapshot)
+{
+	if (auto* AnimInst = GetAnimInst())
+	{
+		AnimInst->StopAllMontages(0.f);
+		if (!Snapshot.CurrentMontage.IsValid()) return;
+
+		AnimInst->Montage_Play(Snapshot.CurrentMontage.Get(), 1.f);
+		AnimInst->Montage_SetPosition(Snapshot.CurrentMontage.Get(), Snapshot.MontagePosition);
+	}
+}
+
+void UWolfPresageComponent::SnapshotGAS(FActorSnapshot& Snapshot) const
+{
+	if (!IsValid(CachedASC)) return;
+
+	const auto& Attributes = AbilityControl->GetCachedAttributes();
+	
+	Snapshot.AttributeValues.Empty(Attributes.Num());
+	for (const auto& Attribute : Attributes)
+	{
+		Snapshot.AttributeValues.Add(CachedASC->GetNumericAttribute(Attribute));
+	}
+
+	Snapshot.ActiveEffects.Reset();
+	const FGameplayEffectQuery Query;
+	const auto ActiveHandles = CachedASC->GetActiveEffects(Query);
+	Snapshot.ActiveEffects.Reserve(ActiveHandles.Num());
+
+	for (const auto& Handle : ActiveHandles)
+	{
+		if (const auto* Effect = CachedASC->GetActiveGameplayEffect(Handle))
+		{
+			FStoredEffect StoredEffect;
+			StoredEffect.EffectClass = Effect->Spec.Def.GetClass();
+			StoredEffect.Level = Effect->Spec.GetLevel();
+			StoredEffect.Stacks = Effect->Spec.GetStackCount();
+			StoredEffect.RemainingDuration = Effect->GetDuration() > 0.f
+				                                 ? Effect->GetTimeRemaining(GetWorld()->GetTimeSeconds())
+				                                 : -1.f;
+
+			Snapshot.ActiveEffects.Add(StoredEffect);
+		}
 	}
 }
 
@@ -289,27 +312,4 @@ void UWolfPresageComponent::RestoreGAS(const FActorSnapshot& Snapshot)
 	}
 
 	// TODO: When we implement the UI Controller, remember to check this bool when doing delegate broadcasts
-}
-
-void UWolfPresageComponent::RestoreAnim(const FActorSnapshot& Snapshot)
-{
-	if (auto* AnimInst = GetAnimInst())
-	{
-		AnimInst->StopAllMontages(0.f);
-		if (!Snapshot.CurrentMontage.IsValid()) return;
-
-		AnimInst->Montage_Play(Snapshot.CurrentMontage.Get(), 1.f);
-		AnimInst->Montage_SetPosition(Snapshot.CurrentMontage.Get(), Snapshot.MontagePosition);
-	}
-}
-
-const FActorSnapshot* UWolfPresageComponent::GetSnapshotAtTime(float RelativeTime) const
-{
-	if (PredictionBuffer.Num() == 0) return nullptr;
-
-	const int32 Index = FMath::Clamp(FMath::RoundToInt(RelativeTime * WolfSimConfig::Frequency),
-								// Snapshot lookup will drift if the Subsystem uses a variable step or different fixed rate.
-							   0,
-							   PredictionBuffer.Num() - 1);
-	return &PredictionBuffer[Index];
 }
