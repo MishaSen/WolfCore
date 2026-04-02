@@ -137,15 +137,14 @@ void UCombatModeSubsystem::ScrubTimeline(float NewTime)
 	if (FMath::IsNearlyEqual(ClampedTime, CurrentTimelineTime)) return; // No time change; no snapshot change
 	CurrentTimelineTime = ClampedTime;
 
-	for (auto It = TrackedCombatants.CreateIterator(); It; ++It)
+	for (auto Combatant : TrackedCombatants)
 	{
-		auto* WolfChar = It->Get();
-		if (IsValid(WolfChar))
-		{
-			const auto* BakedFrame = WolfChar->GetPresageComponent()->GetSnapshotAtTime(CurrentTimelineTime);
-			if (BakedFrame) WolfChar->RestoreSnapshot_Implementation(*BakedFrame);
-		}
-		else It.RemoveCurrent();
+		auto* WolfChar = Cast<AWolfCharacterBase>(Combatant.Get());
+		if (!IsValid(WolfChar)) continue;
+
+		const auto* BakedFrame = WolfChar->GetPresageComponent()->GetSnapshotAtTime(CurrentTimelineTime);
+		if (BakedFrame) WolfChar->RestoreSnapshot_Implementation(*BakedFrame);
+		else WOLF_WARN(TEXT("No snapshot found for %s at %.2fs"), *WolfChar->GetName(), CurrentTimelineTime);
 	}
 	WOLF_LOG(Log, TEXT("Timeline Scrubbed to : %.2fs /  %.2fs"), CurrentTimelineTime, MaxTimelineDuration);
 }

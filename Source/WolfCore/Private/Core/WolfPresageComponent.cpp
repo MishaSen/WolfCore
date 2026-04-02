@@ -152,10 +152,14 @@ void UWolfPresageComponent::SnapshotPhysics(FActorSnapshot& Snapshot) const
 		}
 	}
 
-	WOLF_LOG(Log, TEXT("Character %s has Path Destination %s targeting %s. IsMoving = %s."),
+	const int32 FrameIndex = bIsSimulating ? PredictionBuffer.Num() : -1;
+	const FString FrameType = FrameIndex == -1 ? TEXT("Master") : FString::Printf(TEXT("STEP %d"), FrameIndex);
+
+	WOLF_LOG(Log, TEXT("[Frame: %s] Character %s has Path Destination %s targeting %s. IsMoving = %s."),
+		*FrameType,
 		*GetName(),
 		*Snapshot.Destination.ToString(),
-		*Snapshot.TargetActor->GetName(),
+		Snapshot.TargetActor.IsValid() ? *Snapshot.TargetActor->GetName() : TEXT("None"),
 		Snapshot.bIsMoving ? TEXT ("True") : TEXT("False"));
 }
 

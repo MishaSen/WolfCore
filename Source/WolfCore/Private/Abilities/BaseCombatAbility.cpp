@@ -9,6 +9,7 @@
 #include "Abilities/Tasks/AbilityTask_WaitDelay.h"
 #include "Abilities/Tasks/AbilityTask_WaitGameplayEvent.h"
 #include "Core/WolfGameplayTags.h"
+#include "Debug/WolfDebug.h"
 
 UBaseCombatAbility::UBaseCombatAbility()
 {
@@ -20,6 +21,7 @@ UBaseCombatAbility::UBaseCombatAbility()
 void UBaseCombatAbility::StartCombatSequence()
 {
 	CurrentPeriodIndex = 0;
+	WOLF_LOG(Log, TEXT("Combat sequence started with %d periods."), AbilitySequence.Num());
 	PlayNextPeriod();
 }
 
