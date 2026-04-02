@@ -16,7 +16,6 @@
 #include "Presage/ActorSnapshot.h"
 #include "Presage/Snapshot.h"
 #include "Animation/AnimInstance.h"
-#include "Systems/CombatModeSubsystem.h"
 
 #include "WolfCharacterBase.generated.h"
 

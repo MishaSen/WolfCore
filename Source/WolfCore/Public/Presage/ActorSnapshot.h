@@ -4,6 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "GameplayTagContainer.h"
+#include "Abilities/BaseCombatAbility.h"
 #include "Engine/EngineTypes.h"
 
 #include "ActorSnapshot.generated.h"
@@ -62,6 +63,12 @@ struct FActorSnapshot
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Actor State")
 	uint8 CustomMovementMode = 0;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Actor State|Combat")
+	TWeakObjectPtr<UBaseCombatAbility> ActiveAbility = nullptr;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Actor State|Combat")
+	int32 CurrentPeriodIndex = 0;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Actor State")
 	TWeakObjectPtr<UAnimMontage> CurrentMontage = nullptr;
