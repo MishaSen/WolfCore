@@ -12,6 +12,7 @@
 #include "Debug/WolfDebug.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "Navigation/PathFollowingComponent.h"
+#include "DrawDebugHelpers.h"
 
 UWolfPresageComponent::UWolfPresageComponent()
 {
@@ -79,7 +80,7 @@ void UWolfPresageComponent::RestoreSnapshot_Implementation(const FActorSnapshot&
 
 void UWolfPresageComponent::SimulatePhysicsStep(float DeltaTime)
 {
-	if (!IsValid(GetCMS()) || GetMoveComp()->Velocity.IsNearlyZero()) return;
+	if (!GetCMS() || GetMoveComp()->Velocity.IsNearlyZero()) return;
 
 	const FVector Start = SimulationTransform.GetLocation();
 	const FVector Delta = GetMoveComp()->Velocity * DeltaTime;
@@ -327,7 +328,23 @@ void UWolfPresageComponent::RestoreGAS(const FActorSnapshot& Snapshot)
 
 	if (Snapshot.ActiveAbility.IsValid())
 	{
-		// TODO
+		auto* Ability = Snapshot.ActiveAbility.Get();
+		Ability->SetCurrentPeriodIndex(Snapshot.CurrentPeriodIndex);
+
+		const auto Montage = Snapshot.CurrentMontage.Get();
+		if (!IsValid(Montage) || !IsValid(GetAnimInst())) return;
+
+		if (GetAnimInst()->Montage_IsPlaying(Montage)) GetAnimInst()->Montage_SetPosition(Montage, Snapshot.MontagePosition);
+		else
+		{
+			AbilityControl->GetWolfASC()->PlayMontage(
+				Ability,
+				Ability->GetCurrentActivationInfo(),
+				Montage,
+				1.f,
+				NAME_None,
+				Snapshot.MontagePosition);
+		}
 	}
 }
 

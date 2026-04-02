@@ -76,6 +76,8 @@ public:
 
 public:
 	FActiveGameplayEffectHandle PresageEffectHandle;
+	
+	bool bIsRestoringSnapshot = false;
 
 protected:
 	UFUNCTION()
@@ -109,6 +111,4 @@ private:
 
 	UPROPERTY(Transient)
 	TArray<FGameplayTag> GrantedAbilityTags;
-	
-	bool bIsRestoringSnapshot = false;
 }; 

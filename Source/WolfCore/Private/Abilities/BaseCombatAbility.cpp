@@ -123,6 +123,12 @@ float UBaseCombatAbility::CalculateProjectedImpactTime() const
 	return -1.f;
 }
 
+int32 UBaseCombatAbility::SetCurrentPeriodIndex(int32 NewIndex)
+{
+	CurrentPeriodIndex = NewIndex;
+	return CurrentPeriodIndex;
+}
+
 bool UBaseCombatAbility::IsInvulnerableAt(float RelativeTime) const
 {
 	float TimeAccumulator = 0.f;

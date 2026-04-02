@@ -69,6 +69,7 @@ public:
 	float CalculateProjectedImpactTime() const;
 
 	int32 GetCurrentPeriodIndex() const { return CurrentPeriodIndex; }
+	int32 SetCurrentPeriodIndex(int32 NewIndex);
 
 	bool IsInvulnerableAt(float RelativeTime) const;
 	
