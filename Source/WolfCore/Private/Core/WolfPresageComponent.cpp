@@ -275,6 +275,12 @@ void UWolfPresageComponent::SnapshotGAS(FActorSnapshot& Snapshot) const
 			Snapshot.ActiveEffects.Add(StoredEffect);
 		}
 	}
+
+	if (auto* ActiveAbility = CharacterOwner->GetActiveCombatAbility())
+	{
+		Snapshot.ActiveAbility = ActiveAbility;
+		Snapshot.CurrentPeriodIndex = ActiveAbility->GetCurrentPeriodIndex();
+	}
 }
 
 void UWolfPresageComponent::RestoreGAS(const FActorSnapshot& Snapshot)
@@ -319,7 +325,10 @@ void UWolfPresageComponent::RestoreGAS(const FActorSnapshot& Snapshot)
 		CachedASC->ApplyGameplayEffectSpecToSelf(*SpecHandle.Data.Get());
 	}
 
-	// TODO: When we implement the UI Controller, remember to check this bool when doing delegate broadcasts
+	if (Snapshot.ActiveAbility.IsValid())
+	{
+		// TODO
+	}
 }
 
 FVector UWolfPresageComponent::GetOwnerLocation() const { return CharacterOwner ? CharacterOwner->GetActorLocation() : FVector::ZeroVector; }

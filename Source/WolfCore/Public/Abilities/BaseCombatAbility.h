@@ -68,6 +68,8 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Presage")
 	float CalculateProjectedImpactTime() const;
 
+	int32 GetCurrentPeriodIndex() const { return CurrentPeriodIndex; }
+
 	bool IsInvulnerableAt(float RelativeTime) const;
 	
 protected:
