@@ -85,6 +85,7 @@ protected:
 	UFUNCTION()
 	void PlayNextPeriod();
 
+	AActor* GetTargetFromBlackboard() const;
 	UFUNCTION()
 	void OnPeriodCompleted();
 

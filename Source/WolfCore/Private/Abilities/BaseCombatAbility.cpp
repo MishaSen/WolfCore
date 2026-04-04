@@ -3,13 +3,18 @@
 
 #include "WolfCore/Public/Abilities/BaseCombatAbility.h"
 
+#include "AIController.h"
 #include "Abilities/Notifies/AnimNotify_Hit.h"
 #include "Abilities/Tasks/AbilityTask.h"
 #include "Abilities/Tasks/AbilityTask_PlayMontageAndWait.h"
 #include "Abilities/Tasks/AbilityTask_WaitDelay.h"
 #include "Abilities/Tasks/AbilityTask_WaitGameplayEvent.h"
+#include "BehaviorTree/BlackboardComponent.h"
+#include "Character/WolfCharacterBase.h"
 #include "Core/WolfGameplayTags.h"
 #include "Debug/WolfDebug.h"
+#include "GameFramework/CharacterMovementComponent.h"
+#include "Abilities/Tasks/AbilityTask_MoveToLocation.h"
 
 UBaseCombatAbility::UBaseCombatAbility()
 {
@@ -84,6 +89,46 @@ void UBaseCombatAbility::PlayNextPeriod()
 		DelayTask->OnFinish.AddDynamic(this, &UBaseCombatAbility::OnPeriodCompleted);
 		DelayTask->ReadyForActivation();
 	}
+}
+
+void UBaseCombatAbility::ExecuteMoveTo(FCombatPeriod& Period)
+{
+	const auto* Target = GetTargetFromBlackboard();
+	if (!Target) { OnPeriodCompleted(); return; }
+
+	const auto* AvatarActor = GetAvatarActorFromActorInfo();
+	const auto* Character = Cast<AWolfCharacterBase>(AvatarActor);
+
+	if (Character)
+	{
+		const auto* MoveComp = Character->GetCharacterMovement();
+		auto Distance = FVector::Dist(AvatarActor->GetActorLocation(), Target->GetActorLocation());
+		auto Speed =  MoveComp->MaxWalkSpeed;
+
+		auto* MoveTask = UAbilityTask_MoveToLocation::MoveToLocation(this, TEXT("PresageMoveTo"),
+			Target->GetActorLocation(), Period.Duration, nullptr, nullptr);
+
+		MoveTask->OnTargetLocationReached.AddDynamic(this, &UBaseCombatAbility::OnPeriodCompleted);
+		MoveTask->ReadyForActivation();
+	}
+}
+
+AActor* UBaseCombatAbility::GetTargetFromBlackboard() const
+{
+	const auto Info = GetActorInfo();
+	if (!Info.AvatarActor.IsValid()) return nullptr;
+
+	const auto* Controller = Info.AvatarActor->GetInstigatorController();
+	const AAIController* AIC = Cast<AAIController>(Controller);
+	if (AIC)
+	{
+		if (const auto* BB = AIC->GetBlackboardComponent())
+		{
+			static const FName TargetKey = TEXT("TargetActor"); // Static FName prevents re-hasing the string every frame/call
+			return Cast<AActor>(BB->GetValueAsObject(TargetKey));
+		}
+	}
+	return nullptr;
 }
 
 void UBaseCombatAbility::OnPeriodCompleted()
