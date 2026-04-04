@@ -10,10 +10,11 @@ UENUM()
 enum class EPeriodType : uint8
 {
 	Windup,
-	Attack, // Trigger Hit logic
-	Recovery,
+	Attack,
+	Wait,
+	Rotate,
 	Evasion,
-	MoveTo // Only used for TB
+	MoveTo
 };
 
 USTRUCT(BlueprintType)
