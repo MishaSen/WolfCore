@@ -35,6 +35,17 @@ void UBaseCombatAbility::PlayNextPeriod()
 
 	const auto& CombatPeriod = AbilitySequence[CurrentPeriodIndex];
 
+	switch (CombatPeriod.Type)
+	{
+		case EPeriodType::MoveTo: ExecuteMoveTo(CombatPeriod); break;
+		case EPeriodType::Rotate: ExecuteRotate(CombatPeriod); break;
+		case EPeriodType::Wait:	  ExecuteWait(CombatPeriod);   break;
+		
+		case EPeriodType::Attack:
+		case EPeriodType::Windup:
+		case EPeriodType::Evasion: ExecuteAnimatedPeriod(CombatPeriod); break;
+	}
+
 	// Set up Event Listener if Attack
 	if (CombatPeriod.Type == EPeriodType::Attack)
 	{
@@ -94,7 +105,7 @@ void UBaseCombatAbility::HandleAttackHitEvent()
 float UBaseCombatAbility::GetPeriodDuration(const FCombatPeriod& Period)
 {
 	if (Period.Montage) return Period.Montage->GetPlayLength();
-	return Period.Duration > 0.f ? Period.Duration : 0.f;
+	return Period.Duration;
 }
 
 float UBaseCombatAbility::CalculateProjectedImpactTime() const
