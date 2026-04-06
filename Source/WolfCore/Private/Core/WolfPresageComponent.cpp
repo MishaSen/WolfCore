@@ -85,15 +85,16 @@ void UWolfPresageComponent::SimulatePhysicsStep(float DeltaTime)
 
 	auto SimVelocity = GetMoveComp()->Velocity;
 	auto* Ability = bIsSimulating && SimVelocity.IsNearlyZero() ? CharacterOwner->GetActiveCombatAbility() : nullptr;
-	if (Ability && Ability->AbilitySequence.IsValidIndex(Ability->GetCurrentPeriodIndex()))
+	if (Ability)
 	{
-		const auto& Step = Ability->AbilitySequence[Ability->GetCurrentPeriodIndex()];
-		if (Step.Type == EPeriodType::MoveTo)
+		const auto& Sequence = Ability->AbilitySequence;
+		const auto Index = Ability->GetCurrentPeriodIndex();
+		if (Sequence.IsValidIndex(Index) && Sequence[Index].Type == EPeriodType::MoveTo)
 		{
-			const auto Destination = GetSnapshotAtTime(0)->Destination;
+			const auto Destination = Sequence[Index].MoveToDestination;
 			const auto CurrentLocation = SimulationTransform.GetLocation();
 			const auto Direction = (Destination - CurrentLocation).GetSafeNormal();
-				
+
 			SimVelocity = Direction * GetMoveComp()->MaxWalkSpeed;
 		}
 	}

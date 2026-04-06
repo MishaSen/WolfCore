@@ -101,7 +101,8 @@ void UBaseCombatAbility::ExecuteMoveTo(FCombatPeriod& Period)
 	if (AvatarCharacter)
 	{
 		const auto* MoveComp = AvatarCharacter->GetCharacterMovement();
-		const auto Distance = FVector::Dist(AvatarActor->GetActorLocation(), Target->GetActorLocation());
+		const auto TargetLocation = Target->GetActorLocation();
+		const auto Distance = FVector::Dist(AvatarActor->GetActorLocation(), TargetLocation);
 		/*
 		 * TODO: Goes to exact location of the target. Calculate an offset.
 		 * const auto Direction = (GoalLocation - Avatar->GetActorLocation()).GetSafeNormal();
@@ -113,11 +114,11 @@ void UBaseCombatAbility::ExecuteMoveTo(FCombatPeriod& Period)
 		const auto CurrentVelocity = AvatarActor->GetVelocity().Size();
 
 		Period.Duration = CalculateMovementDuration(Distance, MaxSpeed, Acceleration, CurrentVelocity);
-
+		Period.MoveToDestination = TargetLocation;
 		auto* MoveTask = UAbilityTask_MoveToLocation::MoveToLocation(
 			this,
 			TEXT("PresageMoveTo"),
-			Target->GetActorLocation(),
+			TargetLocation,
 			Period.Duration,
 			nullptr,
 			nullptr);

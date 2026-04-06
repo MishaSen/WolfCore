@@ -43,6 +43,9 @@ struct FCombatPeriod
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Attribute Effects")
 	FScalableFloat Damage = 0.f;
+
+	UPROPERTY(BlueprintReadOnly)
+	FVector MoveToDestination = FVector::ZeroVector;
 };
 /**
  * 
