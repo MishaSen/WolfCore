@@ -102,6 +102,12 @@ void UBaseCombatAbility::ExecuteMoveTo(FCombatPeriod& Period)
 	{
 		const auto* MoveComp = AvatarCharacter->GetCharacterMovement();
 		const auto Distance = FVector::Dist(AvatarActor->GetActorLocation(), Target->GetActorLocation());
+		/*
+		 * TODO: Goes to exact location of the target. Calculate an offset.
+		 * const auto Direction = (GoalLocation - Avatar->GetActorLocation()).GetSafeNormal();
+		 * const auto MeleeRange = 150.f;
+		 * GoalLocation = GoalLocation - Direction * MeleeRange;
+		 */
 		const auto MaxSpeed = MoveComp->MaxWalkSpeed;
 		const auto Acceleration = MoveComp->MaxAcceleration;
 		const auto CurrentVelocity = AvatarActor->GetVelocity().Size();

@@ -82,8 +82,28 @@ void UWolfPresageComponent::SimulatePhysicsStep(float DeltaTime)
 {
 	if (!GetCMS() || GetMoveComp()->Velocity.IsNearlyZero()) return;
 
+	auto SimVelocity = GetMoveComp()->Velocity;
+	if (bIsSimulating && SimVelocity.IsNearlyZero())
+	{
+		if (auto* ActiveAbility = CharacterOwner->GetActiveCombatAbility())
+		{
+			const auto& Sequence = ActiveAbility->AbilitySequence;
+			int32 Index = ActiveAbility->GetCurrentPeriodIndex();
+
+			if (Sequence.IsValidIndex(Index) && Sequence[Index].Type == EPeriodType::MoveTo)
+			{
+				const auto Destination = GetSnapshotAtTime(0)->Destination;
+				const auto Direction = (Destination - SimulationTransform.GetLocation()).GetSafeNormal();
+				SimVelocity = Direction * GetMoveComp()->MaxWalkSpeed;
+			}
+		}
+	}
+
+	if (SimVelocity.IsNearlyZero()) return;
+
 	const FVector Start = SimulationTransform.GetLocation();
-	const FVector Delta = GetMoveComp()->Velocity * DeltaTime;
+	const FVector Delta = SimVelocity * DeltaTime;
+	// Not considering starting acceleration, but might not make a difference. Look out for bugs.
 	const FVector End = Start + Delta;
 
 	FHitResult Hit(1.f);
