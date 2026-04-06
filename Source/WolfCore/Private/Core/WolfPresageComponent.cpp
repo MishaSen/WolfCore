@@ -80,25 +80,24 @@ void UWolfPresageComponent::RestoreSnapshot_Implementation(const FActorSnapshot&
 
 void UWolfPresageComponent::SimulatePhysicsStep(float DeltaTime)
 {
-	if (!GetCMS() || GetMoveComp()->Velocity.IsNearlyZero()) return;
+	auto* MoveComp = GetMoveComp();
+	if (!GetCMS() || !IsValid(MoveComp)) return;
 
 	auto SimVelocity = GetMoveComp()->Velocity;
-	if (bIsSimulating && SimVelocity.IsNearlyZero())
+	auto* Ability = bIsSimulating && SimVelocity.IsNearlyZero() ? CharacterOwner->GetActiveCombatAbility() : nullptr;
+	if (Ability && Ability->AbilitySequence.IsValidIndex(Ability->GetCurrentPeriodIndex()))
 	{
-		if (auto* ActiveAbility = CharacterOwner->GetActiveCombatAbility())
+		const auto& Step = Ability->AbilitySequence[Ability->GetCurrentPeriodIndex()];
+		if (Step.Type == EPeriodType::MoveTo)
 		{
-			const auto& Sequence = ActiveAbility->AbilitySequence;
-			int32 Index = ActiveAbility->GetCurrentPeriodIndex();
-
-			if (Sequence.IsValidIndex(Index) && Sequence[Index].Type == EPeriodType::MoveTo)
-			{
-				const auto Destination = GetSnapshotAtTime(0)->Destination;
-				const auto Direction = (Destination - SimulationTransform.GetLocation()).GetSafeNormal();
-				SimVelocity = Direction * GetMoveComp()->MaxWalkSpeed;
-			}
+			const auto Destination = GetSnapshotAtTime(0)->Destination;
+			const auto CurrentLocation = SimulationTransform.GetLocation();
+			const auto Direction = (Destination - CurrentLocation).GetSafeNormal();
+				
+			SimVelocity = Direction * GetMoveComp()->MaxWalkSpeed;
 		}
 	}
-
+	
 	if (SimVelocity.IsNearlyZero()) return;
 
 	const FVector Start = SimulationTransform.GetLocation();
@@ -106,37 +105,25 @@ void UWolfPresageComponent::SimulatePhysicsStep(float DeltaTime)
 	// Not considering starting acceleration, but might not make a difference. Look out for bugs.
 	const FVector End = Start + Delta;
 
-	FHitResult Hit(1.f);
 	FCollisionQueryParams Params;
 	Params.AddIgnoredActor(CharacterOwner);
+	const FQuat Rotation = SimulationTransform.GetRotation();
+	const FCollisionShape Shape = CharacterOwner->GetCapsuleComponent()->GetCollisionShape();
+	FHitResult Hit(1.f);
+	
+	const bool bHit = GetWorld()->SweepSingleByChannel(Hit, Start, End, Rotation,ECC_Pawn, Shape, Params);
+	if (!bHit) { SimulationTransform.SetLocation(End); return; }
 
-	const bool bHit = GetWorld()->SweepSingleByChannel(Hit, Start, End,
-		SimulationTransform.GetRotation(),
-		ECC_Pawn,
-		CharacterOwner->GetCapsuleComponent()->GetCollisionShape(),
-		Params);
+	const FVector RemainingDelta = Delta * (1.f - Hit.Time);
+	const FVector SlideDelta = FVector::VectorPlaneProject(RemainingDelta, Hit.Normal);
+	if (SlideDelta.IsNearlyZero()) { SimulationTransform.SetLocation(Hit.Location); return; }
 
-	if (bHit)
-	{
-		const auto RemainingDelta = Delta * (1.f - Hit.Time);
-		const auto SlideDelta = FVector::VectorPlaneProject(RemainingDelta, Hit.Normal);
-
-		if (!SlideDelta.IsNearlyZero())
-		{
-			FHitResult SlideHit;
-			const auto SlideEnd = Hit.Location + SlideDelta;
-
-			GetWorld()->SweepSingleByChannel(SlideHit, Hit.Location, SlideEnd,
-				SimulationTransform.GetRotation(),
-				ECC_Pawn,
-				CharacterOwner->GetCapsuleComponent()->GetCollisionShape(),
-				Params);
-			
-			SimulationTransform.SetLocation(SlideHit.bBlockingHit ? SlideHit.Location : SlideEnd);
-		}
-		else SimulationTransform.SetLocation(Hit.Location);
-	}
-	else SimulationTransform.SetLocation(End);
+	FHitResult SlideHit;
+	const FVector SlideEnd = Hit.Location + SlideDelta;
+	const bool bSlideHit = GetWorld()->
+		SweepSingleByChannel(SlideHit,Hit.Location, SlideEnd, Rotation,ECC_Pawn, Shape, Params);
+	
+	SimulationTransform.SetLocation(bSlideHit ? SlideHit.Location : SlideEnd);
 }
 
 void UWolfPresageComponent::SnapshotPhysics(FActorSnapshot& Snapshot) const
