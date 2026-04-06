@@ -106,4 +106,7 @@ protected:
 
 	UPROPERTY(EditDefaultsOnly, Category = "Combat | Effects")
 	TSubclassOf<UGameplayEffect> DamageEffect;
+
+private:
+	static float CalculateMovementDuration(float TotalDistance, float MaxVelocity, float Acceleration, float StartVelocity);
 };

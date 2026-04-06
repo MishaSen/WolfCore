@@ -92,25 +92,51 @@ void UBaseCombatAbility::PlayNextPeriod()
 }
 
 void UBaseCombatAbility::ExecuteMoveTo(FCombatPeriod& Period)
-{
+{	
 	const auto* Target = GetTargetFromBlackboard();
-	if (!Target) { OnPeriodCompleted(); return; }
-
 	const auto* AvatarActor = GetAvatarActorFromActorInfo();
-	const auto* Character = Cast<AWolfCharacterBase>(AvatarActor);
+	if (!Target || !AvatarActor) { OnPeriodCompleted(); return; }
 
-	if (Character)
+	const auto* AvatarCharacter = Cast<AWolfCharacterBase>(AvatarActor);
+	if (AvatarCharacter)
 	{
-		const auto* MoveComp = Character->GetCharacterMovement();
-		auto Distance = FVector::Dist(AvatarActor->GetActorLocation(), Target->GetActorLocation());
-		auto Speed =  MoveComp->MaxWalkSpeed;
+		const auto* MoveComp = AvatarCharacter->GetCharacterMovement();
+		const auto Distance = FVector::Dist(AvatarActor->GetActorLocation(), Target->GetActorLocation());
+		const auto MaxSpeed = MoveComp->MaxWalkSpeed;
+		const auto Acceleration = MoveComp->MaxAcceleration;
+		const auto CurrentVelocity = AvatarActor->GetVelocity().Size();
 
-		auto* MoveTask = UAbilityTask_MoveToLocation::MoveToLocation(this, TEXT("PresageMoveTo"),
-			Target->GetActorLocation(), Period.Duration, nullptr, nullptr);
+		Period.Duration = CalculateMovementDuration(Distance, MaxSpeed, Acceleration, CurrentVelocity);
+
+		auto* MoveTask = UAbilityTask_MoveToLocation::MoveToLocation(
+			this,
+			TEXT("PresageMoveTo"),
+			Target->GetActorLocation(),
+			Period.Duration,
+			nullptr,
+			nullptr);
 
 		MoveTask->OnTargetLocationReached.AddDynamic(this, &UBaseCombatAbility::OnPeriodCompleted);
 		MoveTask->ReadyForActivation();
 	}
+}
+
+float UBaseCombatAbility::CalculateMovementDuration(float TotalDistance, float MaxVelocity, float Acceleration, float StartVelocity)
+{
+	if (Acceleration <= 0.f) return StartVelocity > 0.f ? TotalDistance / StartVelocity : 0.f;
+	if (StartVelocity >= MaxVelocity) return TotalDistance / StartVelocity;
+	
+	const auto TimeToReachMax = (MaxVelocity - StartVelocity) / Acceleration;
+	const auto DistanceCoveredDuringAcceleration = StartVelocity * TimeToReachMax + 0.5f * Acceleration * FMath::Square(TimeToReachMax);
+
+	if (DistanceCoveredDuringAcceleration >= TotalDistance) // Never reach MaxVelocity
+	{
+		return (-StartVelocity + FMath::Sqrt(FMath::Square(StartVelocity) + 2 * Acceleration * TotalDistance)) / Acceleration;
+	}
+
+	const auto RemainingDistance = TotalDistance - DistanceCoveredDuringAcceleration;
+	const auto TimeAtMax = RemainingDistance / MaxVelocity;
+	return TimeToReachMax + TimeAtMax;
 }
 
 AActor* UBaseCombatAbility::GetTargetFromBlackboard() const
