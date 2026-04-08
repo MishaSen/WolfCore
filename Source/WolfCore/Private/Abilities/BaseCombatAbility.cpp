@@ -98,13 +98,13 @@ void UBaseCombatAbility::ExecuteMoveTo(FCombatPeriod& Period)
 	if (!Target || !AvatarActor) { OnPeriodCompleted(); return; }
 
 	const auto* AvatarCharacter = Cast<AWolfCharacterBase>(AvatarActor);
-	if (AvatarCharacter)
+	if (IsValid(AvatarCharacter))
 	{
 		const auto* MoveComp = AvatarCharacter->GetCharacterMovement();
 		const auto TargetLocation = Target->GetActorLocation();
 		const auto Distance = FVector::Dist(AvatarActor->GetActorLocation(), TargetLocation);
 		/*
-		 * TODO: Goes to exact location of the target. Calculate an offset.
+		 * TODO: Goes to the exact location of the target. Calculate an offset.
 		 * const auto Direction = (GoalLocation - Avatar->GetActorLocation()).GetSafeNormal();
 		 * const auto MeleeRange = 150.f;
 		 * GoalLocation = GoalLocation - Direction * MeleeRange;
