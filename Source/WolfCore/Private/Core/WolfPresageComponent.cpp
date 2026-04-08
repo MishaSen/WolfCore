@@ -80,29 +80,10 @@ void UWolfPresageComponent::RestoreSnapshot_Implementation(const FActorSnapshot&
 
 void UWolfPresageComponent::SimulatePhysicsStep(float DeltaTime)
 {
-	auto* MoveComp = GetMoveComp();
-	if (!GetCMS() || !IsValid(MoveComp)) return;
+	if (!GetCMS() || !GetMoveComp()) return;
 
-	auto SimVelocity = GetMoveComp()->Velocity;
-	auto* Ability = bIsSimulating && SimVelocity.IsNearlyZero() ? CharacterOwner->GetActiveCombatAbility() : nullptr;
-
-	bool bHasDestination = false;
-	FVector Destination = FVector::ZeroVector;
-	
-	if (IsValid(Ability))
-	{
-		const auto& Sequence = Ability->AbilitySequence;
-		const auto Index = Ability->GetCurrentPeriodIndex();
-		if (Sequence.IsValidIndex(Index) && Sequence[Index].Type == EPeriodType::MoveTo)
-		{
-			Destination = Sequence[Index].MoveToDestination;
-			const auto CurrentLocation = SimulationTransform.GetLocation();
-			const auto Direction = (Destination - CurrentLocation).GetSafeNormal();
-
-			SimVelocity = Direction * GetMoveComp()->MaxWalkSpeed;
-			bHasDestination = true;
-		}
-	}
+	FVector Destination;
+	const auto SimVelocity = GetSimulatedVelocity(Destination);
 	
 	if (SimVelocity.IsNearlyZero()) return; // Direction might be very small.
 
@@ -110,21 +91,43 @@ void UWolfPresageComponent::SimulatePhysicsStep(float DeltaTime)
 	FVector Delta = SimVelocity * DeltaTime;
 	// Not considering starting acceleration, but might not make a difference. Look out for bugs.
 	
-	if (bHasDestination)
+	if (!Destination.IsZero())
 	{
 		const float DistanceToTarget = FVector::Dist(Start, Destination);
-		const float IntendedStepSize = Delta.Size();
-
-		if (IntendedStepSize > DistanceToTarget) Delta = Delta.GetSafeNormal() * DistanceToTarget;
+		if (Delta.Size() > DistanceToTarget) Delta = Delta.GetSafeNormal() * DistanceToTarget;
 	}
 	const FVector End = Start + Delta;
+	ResolveMovementWithCollision(Start, End, Delta);
+}
+
+FVector UWolfPresageComponent::GetSimulatedVelocity(FVector& Destination) const
+{
+	const FVector Velocity = GetMoveComp()->Velocity;
+	if (!bIsSimulating && Velocity.IsNearlyZero()) return Velocity;
 	
+	if (const auto* Ability = CharacterOwner->GetActiveCombatAbility())
+	{
+		const auto& Sequence = Ability->AbilitySequence;
+		const auto Index = Ability->GetCurrentPeriodIndex();
+		if (Sequence.IsValidIndex(Index) && Sequence[Index].Type == EPeriodType::MoveTo)
+		{
+			Destination = Sequence[Index].MoveToDestination;
+			const FVector ToDestination = Destination - SimulationTransform.GetLocation();
+			return ToDestination.GetSafeNormal() * GetMoveComp()->MaxWalkSpeed;
+		}
+	}
+	return Velocity;
+}
+
+void UWolfPresageComponent::ResolveMovementWithCollision(const FVector& Start, const FVector& End, FVector& Delta)
+{
 	FCollisionQueryParams Params;
 	Params.AddIgnoredActor(CharacterOwner);
+	
 	const FQuat Rotation = SimulationTransform.GetRotation();
 	const FCollisionShape Shape = CharacterOwner->GetCapsuleComponent()->GetCollisionShape();
-	FHitResult Hit(1.f);
 	
+	FHitResult Hit(1.f);
 	const bool bHit = GetWorld()->SweepSingleByChannel(Hit, Start, End, Rotation,ECC_Pawn, Shape, Params);
 	if (!bHit) { SimulationTransform.SetLocation(End); return; }
 

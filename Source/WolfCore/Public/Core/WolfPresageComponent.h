@@ -35,6 +35,8 @@ public:
 
 private:
 	void SimulatePhysicsStep(float DeltaTime);
+	FVector GetSimulatedVelocity(FVector& Destination) const;
+	void ResolveMovementWithCollision(const FVector& Start, const FVector& End, FVector& Delta);
 	void SnapshotPhysics(FActorSnapshot& Snapshot) const;
 	void RestorePhysics(const FActorSnapshot& Snapshot);
 	
