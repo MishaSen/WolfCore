@@ -31,10 +31,10 @@ void UWolfPresageComponent::BeginPlay()
 	}
 }
 
-void UWolfPresageComponent::SimulateTick(float DeltaTime)
+void UWolfPresageComponent::SimulateTick(float Step)
 {
-	SimulatePhysicsStep(DeltaTime);
-	SimulateAnimationStep(DeltaTime);
+	SimulatePhysicsStep(Step);
+	SimulateAnimationStep(Step);
 
 	FActorSnapshot FutureFrame;
 	CreateSnapshot_Implementation(FutureFrame);
@@ -78,7 +78,7 @@ void UWolfPresageComponent::RestoreSnapshot_Implementation(const FActorSnapshot&
 	// In UI or animation code, check if (bIsRestoringSnapshot) return; before doing effects
 }
 
-void UWolfPresageComponent::SimulatePhysicsStep(float DeltaTime)
+void UWolfPresageComponent::SimulatePhysicsStep(float Step)
 {
 	if (!GetCMS() || !GetMoveComp()) return;
 
@@ -88,7 +88,7 @@ void UWolfPresageComponent::SimulatePhysicsStep(float DeltaTime)
 	if (SimVelocity.IsNearlyZero()) return; // Direction might be very small.
 
 	const FVector Start = SimulationTransform.GetLocation();
-	FVector Delta = SimVelocity * DeltaTime;
+	FVector Delta = SimVelocity * Step;
 	// Not considering starting acceleration, but might not make a difference. Look out for bugs.
 	
 	if (!Destination.IsZero())

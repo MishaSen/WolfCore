@@ -28,13 +28,13 @@ public:
 
 	void SetIsSimulating(bool bState) { bIsSimulating = bState; }
 	void SetSimulationTransform(const FTransform& NewTransform) { SimulationTransform = NewTransform; }
-	virtual void SimulateTick(float DeltaTime);
+	virtual void SimulateTick(float Step);
 
 	virtual void CreateSnapshot_Implementation(FActorSnapshot& OutSnapshot) override;
 	virtual void RestoreSnapshot_Implementation(const FActorSnapshot& Snapshot) override;
 
 private:
-	void SimulatePhysicsStep(float DeltaTime);
+	void SimulatePhysicsStep(float Step);
 	FVector GetSimulatedVelocity(FVector& Destination) const;
 	void ResolveMovementWithCollision(const FVector& Start, const FVector& End, FVector& Delta);
 	void SnapshotPhysics(FActorSnapshot& Snapshot) const;
