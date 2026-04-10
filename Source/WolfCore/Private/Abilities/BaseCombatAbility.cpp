@@ -91,8 +91,9 @@ void UBaseCombatAbility::PlayNextPeriod()
 	}
 }
 
-void UBaseCombatAbility::ExecuteMoveTo(FCombatPeriod& Period)
-{	
+void UBaseCombatAbility::ExecuteMoveTo(FCombatPeriod Period)
+{
+	WOLF_LOG(Log, TEXT("Executing MoveTo for ability %s from character %s"), *GetName(), *GetAvatarActorFromActorInfo()->GetName());
 	const auto* Target = GetTargetFromBlackboard();
 	const auto* AvatarActor = GetAvatarActorFromActorInfo();
 	if (!Target || !AvatarActor) { OnPeriodCompleted(); return; }
@@ -212,12 +213,6 @@ float UBaseCombatAbility::CalculateProjectedImpactTime() const
 		}
 	}
 	return -1.f;
-}
-
-int32 UBaseCombatAbility::SetCurrentPeriodIndex(int32 NewIndex)
-{
-	CurrentPeriodIndex = NewIndex;
-	return CurrentPeriodIndex;
 }
 
 bool UBaseCombatAbility::IsInvulnerableAt(float RelativeTime) const

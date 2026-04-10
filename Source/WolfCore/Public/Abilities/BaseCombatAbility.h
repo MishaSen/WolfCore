@@ -73,7 +73,7 @@ public:
 	float CalculateProjectedImpactTime() const;
 
 	int32 GetCurrentPeriodIndex() const { return CurrentPeriodIndex; }
-	int32 SetCurrentPeriodIndex(int32 NewIndex);
+	void SetCurrentPeriodIndex(int32 NewIndex) { CurrentPeriodIndex = NewIndex; }
 
 	bool IsInvulnerableAt(float RelativeTime) const;
 	
@@ -85,8 +85,12 @@ protected:
 	UFUNCTION()
 	void StartCombatSequence();
 
+	void ExecuteRotate(const FCombatPeriod& element);
+	void ExecuteWait(const FCombatPeriod& element);
+	void ExecuteAnimatedPeriod(const FCombatPeriod& element);
 	UFUNCTION()
 	void PlayNextPeriod();
+	void ExecuteMoveTo(FCombatPeriod Period);
 
 	AActor* GetTargetFromBlackboard() const;
 	UFUNCTION()
