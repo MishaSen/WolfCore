@@ -30,6 +30,14 @@ void UBaseCombatAbility::StartCombatSequence()
 	PlayNextPeriod();
 }
 
+void UBaseCombatAbility::ExecuteWait(const FCombatPeriod& element)
+{
+}
+
+void UBaseCombatAbility::ExecuteAnimatedPeriod(const FCombatPeriod& element)
+{
+}
+
 void UBaseCombatAbility::PlayNextPeriod()
 {
 	if (!AbilitySequence.IsValidIndex(CurrentPeriodIndex))
@@ -43,7 +51,6 @@ void UBaseCombatAbility::PlayNextPeriod()
 	switch (CombatPeriod.Type)
 	{
 		case EPeriodType::MoveTo: ExecuteMoveTo(CombatPeriod); break;
-		case EPeriodType::Rotate: ExecuteRotate(CombatPeriod); break;
 		case EPeriodType::Wait:	  ExecuteWait(CombatPeriod);   break;
 		
 		case EPeriodType::Attack:
@@ -93,8 +100,10 @@ void UBaseCombatAbility::PlayNextPeriod()
 
 void UBaseCombatAbility::ExecuteMoveTo(FCombatPeriod Period)
 {
-	WOLF_LOG(Log, TEXT("Executing MoveTo for ability %s from character %s"), *GetName(), *GetAvatarActorFromActorInfo()->GetName());
 	const auto* Target = GetTargetFromBlackboard();
+	WOLF_LOG(Log, TEXT("Executing MoveTo for ability %s from character %s and targeting %s"),
+		*GetName(), *GetAvatarActorFromActorInfo()->GetName(), *Target->GetName());
+	
 	const auto* AvatarActor = GetAvatarActorFromActorInfo();
 	if (!Target || !AvatarActor) { OnPeriodCompleted(); return; }
 
@@ -103,23 +112,26 @@ void UBaseCombatAbility::ExecuteMoveTo(FCombatPeriod Period)
 	{
 		const auto* MoveComp = AvatarCharacter->GetCharacterMovement();
 		const auto TargetLocation = Target->GetActorLocation();
-		const auto Distance = FVector::Dist(AvatarActor->GetActorLocation(), TargetLocation);
-		/*
-		 * TODO: Goes to the exact location of the target. Calculate an offset.
-		 * const auto Direction = (GoalLocation - Avatar->GetActorLocation()).GetSafeNormal();
-		 * const auto MeleeRange = 150.f;
-		 * GoalLocation = GoalLocation - Direction * MeleeRange;
-		 */
+		const auto CurrentLocation = AvatarActor->GetActorLocation();
+
+		const auto Direction = (TargetLocation - CurrentLocation).GetSafeNormal2D();
+		const auto GoalLocation = TargetLocation - Direction * Period.Range;
+		const auto MoveDistance = FVector::Dist(CurrentLocation, GoalLocation);
+
 		const auto MaxSpeed = MoveComp->MaxWalkSpeed;
 		const auto Acceleration = MoveComp->MaxAcceleration;
 		const auto CurrentVelocity = AvatarActor->GetVelocity().Size();
 
-		Period.Duration = CalculateMovementDuration(Distance, MaxSpeed, Acceleration, CurrentVelocity);
-		Period.MoveToDestination = TargetLocation;
+		Period.Duration = CalculateMovementDuration(MoveDistance, MaxSpeed, Acceleration, CurrentVelocity);
+		Period.MoveToDestination = GoalLocation;
+
+		WOLF_LOG(Log, TEXT("%s moving to position %.2f. Target's location is at %.2f"),
+			*AvatarActor->GetName(), MoveDistance, FVector::Dist(CurrentLocation, TargetLocation));
+		
 		auto* MoveTask = UAbilityTask_MoveToLocation::MoveToLocation(
 			this,
 			TEXT("PresageMoveTo"),
-			TargetLocation,
+			GoalLocation,
 			Period.Duration,
 			nullptr,
 			nullptr);

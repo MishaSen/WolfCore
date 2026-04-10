@@ -12,7 +12,6 @@ enum class EPeriodType : uint8
 	Windup,
 	Attack,
 	Wait,
-	Rotate,
 	Evasion,
 	MoveTo
 };
@@ -43,6 +42,9 @@ struct FCombatPeriod
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Attribute Effects")
 	FScalableFloat Damage = 0.f;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Movement")
+	float Range = 150.f;
 
 	UPROPERTY(BlueprintReadOnly)
 	FVector MoveToDestination = FVector::ZeroVector;
@@ -85,7 +87,6 @@ protected:
 	UFUNCTION()
 	void StartCombatSequence();
 
-	void ExecuteRotate(const FCombatPeriod& element);
 	void ExecuteWait(const FCombatPeriod& element);
 	void ExecuteAnimatedPeriod(const FCombatPeriod& element);
 	UFUNCTION()
