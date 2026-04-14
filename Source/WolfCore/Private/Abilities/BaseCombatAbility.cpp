@@ -71,8 +71,10 @@ void UBaseCombatAbility::ExecuteAnimatedPeriod(const FCombatPeriod& Period)
 		if (Period.Type == EPeriodType::Attack)
 		{
 			FTimerHandle TimerHandle;
-			GetWorld()->GetTimerManager().SetTimer(TimerHandle, this, &UBaseCombatAbility::HandleAttackHitEvent,
-												   Period.HitDelay, false);
+			GetWorld()->GetTimerManager().SetTimer(
+								TimerHandle,
+								[this, Period]() { UBaseCombatAbility::HandleAttackHitEvent(Period); },
+								Period.HitDelay, false);
 		}
 
 		auto* DelayTask = UAbilityTask_WaitDelay::WaitDelay(this, Period.Duration);
@@ -190,10 +192,10 @@ void UBaseCombatAbility::OnPeriodCompleted()
 
 void UBaseCombatAbility::OnEventReceived(FGameplayEventData EventData)
 {
-	HandleAttackHitEvent();
+	if (AbilitySequence.IsValidIndex(CurrentPeriodIndex)) { HandleAttackHitEvent(AbilitySequence[CurrentPeriodIndex]); }
 }
 
-void UBaseCombatAbility::HandleAttackHitEvent()
+void UBaseCombatAbility::HandleAttackHitEvent(const FCombatPeriod& CurrentAttackPeriod)
 {
 	// Override in children
 }

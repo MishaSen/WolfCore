@@ -23,7 +23,7 @@ void URTCombatAbility::ActivateAbility(const FGameplayAbilitySpecHandle Handle,
 	StartCombatSequence();
 }
 
-void URTCombatAbility::HandleAttackHitEvent()
+void URTCombatAbility::HandleAttackHitEvent(const FCombatPeriod& ContextPeriod)
 {
 	if (!AbilitySequence.IsValidIndex(CurrentPeriodIndex))
 	{
@@ -31,8 +31,6 @@ void URTCombatAbility::HandleAttackHitEvent()
 		WOLF_ERROR("CombatSequence index out of bounds.");
 		return;
 	}
-
-	const auto& CurrentPeriod = AbilitySequence[CurrentPeriodIndex];
 
 	auto* Avatar = GetAvatarActorFromActorInfo();
 	if (!Avatar) return;
@@ -71,8 +69,8 @@ void URTCombatAbility::HandleAttackHitEvent()
 			else MyASC->ApplyGameplayEffectSpecToSelf(*EffectSpecHandle.Data.Get());
 		};
 
-		ApplyEffect(FlowGainEffect, CurrentPeriod.FlowGain, false);
-		ApplyEffect(AdrenalineGainEffect, CurrentPeriod.AdrenalineGain, false);
-		ApplyEffect(DamageEffect, CurrentPeriod.Damage, true);
+		ApplyEffect(FlowGainEffect, ContextPeriod.FlowGain, false);
+		ApplyEffect(AdrenalineGainEffect, ContextPeriod.AdrenalineGain, false);
+		ApplyEffect(DamageEffect, ContextPeriod.Damage, true);
 	}
 }

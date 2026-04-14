@@ -28,5 +28,5 @@ protected:
 	UPROPERTY(EditDefaultsOnly, Category = "Combat | Trace")
 	float AttackRadius = 50.f;
 
-	virtual void HandleAttackHitEvent() override;
+	virtual void HandleAttackHitEvent(const FCombatPeriod& ContextPeriod) override;
 };

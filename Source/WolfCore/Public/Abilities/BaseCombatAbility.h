@@ -100,7 +100,7 @@ protected:
 	UFUNCTION()
 	void OnEventReceived(FGameplayEventData EventData);
 
-	virtual void HandleAttackHitEvent();
+	virtual void HandleAttackHitEvent(const FCombatPeriod& CurrentAttackPeriod);
 
 	static float GetPeriodDuration(const FCombatPeriod& Period);
 
