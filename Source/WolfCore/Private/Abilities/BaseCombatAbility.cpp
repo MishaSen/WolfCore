@@ -30,49 +30,34 @@ void UBaseCombatAbility::StartCombatSequence()
 	PlayNextPeriod();
 }
 
-void UBaseCombatAbility::ExecuteWait(const FCombatPeriod& element)
+void UBaseCombatAbility::ExecuteWait(const FCombatPeriod& Period)
 {
+	/* Consider implementing something like ApplyWaitTags() for wait period behavior. E.g., take more damage it hit.*/
+	if (IsValid(Period.Montage)) { ExecuteAnimatedPeriod(Period); }
+	else
+	{
+		auto* DelayTask = UAbilityTask_WaitDelay::WaitDelay(this, Period.Duration);
+		DelayTask->OnFinish.AddDynamic(this, &UBaseCombatAbility::OnPeriodCompleted);
+		DelayTask->ReadyForActivation();
+	}
 }
 
-void UBaseCombatAbility::ExecuteAnimatedPeriod(const FCombatPeriod& element)
+void UBaseCombatAbility::ExecuteAnimatedPeriod(const FCombatPeriod& Period)
 {
-}
-
-void UBaseCombatAbility::PlayNextPeriod()
-{
-	if (!AbilitySequence.IsValidIndex(CurrentPeriodIndex))
-	{
-		EndAbility(CurrentSpecHandle, CurrentActorInfo, CurrentActivationInfo, true, false);
-		return;
-	}
-
-	const auto& CombatPeriod = AbilitySequence[CurrentPeriodIndex];
-
-	switch (CombatPeriod.Type)
-	{
-		case EPeriodType::MoveTo: ExecuteMoveTo(CombatPeriod); break;
-		case EPeriodType::Wait:	  ExecuteWait(CombatPeriod);   break;
-		
-		case EPeriodType::Attack:
-		case EPeriodType::Windup:
-		case EPeriodType::Evasion: ExecuteAnimatedPeriod(CombatPeriod); break;
-	}
-
-	// Set up Event Listener if Attack
-	if (CombatPeriod.Type == EPeriodType::Attack)
+	if (Period.Type == EPeriodType::Attack) // Set up Event Listener if Attack
 	{
 		if (HitEventTag.IsValid())
 		{
 			auto* WaitTask = UAbilityTask_WaitGameplayEvent::WaitGameplayEvent(this, HitEventTag);
 			WaitTask->EventReceived.AddDynamic(this, &UBaseCombatAbility::OnEventReceived);
 			WaitTask->ReadyForActivation();
-		}
+		} else WOLF_WARN(TEXT("No HitEvent Tag for attack period of ability %s"), *GetName());
 	}
 
-	if (CombatPeriod.Montage)
+	if (IsValid(Period.Montage))
 	{
 		auto* MontageTask = UAbilityTask_PlayMontageAndWait::CreatePlayMontageAndWaitProxy(
-			this, NAME_None, CombatPeriod.Montage, 1.f, NAME_None, false,
+			this, NAME_None, Period.Montage, 1.f, NAME_None, false,
 			1.f, 0.f, false);
 
 		MontageTask->OnCompleted.AddDynamic(this, &UBaseCombatAbility::OnPeriodCompleted);
@@ -83,22 +68,41 @@ void UBaseCombatAbility::PlayNextPeriod()
 	}
 	else // If the attack period has no montage (e.g., prototyping), play hit event based on timer instead of notify 
 	{
-		const auto Duration = GetPeriodDuration(CombatPeriod);
-
-		if (CombatPeriod.Type == EPeriodType::Attack)
+		if (Period.Type == EPeriodType::Attack)
 		{
 			FTimerHandle TimerHandle;
 			GetWorld()->GetTimerManager().SetTimer(TimerHandle, this, &UBaseCombatAbility::HandleAttackHitEvent,
-			                                       CombatPeriod.HitDelay, false);
+												   Period.HitDelay, false);
 		}
 
-		auto* DelayTask = UAbilityTask_WaitDelay::WaitDelay(this, Duration);
+		auto* DelayTask = UAbilityTask_WaitDelay::WaitDelay(this, Period.Duration);
 		DelayTask->OnFinish.AddDynamic(this, &UBaseCombatAbility::OnPeriodCompleted);
 		DelayTask->ReadyForActivation();
 	}
 }
 
-void UBaseCombatAbility::ExecuteMoveTo(FCombatPeriod Period)
+void UBaseCombatAbility::PlayNextPeriod()
+{
+	if (!AbilitySequence.IsValidIndex(CurrentPeriodIndex))
+	{
+		EndAbility(CurrentSpecHandle, CurrentActorInfo, CurrentActivationInfo, true, false);
+		return;
+	}
+
+	auto& CombatPeriod = AbilitySequence[CurrentPeriodIndex];
+
+	switch (CombatPeriod.Type)
+	{
+		case EPeriodType::MoveTo: ExecuteMoveTo(CombatPeriod); break;
+		case EPeriodType::Wait:	  ExecuteWait(CombatPeriod);   break;
+		
+		case EPeriodType::Attack:
+		case EPeriodType::Windup:
+		case EPeriodType::Evasion: ExecuteAnimatedPeriod(CombatPeriod); break;
+	}
+}
+
+void UBaseCombatAbility::ExecuteMoveTo(FCombatPeriod& Period)
 {
 	const auto* Target = GetTargetFromBlackboard();
 	WOLF_LOG(Log, TEXT("Executing MoveTo for ability %s from character %s and targeting %s"),
@@ -116,6 +120,7 @@ void UBaseCombatAbility::ExecuteMoveTo(FCombatPeriod Period)
 
 		const auto Direction = (TargetLocation - CurrentLocation).GetSafeNormal2D();
 		const auto GoalLocation = TargetLocation - Direction * Period.Range;
+		// Moves backwards if too close. Need to review down the line if this behavior should be intended.
 		const auto MoveDistance = FVector::Dist(CurrentLocation, GoalLocation);
 
 		const auto MaxSpeed = MoveComp->MaxWalkSpeed;

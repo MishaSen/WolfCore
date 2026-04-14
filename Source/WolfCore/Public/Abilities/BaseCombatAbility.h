@@ -87,11 +87,11 @@ protected:
 	UFUNCTION()
 	void StartCombatSequence();
 
-	void ExecuteWait(const FCombatPeriod& element);
-	void ExecuteAnimatedPeriod(const FCombatPeriod& element);
+	void ExecuteWait(const FCombatPeriod& Period);
+	void ExecuteAnimatedPeriod(const FCombatPeriod& Period);
 	UFUNCTION()
 	void PlayNextPeriod();
-	void ExecuteMoveTo(FCombatPeriod Period);
+	void ExecuteMoveTo(FCombatPeriod& Period);
 
 	AActor* GetTargetFromBlackboard() const;
 	UFUNCTION()
