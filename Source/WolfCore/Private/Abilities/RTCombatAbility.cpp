@@ -25,13 +25,6 @@ void URTCombatAbility::ActivateAbility(const FGameplayAbilitySpecHandle Handle,
 
 void URTCombatAbility::HandleAttackHitEvent(const FCombatPeriod& ContextPeriod)
 {
-	if (!AbilitySequence.IsValidIndex(CurrentPeriodIndex))
-	{
-		EndAbility(CurrentSpecHandle, CurrentActorInfo, CurrentActivationInfo, true, false);
-		WOLF_ERROR("CombatSequence index out of bounds.");
-		return;
-	}
-
 	auto* Avatar = GetAvatarActorFromActorInfo();
 	if (!Avatar) return;
 

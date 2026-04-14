@@ -44,37 +44,40 @@ void UBaseCombatAbility::ExecuteWait(const FCombatPeriod& Period)
 
 void UBaseCombatAbility::ExecuteAnimatedPeriod(const FCombatPeriod& Period)
 {
-	if (Period.Type == EPeriodType::Attack) // Set up Event Listener if Attack
-	{
-		if (HitEventTag.IsValid())
-		{
-			auto* WaitTask = UAbilityTask_WaitGameplayEvent::WaitGameplayEvent(this, HitEventTag);
-			WaitTask->EventReceived.AddDynamic(this, &UBaseCombatAbility::OnEventReceived);
-			WaitTask->ReadyForActivation();
-		} else WOLF_WARN(TEXT("No HitEvent Tag for attack period of ability %s"), *GetName());
-	}
-
-	if (IsValid(Period.Montage))
+	if (IsValid(Period.Montage)) // Currently does not support non attack period montages.
 	{
 		auto* MontageTask = UAbilityTask_PlayMontageAndWait::CreatePlayMontageAndWaitProxy(
 			this, NAME_None, Period.Montage, 1.f, NAME_None, false,
-			1.f, 0.f, false);
+				1.f, 0.f, false);
+
+		if (Period.Type == EPeriodType::Attack && HitEventTag.IsValid())
+		{
+			auto* WaitTask = UAbilityTask_WaitGameplayEvent::WaitGameplayEvent(
+				this, HitEventTag, nullptr);
+			
+			WaitTask->EventReceived.AddDynamic(this, &UBaseCombatAbility::OnEventReceived);
+
+			MontageTask->OnCompleted.AddDynamic(WaitTask, &UAbilityTask_WaitGameplayEvent::EndTask);
+			MontageTask->OnInterrupted.AddDynamic(WaitTask, &UAbilityTask_WaitGameplayEvent::EndTask);
+			MontageTask->OnCancelled.AddDynamic(WaitTask, &UAbilityTask_WaitGameplayEvent::EndTask);
+
+			WaitTask->ReadyForActivation();
+		}
 
 		MontageTask->OnCompleted.AddDynamic(this, &UBaseCombatAbility::OnPeriodCompleted);
 		MontageTask->OnInterrupted.AddDynamic(this, &UBaseCombatAbility::K2_EndAbility);
 		MontageTask->OnCancelled.AddDynamic(this, &UBaseCombatAbility::K2_EndAbility);
-
 		MontageTask->ReadyForActivation();
 	}
-	else // If the attack period has no montage (e.g., prototyping), play hit event based on timer instead of notify 
+	else
 	{
 		if (Period.Type == EPeriodType::Attack)
 		{
 			FTimerHandle TimerHandle;
 			GetWorld()->GetTimerManager().SetTimer(
-								TimerHandle,
-								[this, Period]() { UBaseCombatAbility::HandleAttackHitEvent(Period); },
-								Period.HitDelay, false);
+				TimerHandle,
+				[this, Period]() { HandleAttackHitEvent(Period); },
+				Period.HitDelay, false);
 		}
 
 		auto* DelayTask = UAbilityTask_WaitDelay::WaitDelay(this, Period.Duration);
