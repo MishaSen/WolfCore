@@ -13,6 +13,7 @@
 #include "GameFramework/CharacterMovementComponent.h"
 #include "Navigation/PathFollowingComponent.h"
 #include "DrawDebugHelpers.h"
+#include "Misc/TransactionObjectEvent.h"
 
 UWolfPresageComponent::UWolfPresageComponent()
 {
@@ -153,17 +154,24 @@ void UWolfPresageComponent::SnapshotPhysics(FActorSnapshot& Snapshot) const
 	
 	const auto* AICont = Cast<AAIController>(CharacterOwner->GetController());
 	if (!IsValid(AICont)) return;
-	
-	const auto* PathFollowComp = AICont->GetPathFollowingComponent();
-	if (PathFollowComp && PathFollowComp->GetStatus() == EPathFollowingStatus::Moving)
+
+	if (const auto* ActiveAbility = CharacterOwner->GetActiveCombatAbility())
 	{
-		Snapshot.Destination = PathFollowComp->GetPathDestination();
+		const auto Index = ActiveAbility->GetCurrentPeriodIndex();
+		if (!ActiveAbility->AbilitySequence.IsValidIndex(Index)) return;
+
+		const auto& CurrentPeriod = ActiveAbility->AbilitySequence[Index];
+		if (CurrentPeriod.Type != EPeriodType::MoveTo) return;
+
+		Snapshot.Destination = CurrentPeriod.MoveToDestination;
 		Snapshot.bIsMoving = true;
-		
-		DrawDebugSphere(GetWorld(), Snapshot.Destination, 25.f, 12, FColor::Red, false, 5.f);
+
+		DrawDebugSphere(GetWorld(), Snapshot.Destination, 25.f, 12, FColor::Red, false,
+			5.f);
 		DrawDebugLine(GetWorld(), GetOwnerLocation(), Snapshot.Destination, FColor::Red,
 			false, 5.f, 0, 2.f);
 	}
+	else { Snapshot.bIsMoving = false; Snapshot.Destination = FVector::ZeroVector; }
 
 	if (const auto* BB = AICont->GetBlackboardComponent())
 	{
@@ -181,8 +189,8 @@ void UWolfPresageComponent::SnapshotPhysics(FActorSnapshot& Snapshot) const
 
 	WOLF_LOG(Log, TEXT("[Frame: %s] Character %s has Path Destination %s targeting %s. IsMoving = %s."),
 		*FrameType,
-		*GetName(),
-		*Snapshot.Destination.ToString(),
+		*CharacterOwner->GetName(),
+		*Snapshot.Destination.ToCompactString(),
 		Snapshot.TargetActor.IsValid() ? *Snapshot.TargetActor->GetName() : TEXT("None"),
 		Snapshot.bIsMoving ? TEXT ("True") : TEXT("False"));
 }

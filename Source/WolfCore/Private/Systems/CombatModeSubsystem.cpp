@@ -84,7 +84,7 @@ FTemporalStates UCombatModeSubsystem::CaptureCurrentWorldState(float Timestamp)
 		{
 			FActorSnapshot ActorState;
 			ISnapshot::Execute_CreateSnapshot(WolfChar, ActorState);
-			WOLF_LOG(Verbose, TEXT("Snapshotted [%s] at %s"), *WolfChar->GetName(), *ActorState.Location.ToString());
+			WOLF_LOG(Log, TEXT("Snapshotted [%s] at %s"), *WolfChar->GetName(), *ActorState.Location.ToString());
 			NewState.ActorStates.Add(WolfChar, ActorState);
 		}
 		else
