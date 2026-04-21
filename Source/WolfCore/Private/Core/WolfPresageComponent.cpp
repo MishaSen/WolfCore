@@ -46,9 +46,7 @@ void UWolfPresageComponent::SimulateTick(float Step)
 	SimPeriodTime += Step;
 
 	auto* ActiveAbility = CharacterOwner->GetActiveCombatAbility();
-	const auto& AbilitySequence = ActiveAbility->AbilitySequence;
-	const auto CurrentIndex = ActiveAbility->GetCurrentPeriodIndex();
-	const bool bSequenceIsActive = IsValid(ActiveAbility) && AbilitySequence.IsValidIndex(CurrentIndex);
+	const bool bSequenceIsActive = IsValid(ActiveAbility) && ActiveAbility->AbilitySequence.IsValidIndex(ActiveAbility->GetCurrentPeriodIndex());
 	
 	FActorSnapshot FutureFrame;
 	CreateSnapshot_Implementation(FutureFrame);
@@ -57,6 +55,8 @@ void UWolfPresageComponent::SimulateTick(float Step)
 	{
 		if (IsValid(ActiveAbility))
 		{
+			const auto& AbilitySequence = ActiveAbility->AbilitySequence;
+			const auto CurrentIndex = ActiveAbility->GetCurrentPeriodIndex();
 			if (AbilitySequence.IsValidIndex(CurrentIndex))
 			{
 				auto Duration = 0.f;
@@ -378,7 +378,7 @@ void UWolfPresageComponent::SnapshotGAS(FActorSnapshot& Snapshot) const
 	}
 	
 	auto* ActiveAbility = CharacterOwner->GetActiveCombatAbility();
-	const auto CurrentIndex = ActiveAbility->GetCurrentPeriodIndex();
+	const auto CurrentIndex = ActiveAbility ? ActiveAbility->GetCurrentPeriodIndex() : -1;
 	if (IsValid(ActiveAbility) && ActiveAbility->AbilitySequence.IsValidIndex(CurrentIndex))
 	{
 		Snapshot.ActiveAbility = ActiveAbility;
