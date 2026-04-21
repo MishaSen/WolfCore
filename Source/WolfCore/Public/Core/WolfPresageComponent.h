@@ -33,6 +33,9 @@ public:
 	virtual void CreateSnapshot_Implementation(FActorSnapshot& OutSnapshot) override;
 	virtual void RestoreSnapshot_Implementation(const FActorSnapshot& Snapshot) override;
 
+public:
+	float SimPeriodTime = 0.f;
+
 private:
 	void SimulatePhysicsStep(float Step);
 	FVector GetSimulatedVelocity(FVector& Destination) const;

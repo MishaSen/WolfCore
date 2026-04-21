@@ -78,10 +78,18 @@ public:
 	void SetCurrentPeriodIndex(int32 NewIndex) { CurrentPeriodIndex = NewIndex; }
 
 	bool IsInvulnerableAt(float RelativeTime) const;
+
+	static float GetPeriodDuration(const FCombatPeriod& Period);
+
+	UFUNCTION(BlueprintCallable, Category = "Presage")
+	float GetPeriodProgress() const;
 	
+	static float CalculateMovementDuration(float TotalDistance, float MaxVelocity, float Acceleration, float StartVelocity);
+
 protected:
 	// --- Execution State ---
 	int32 CurrentPeriodIndex = 0;
+	float CurrentPeriodStartTime = 0.f;
 
 	// --- Main Loop ---
 	UFUNCTION()
@@ -102,8 +110,6 @@ protected:
 
 	virtual void HandleAttackHitEvent(const FCombatPeriod& CurrentAttackPeriod);
 
-	static float GetPeriodDuration(const FCombatPeriod& Period);
-
 	// --- Attribute Effects ---
 	
 	UPROPERTY(EditDefaultsOnly, Category = "Combat | Effects")
@@ -114,7 +120,4 @@ protected:
 
 	UPROPERTY(EditDefaultsOnly, Category = "Combat | Effects")
 	TSubclassOf<UGameplayEffect> DamageEffect;
-
-private:
-	static float CalculateMovementDuration(float TotalDistance, float MaxVelocity, float Acceleration, float StartVelocity);
 };

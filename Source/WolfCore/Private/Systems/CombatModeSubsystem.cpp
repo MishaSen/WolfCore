@@ -275,6 +275,12 @@ void UCombatModeSubsystem::GenerateFutureState(float Duration)
 				Presage->SetSimulationTransform(WolfChar->GetActorTransform());
 			}
 
+			if (const auto* ActiveAbility = WolfChar->GetActiveCombatAbility()) // Sync sim timer to the current period.
+			{
+				Presage->SimPeriodTime = ActiveAbility->GetPeriodProgress();
+			}
+			else Presage->SimPeriodTime = 0.f;
+
 			if (auto* MoveComp = WolfChar->GetCharacterMovement())
 			{
 				if (!IsValid(WolfChar->GetCurrentMontage())) MoveComp->StopMovementImmediately();

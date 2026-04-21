@@ -34,8 +34,51 @@ void UWolfPresageComponent::BeginPlay()
 
 void UWolfPresageComponent::SimulateTick(float Step)
 {
+	if (PredictionBuffer.Num() == 0)
+	{
+		SimulationTransform = CharacterOwner->GetActorTransform();
+		SimPeriodTime = 0.f;
+	}
+	
 	SimulatePhysicsStep(Step);
 	SimulateAnimationStep(Step);
+
+	SimPeriodTime += Step;
+
+	if (auto* ActiveAbility = CharacterOwner->GetActiveCombatAbility())
+	{
+		const auto& AbilitySequence = ActiveAbility->AbilitySequence;
+		const auto CurrentIndex = ActiveAbility->GetCurrentPeriodIndex();
+		if (AbilitySequence.IsValidIndex(CurrentIndex))
+		{
+			auto& CurrentPeriod = AbilitySequence[CurrentIndex];
+			auto Duration = 0.f;
+			if (CurrentPeriod.Type == EPeriodType::MoveTo)
+			{
+				Duration = ActiveAbility->CalculateMovementDuration(FVector::Distance(SimulationTransform.GetLocation(), CurrentPeriod.MoveToDestination),
+														 GetMoveComp()->MaxWalkSpeed,
+														 GetMoveComp()->MaxAcceleration,
+														 GetMoveComp()->Velocity.Size());
+				WOLF_LOG(Log, TEXT("[CALCULATE MOVEMENT DURATION TEST] Duration is %f"), Duration);
+			}
+			else Duration = ActiveAbility->GetPeriodDuration(AbilitySequence[CurrentIndex]);
+			
+			if (SimPeriodTime >= Duration)
+			{
+				const auto NextIndex = CurrentIndex + 1;
+				ActiveAbility->SetCurrentPeriodIndex(NextIndex);
+				SimPeriodTime = 0.f;
+
+				if (AbilitySequence.IsValidIndex(NextIndex))
+				{
+					WOLF_LOG(Log, TEXT("[SIM] Period %d %s completed. Next: %d %s."),
+						CurrentIndex, *UEnum::GetValueAsString(AbilitySequence[CurrentIndex].Type),
+						NextIndex, *UEnum::GetValueAsString(AbilitySequence[NextIndex].Type));
+				}
+				else WOLF_LOG(Log, TEXT("[SIM] Ability Sequence finished at Step %d."), CurrentIndex);
+			}
+		}
+	}
 
 	FActorSnapshot FutureFrame;
 	CreateSnapshot_Implementation(FutureFrame);
@@ -161,15 +204,16 @@ void UWolfPresageComponent::SnapshotPhysics(FActorSnapshot& Snapshot) const
 		if (!ActiveAbility->AbilitySequence.IsValidIndex(Index)) return;
 
 		const auto& CurrentPeriod = ActiveAbility->AbilitySequence[Index];
-		if (CurrentPeriod.Type != EPeriodType::MoveTo) return;
+		if (CurrentPeriod.Type == EPeriodType::MoveTo)
+		{
+			Snapshot.Destination = CurrentPeriod.MoveToDestination;
+			Snapshot.bIsMoving = true;
 
-		Snapshot.Destination = CurrentPeriod.MoveToDestination;
-		Snapshot.bIsMoving = true;
-
-		DrawDebugSphere(GetWorld(), Snapshot.Destination, 25.f, 12, FColor::Red, false,
-			5.f);
-		DrawDebugLine(GetWorld(), GetOwnerLocation(), Snapshot.Destination, FColor::Red,
-			false, 5.f, 0, 2.f);
+			DrawDebugSphere(GetWorld(), Snapshot.Destination, 25.f, 12, FColor::Red, false,
+				5.f);
+			DrawDebugLine(GetWorld(), GetOwnerLocation(), Snapshot.Destination, FColor::Red,
+				false, 5.f, 0, 2.f);
+		}
 	}
 	else { Snapshot.bIsMoving = false; Snapshot.Destination = FVector::ZeroVector; }
 

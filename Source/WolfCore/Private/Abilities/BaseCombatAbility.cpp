@@ -94,8 +94,9 @@ void UBaseCombatAbility::PlayNextPeriod()
 		return;
 	}
 
-	auto& CombatPeriod = AbilitySequence[CurrentPeriodIndex];
+	if (const auto* World = GetWorld()) CurrentPeriodStartTime = World->GetTimeSeconds();
 
+	auto& CombatPeriod = AbilitySequence[CurrentPeriodIndex];
 	switch (CombatPeriod.Type)
 	{
 		case EPeriodType::MoveTo: ExecuteMoveTo(CombatPeriod); break;
@@ -105,6 +106,17 @@ void UBaseCombatAbility::PlayNextPeriod()
 		case EPeriodType::Windup:
 		case EPeriodType::Evasion: ExecuteAnimatedPeriod(CombatPeriod); break;
 	}
+}
+
+float UBaseCombatAbility::GetPeriodProgress() const
+{
+	if (!AbilitySequence.IsValidIndex(CurrentPeriodIndex)) return 0.f;
+
+	const auto* World = GetWorld();
+	if (!World) return 0.f;
+
+	const auto ElapsedTime = World->GetTimeSeconds() - CurrentPeriodStartTime;
+	return FMath::Max(0.f, ElapsedTime);
 }
 
 void UBaseCombatAbility::ExecuteMoveTo(FCombatPeriod& Period)
@@ -133,9 +145,10 @@ void UBaseCombatAbility::ExecuteMoveTo(FCombatPeriod& Period)
 		const auto CurrentVelocity = AvatarActor->GetVelocity().Size();
 
 		Period.Duration = CalculateMovementDuration(MoveDistance, MaxSpeed, Acceleration, CurrentVelocity);
+		WOLF_LOG(Log, TEXT("[DURATION TEST] Duration is %.2f seconds."), Period.Duration);
 		Period.MoveToDestination = GoalLocation;
 
-		WOLF_LOG(Log, TEXT("%s moving to position %.2f. Target's location is at %.2f"),
+		WOLF_LOG(Log, TEXT("%s moving %.2f units. Target's location is %.2f units away."),
 			*AvatarActor->GetName(), MoveDistance, FVector::Dist(CurrentLocation, TargetLocation));
 		
 		auto* MoveTask = UAbilityTask_MoveToLocation::MoveToLocation(
