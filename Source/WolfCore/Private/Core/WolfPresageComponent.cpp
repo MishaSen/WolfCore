@@ -45,43 +45,63 @@ void UWolfPresageComponent::SimulateTick(float Step)
 
 	SimPeriodTime += Step;
 
-	if (auto* ActiveAbility = CharacterOwner->GetActiveCombatAbility())
+	auto* ActiveAbility = CharacterOwner->GetActiveCombatAbility();
+	const auto& AbilitySequence = ActiveAbility->AbilitySequence;
+	const auto CurrentIndex = ActiveAbility->GetCurrentPeriodIndex();
+	const bool bSequenceIsActive = IsValid(ActiveAbility) && AbilitySequence.IsValidIndex(CurrentIndex);
+	
+	FActorSnapshot FutureFrame;
+	CreateSnapshot_Implementation(FutureFrame);
+	
+	if (bSequenceIsActive)
 	{
-		const auto& AbilitySequence = ActiveAbility->AbilitySequence;
-		const auto CurrentIndex = ActiveAbility->GetCurrentPeriodIndex();
-		if (AbilitySequence.IsValidIndex(CurrentIndex))
+		if (IsValid(ActiveAbility))
 		{
-			auto& CurrentPeriod = AbilitySequence[CurrentIndex];
-			auto Duration = 0.f;
-			if (CurrentPeriod.Type == EPeriodType::MoveTo)
+			if (AbilitySequence.IsValidIndex(CurrentIndex))
 			{
-				Duration = ActiveAbility->CalculateMovementDuration(FVector::Distance(SimulationTransform.GetLocation(), CurrentPeriod.MoveToDestination),
-														 GetMoveComp()->MaxWalkSpeed,
-														 GetMoveComp()->MaxAcceleration,
-														 GetMoveComp()->Velocity.Size());
-				WOLF_LOG(Log, TEXT("[CALCULATE MOVEMENT DURATION TEST] Duration is %f"), Duration);
-			}
-			else Duration = ActiveAbility->GetPeriodDuration(AbilitySequence[CurrentIndex]);
-			
-			if (SimPeriodTime >= Duration)
-			{
-				const auto NextIndex = CurrentIndex + 1;
-				ActiveAbility->SetCurrentPeriodIndex(NextIndex);
-				SimPeriodTime = 0.f;
-
-				if (AbilitySequence.IsValidIndex(NextIndex))
+				auto Duration = 0.f;
+				auto& CurrentPeriod = AbilitySequence[CurrentIndex];
+				if (CurrentPeriod.Type == EPeriodType::MoveTo)
 				{
-					WOLF_LOG(Log, TEXT("[SIM] Period %d %s completed. Next: %d %s."),
-						CurrentIndex, *UEnum::GetValueAsString(AbilitySequence[CurrentIndex].Type),
-						NextIndex, *UEnum::GetValueAsString(AbilitySequence[NextIndex].Type));
+					Duration = ActiveAbility->CalculateMovementDuration(FVector::Distance(SimulationTransform.GetLocation(), CurrentPeriod.MoveToDestination),
+															 GetMoveComp()->MaxWalkSpeed,
+															 GetMoveComp()->MaxAcceleration,
+															 GetMoveComp()->Velocity.Size());
+					WOLF_LOG(Log, TEXT("[CALCULATE MOVEMENT DURATION TEST] Duration is %f."), Duration);
 				}
-				else WOLF_LOG(Log, TEXT("[SIM] Ability Sequence finished at Step %d."), CurrentIndex);
+				else Duration = ActiveAbility->GetPeriodDuration(CurrentPeriod);
+			
+				if (SimPeriodTime >= Duration)
+				{
+					const auto NextIndex = CurrentIndex + 1;
+					ActiveAbility->SetCurrentPeriodIndex(NextIndex);
+					SimPeriodTime = 0.f;
+
+					if (AbilitySequence.IsValidIndex(NextIndex))
+					{
+						WOLF_LOG(Log, TEXT("[SIM] Period %d %s completed. Next: %d %s."),
+							CurrentIndex, *UEnum::GetValueAsString(AbilitySequence[CurrentIndex].Type),
+							NextIndex, *UEnum::GetValueAsString(AbilitySequence[NextIndex].Type));
+					}
+					else WOLF_LOG(Log, TEXT("[SIM] Ability Sequence finished at Step %d."), CurrentIndex);
+				}
 			}
 		}
 	}
-
-	FActorSnapshot FutureFrame;
-	CreateSnapshot_Implementation(FutureFrame);
+	else
+	{
+		FutureFrame.ActiveAbility = nullptr;
+		FutureFrame.CurrentPeriodIndex = -1;	
+	}
+	
+	WOLF_LOG(Log, TEXT("[STEP %d] Character: %s | Location: %s| Ability: %s | Period: %d | Montage: %s (Pos: %.2f)"),
+		PredictionBuffer.Num(),
+		*CharacterOwner.GetName(),
+		*FutureFrame.Location.ToCompactString(),
+		FutureFrame.ActiveAbility.IsValid() ? *FutureFrame.ActiveAbility->GetName() : TEXT("None"),
+		FutureFrame.CurrentPeriodIndex,
+		FutureFrame.CurrentMontage.IsValid() ? *FutureFrame.CurrentMontage->GetName() : TEXT("None"),
+		FutureFrame.MontagePosition);
 	PredictionBuffer.Add(FutureFrame); // Remember to clear PredictionBuffer in CombatModeSubsystem
 }
 
@@ -356,11 +376,13 @@ void UWolfPresageComponent::SnapshotGAS(FActorSnapshot& Snapshot) const
 			Snapshot.ActiveEffects.Add(StoredEffect);
 		}
 	}
-
-	if (auto* ActiveAbility = CharacterOwner->GetActiveCombatAbility())
+	
+	auto* ActiveAbility = CharacterOwner->GetActiveCombatAbility();
+	const auto CurrentIndex = ActiveAbility->GetCurrentPeriodIndex();
+	if (IsValid(ActiveAbility) && ActiveAbility->AbilitySequence.IsValidIndex(CurrentIndex))
 	{
 		Snapshot.ActiveAbility = ActiveAbility;
-		Snapshot.CurrentPeriodIndex = ActiveAbility->GetCurrentPeriodIndex();
+		Snapshot.CurrentPeriodIndex = CurrentIndex;
 	}
 }
 

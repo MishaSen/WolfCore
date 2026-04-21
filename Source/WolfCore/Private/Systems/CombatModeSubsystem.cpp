@@ -295,11 +295,15 @@ void UCombatModeSubsystem::GenerateFutureState(float Duration)
 
 	for (int32 i = 0; i < TotalSteps; ++i)
 	{
+		WOLF_LOG(Log, TEXT("[SIM] Step %d"), i);
 		for (auto& Combatant : TrackedCombatants)
 		{
 			if (const auto* WolfChar = Combatant.Get())
 			{
-				if (auto* Presage = WolfChar->GetPresageComponent()) Presage->SimulateTick(Step);
+				if (auto* Presage = WolfChar->GetPresageComponent())
+				{
+					Presage->SimulateTick(Step);
+				}
 			}
 		}
 	}
