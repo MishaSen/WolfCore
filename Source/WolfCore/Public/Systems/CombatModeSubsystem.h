@@ -30,7 +30,16 @@ class WOLFCORE_API UCombatModeSubsystem : public UWorldSubsystem
 	// Lifecycle
 	// ============================================================================================================================
 
+	/** Initializes the subsystem when it is registered with the world, setting up internal state and tag references. */
+	/**
+	 * @param Collection Reference to the FSubsystemCollectionBase containing all initialized subsystems.
+	 */
 	virtual void Initialize(FSubsystemCollectionBase& Collection) override;
+
+	/** Called when the world begins play, initializing combat mode state and loading default configuration. */
+	/**
+	 * @param InWorld Pointer to the UWorld being loaded for subsystem initialization.
+	 */
 	virtual void OnWorldBeginPlay(UWorld& InWorld) override;
 
 	// ============================================================================================================================
@@ -38,74 +47,148 @@ class WOLFCORE_API UCombatModeSubsystem : public UWorldSubsystem
 	// ============================================================================================================================
 
 public:
+	/** Sets the global combat mode to a new value, triggering mode transitions and updating all registered combatants. */
+	/**
+	 * @param NewMode The FGameplayTag representing the new combat mode (e.g., RT, TB).
+	 */
 	void SetMode(FGameplayTag NewMode);
+
+	/** Switches between combat modes using the player's current selection from the game instance configuration. */
 	void SwitchCombatMode();
+
+	/** Applies a specific combat mode to an individual actor, updating their ability system and state accordingly. */
+	/**
+	 * @param Combatant Pointer to the AActor whose combat mode is being updated.
+	 * @param NewMode The FGameplayTag representing the new combat mode to apply.
+	 */
 	void ApplyModeToActor(AActor* Combatant, FGameplayTag NewMode);
 
-	UFUNCTION(BlueprintPure, Category = "Combat")
+	/** Returns the current global combat mode as a GameplayTag for Blueprint queries and runtime checks. */
+	UFUNCTION(BlueprintPure, Meta = (DisplayName = "Get Current Mode"), Category = "WolfCore|Combat")
 	FGameplayTag GetCurrentMode() const { return CurrentMode; }
 
-	UFUNCTION(BlueprintPure, Category = "Combat")
+	/** Returns the current timeline position in seconds representing elapsed time within the active combat mode. */
+	UFUNCTION(BlueprintPure, Meta = (DisplayName = "Get Timeline Time"), Category = "WolfCore|Combat")
 	float GetCurrentTimelineTime() const { return CurrentTimelineTime; }
 
+	/** Boolean flag indicating whether the current combat mode is set to turn-based (TB) rather than real-time (RT). */
 	bool bIsInTB;
 
 	// ============================================================================================================================
 	// Public API - Snapshots & Timeline
 	// ============================================================================================================================
 
-	UFUNCTION(BlueprintCallable, Category = "Wolf|Combat|Snapshots")
+	/** Captures the current world state into a FTemporalStates container at the specified timestamp for timeline scrubbing. */
+	UFUNCTION(BlueprintCallable, Meta = (DisplayName = "Capture World State"), Category = "WolfCore|Combat|Snapshots")
+	/**
+	 * @param Timestamp The time anchor in seconds at which to capture the world state snapshot.
+	 * @return FTemporalStates containing the captured world state mapped to the specified timestamp.
+	 */
 	FTemporalStates CaptureCurrentWorldState(float Timestamp);
 
-	UFUNCTION(BlueprintCallable, Category = "Wolf|Combat")
+	/** Advances or rewinds the prediction timeline to a specific timestamp for scrubbing and visualization. */
+	UFUNCTION(BlueprintCallable, Meta = (DisplayName = "Scrub Timeline"), Category = "WolfCore|Combat")
+	/**
+	 * @param NewTime The target timeline position in seconds to scrub the prediction state to.
+	 */
 	void ScrubTimeline(float NewTime);
 
+	/** Returns a reference to the master snapshot captured at the start of the current simulation session. */
 	const FTemporalStates& GetMasterSnapshot() const { return MasterStartSnapshot; }
 
-	UFUNCTION(BlueprintCallable, Category = "Wolf|Presage")
+	/** Generates future state predictions for the specified duration by processing queued ability requests and events. */
+	UFUNCTION(BlueprintCallable, Meta = (DisplayName = "Generate Future State"), Category = "WolfCore|Presage")
+	/**
+	 * @param Duration The simulation duration in seconds to generate future state predictions for.
+	 */
 	void GenerateFutureState(float Duration);
 
 	// ============================================================================================================================
 	// Public API - Combatant Tracking
 	// ============================================================================================================================
 
+	/** Registers a character as an active combat participant, enabling it to receive mode updates and prediction data. */
+	/**
+	 * @param Character Pointer to the AWolfCharacterBase being registered for combat tracking.
+	 */
 	void RegisterCombatant(AWolfCharacterBase* Character);
+
+	/** Unregisters a character from active combat participation, removing it from mode updates and prediction processing. */
+	/**
+	 * @param Character Pointer to the AWolfCharacterBase being removed from combat tracking.
+	 */
 	void UnregisterCombatant(AWolfCharacterBase* Character);
+
+	/** Returns the array of weak references to tracked combatants currently registered with this subsystem. */
 	const TArray<TWeakObjectPtr<AWolfCharacterBase>>& GetTrackedCombatants() const { return TrackedCombatants; }
 
 	// ============================================================================================================================
 	// Events
 	// ============================================================================================================================
 
-	UPROPERTY(BlueprintAssignable, Category = "Combat")
+	/** Multicast delegate broadcast whenever the global combat mode changes, notifying all registered listeners. */
+	UPROPERTY(BlueprintAssignable, Category = "WolfCore|Combat")
 	FOnCombatModeChanged OnCombatModeChanged;
 
 protected:
+	/** Temporal states container holding the master snapshot captured at simulation start for state restoration. */
 	FTemporalStates MasterStartSnapshot;
 
-	UPROPERTY(BlueprintReadOnly, Category = "Wolf|Timeline")
+	/** Current timeline position in seconds representing elapsed time within the active combat mode session. */
+	UPROPERTY(BlueprintReadOnly, Category = "WolfCore|Timeline")
 	float CurrentTimelineTime = 0.f;
 
-	UPROPERTY(EditDefaultsOnly, Category = "Wolf|Timeline")
+	/** Maximum allowed duration in seconds for the prediction timeline before requiring regeneration or reset. */
+	UPROPERTY(EditDefaultsOnly, Category = "WolfCore|Timeline")
 	float MaxTimelineDuration = 5.f;
 
 private:
+	/** Handles completion of presage effect loading, applying the loaded gameplay effect to the player's ability system. */
 	void OnPresageEffectLoaded();
+
+	/** Initializes subsystem defaults by setting up internal state, tag references, and configuration values at startup. */
 	void InitializeSubsystemDefaults();
+
+	/** Attempts to load the player-selected combat mode from game instance configuration for initial mode setup. */
+	/**
+	 * @return True if a valid player-selected mode was loaded; false otherwise (default level mode will be applied).
+	 */
 	bool TryLoadPlayerSelectedMode();
+
+	/** Applies the default combat mode from level settings when no player selection is available or valid. */
 	void ApplyDefaultLevelMode();
+
+	/** Handles presage drain effect application to an actor's ability system based on their current combat mode state. */
+	/**
+	 * @param ASC Pointer to the UAbilitySystemComponent receiving the drain effect modification.
+	 * @param CurrentActorMode The FGameplayTag representing the actor's current combat mode being evaluated.
+	 */
 	void HandlePresageDrainEffect(UAbilitySystemComponent* ASC, FGameplayTag CurrentActorMode);
 
+	/** Retrieves the player controller's Ability System Component (ASC) for gameplay effect application and state management. */
 	UAbilitySystemComponent* GetPlayerASC() const;
+
+	/** Returns the time dilation multiplier configured for a specific combat mode to control temporal prediction scaling. */
+	/**
+	 * @param Mode The FGameplayTag representing the combat mode whose dilation value is being queried.
+	 * @return Float representing the time dilation factor (e.g., 1.0 for RT, 0.5 for TB).
+	 */
 	static float GetDilationForMode(const FGameplayTag& Mode);
 
+	/** GameplayTag representing the current global combat mode (Real-Time or Turn-Based) active in this session. */
 	FGameplayTag CurrentMode;
+
+	/** Singleton gameplay tags structure providing framework-wide tag access for combat mode identification and filtering. */
 	FWolfGameplayTags WolfTag;
+
+	/** Shared pointer to a streamable handle managing asynchronous loading of the presage effect class asset. */
 	TSharedPtr<FStreamableHandle> PresageClassLoadHandle;
 
+	/** Subclass of GameplayEffect applied during presage simulation for drain effects and temporal state management. */
 	UPROPERTY()
 	TSubclassOf<UGameplayEffect> PresageEffectClass;
 
+	/** Array of weak references to combatants currently tracked by this subsystem for mode updates and prediction processing. */
 	UPROPERTY()
 	TArray<TWeakObjectPtr<AWolfCharacterBase>> TrackedCombatants;
 };

@@ -22,15 +22,18 @@ class WOLFCORE_API AWolfChar : public AWolfCharacterBase
 	// ============================================================================================================================
 
 public:
+	/** Default constructor for AWolfChar, initializing the character's camera components. */
 	AWolfChar();
 
 	// ============================================================================================================================
 	// Camera Components
 	// ============================================================================================================================
 
-	UPROPERTY(VisibleAnywhere, Category = "Camera")
+	/** Spring arm component that serves as a boom between the character and the follow camera, providing distance-based offset. */
+	UPROPERTY(VisibleAnywhere, Category = "WolfCore|Camera")
 	TObjectPtr<USpringArmComponent> CameraBoom;
 
-	UPROPERTY(VisibleAnywhere, Category = "Camera")
+	/** First-person camera component attached to the spring arm for player viewport rendering. */
+	UPROPERTY(VisibleAnywhere, Category = "WolfCore|Camera")
 	TObjectPtr<UCameraComponent> FollowCamera;
 };

@@ -28,30 +28,59 @@ class WOLFCORE_API UWolfPresageComponent : public UActorComponent, public ISnaps
 	// ============================================================================================================================
 
 public:
+	/** Default constructor for UWolfPresageComponent. */
 	UWolfPresageComponent();
 
+	/** Called at runtime when the component is ready to begin functioning. Overrides UActorComponent::BeginPlay(). */
 	virtual void BeginPlay() override;
 
 	// ============================================================================================================================
 	// Public API - Prediction Buffer
 	// ============================================================================================================================
 
+	/** Clears all snapshots in the prediction buffer and resets the simulation timeline. */
 	void ClearPredictionBuffer(float MaxDuration);
+
+	/** Retrieves a snapshot from the prediction buffer at a given relative time offset. */
+	/**
+	 * @param RelativeTime Time delta to query against the prediction buffer.
+	 * @return Pointer to the FActorSnapshot at the specified time, or nullptr if not found.
+	 */
 	const FActorSnapshot* GetSnapshotAtTime(float RelativeTime) const;
 
 	// ============================================================================================================================
 	// Public API - Simulation Control
 	// ============================================================================================================================
 
+	/** Sets whether temporal simulation is currently active for this component. */
 	void SetIsSimulating(bool bState) { bIsSimulating = bState; }
+
+	/** Overrides the simulation transform to a specific world-space transform value. */
+	/**
+	 * @param NewTransform The FTransform to set as the new simulation base transform.
+	 */
 	void SetSimulationTransform(const FTransform& NewTransform) { SimulationTransform = NewTransform; }
+
+	/** Executes a single simulation tick step, advancing the temporal prediction state by one frame. */
+	/**
+	 * @param Step The time delta in seconds for this simulation tick step.
+	 */
 	virtual void SimulateTick(float Step);
 
 	// ============================================================================================================================
 	// Public API - Snapshot Interface
 	// ============================================================================================================================
 
+	/**Creates a full actor snapshot representing the current simulated state for temporal prediction storage. Implements ISnapshot. */
+	/**
+	 * @param OutSnapshot Reference to the FActorSnapshot to populate with simulation state data.
+	 */
 	virtual void CreateSnapshot_Implementation(FActorSnapshot& OutSnapshot) override;
+
+	/** Restores the component's simulated state from a previously captured snapshot, reversing temporal prediction changes. Implements ISnapshot. */
+	/**
+	 * @param Snapshot The FActorSnapshot containing the state to restore.
+	 */
 	virtual void RestoreSnapshot_Implementation(const FActorSnapshot& Snapshot) override;
 
 	// ============================================================================================================================
@@ -59,6 +88,7 @@ public:
 	// ============================================================================================================================
 
 public:
+	/** Time delta between each simulation tick step during temporal prediction. */
 	float SimPeriodTime = 0.f;
 
 	// ============================================================================================================================
@@ -66,60 +96,134 @@ public:
 	// ============================================================================================================================
 
 private:
+	/** Executes a single physics simulation step, updating character movement and collision state. */
+	/**
+	 * @param Step The time delta in seconds for this physics step.
+	 */
 	void SimulatePhysicsStep(float Step);
+
+	/** Computes the simulated velocity vector based on destination position and current state. */
+	/**
+	 * @param Destination The target destination FVector for velocity calculation.
+	 * @return FVector representing the computed simulated velocity.
+	 */
 	FVector GetSimulatedVelocity(FVector& Destination) const;
+
+	/** Resolves movement collision between start and end positions, adjusting the delta accordingly. */
+	/**
+	 * @param Start The starting FVector position for collision resolution.
+	 * @param End The ending FVector position for collision resolution.
+	 * @param Delta Output parameter for the adjusted movement delta after collision resolution.
+	 */
 	void ResolveMovementWithCollision(const FVector& Start, const FVector& End, FVector& Delta);
+
+	/** Captures physics state (location, velocity, collision) into a snapshot for temporal prediction storage. */
+	/**
+	 * @param Snapshot Reference to the FActorSnapshot to populate with physics data.
+	 */
 	void SnapshotPhysics(FActorSnapshot& Snapshot) const;
+
+	/** Restores physics state from a previously captured snapshot, reversing simulation changes. */
+	/**
+	 * @param Snapshot The FActorSnapshot containing physics state to restore.
+	 */
 	void RestorePhysics(const FActorSnapshot& Snapshot);
 
 	// ============================================================================================================================
 	// Private - Animation Simulation
 	// ============================================================================================================================
 
+	/** Executes a single animation simulation step, advancing animation state and montage scrubbing. */
+	/**
+	 * @param DeltaTime The time delta in seconds for this animation step.
+	 */
 	void SimulateAnimationStep(float DeltaTime);
+
+	/** Captures animation state (montage position, playback rate, blend layers) into a snapshot. */
+	/**
+	 * @param Snapshot Reference to the FActorSnapshot to populate with animation data.
+	 */
 	void SnapshotAnim(FActorSnapshot& Snapshot) const;
+
+	/** Restores animation state from a previously captured snapshot, reversing simulation changes. */
+	/**
+	 * @param Snapshot The FActorSnapshot containing animation state to restore.
+	 */
 	void RestoreAnim(const FActorSnapshot& Snapshot);
 
 	// ============================================================================================================================
 	// Private - GAS State Management
 	// ============================================================================================================================
 
+	/** Captures Gameplay Ability System state (attributes, active effects, cooldowns) into a snapshot. */
+	/**
+	 * @param Snapshot Reference to the FActorSnapshot to populate with GAS data.
+	 */
 	void SnapshotGAS(FActorSnapshot& Snapshot) const;
+
+	/** Restores Gameplay Ability System state from a previously captured snapshot. */
+	/**
+	 * @param Snapshot The FActorSnapshot containing GAS state to restore.
+	 */
 	void RestoreGAS(const FActorSnapshot& Snapshot);
 
 	// ============================================================================================================================
 	// Private - Inline Accessors
 	// ============================================================================================================================
 
+	/** Provides fast access to the owner's current world-space location. */
 	FORCEINLINE FVector GetOwnerLocation() const;
+
+	/** Provides fast access to the owner's current rotation in FRotator format. */
 	FORCEINLINE FRotator GetOwnerRotation() const;
+
+	/** Provides fast access to the simulated location for temporal prediction queries. */
 	FORCEINLINE FVector GetSimLocation() const;
+
+	/** Provides fast access to the simulated rotation for temporal prediction queries. */
 	FORCEINLINE FRotator GetSimRotation() const;
 
+	/** Provides fast access to the character's movement component for simulation state management. */
 	FORCEINLINE UCharacterMovementComponent* GetMoveComp() const;
+
+	/** Provides fast access to the Ability System Component (ASC) for GAS interactions during simulation. */
 	FORCEINLINE UWolfAbilitySystemComponent* GetASC() const;
+
+	/** Provides fast access to the cached animation instance for animation scrubbing operations. */
 	FORCEINLINE UAnimInstance* GetAnimInst() const;
+
+	/** Provides fast access to the current active animation montage being simulated. */
 	FORCEINLINE UAnimMontage* GetCurrentMontage() const;
+
+	/** Provides fast access to the Combat Mode subsystem singleton for combat mode queries during simulation. */
 	FORCEINLINE UCombatModeSubsystem* GetCMS() const;
 
 	// ============================================================================================================================
 	// Internal State
 	// ============================================================================================================================
 
+	/** Flag indicating whether the component is currently in a snapshot restoration sequence. */
 	bool bIsRestoringSnapshot = false;
+
+	/** Flag indicating whether temporal simulation is currently active for this component. */
 	bool bIsSimulating = false;
 
+	/** The base transform representing the simulated world-space position during prediction. */
 	FTransform SimulationTransform;
 
-	UPROPERTY(Transient, VisibleInstanceOnly, Category = "Wolf|Internal")
+	/** Array of snapshots capturing the prediction buffer for temporal state queries and visualization. */
+	UPROPERTY(Transient, VisibleInstanceOnly, Category = "WolfCore|Internal")
 	TArray<FActorSnapshot> PredictionBuffer;
 
-	UPROPERTY(Transient, VisibleInstanceOnly, Category = "Wolf|Internal")
+	/** Strong reference to the owning character actor that controls this presage component. */
+	UPROPERTY(Transient, VisibleInstanceOnly, Category = "WolfCore|Internal")
 	TObjectPtr<AWolfCharacterBase> CharacterOwner;
 
-	UPROPERTY(Transient, VisibleInstanceOnly, Category = "Wolf|Internal")
+	/** Strong reference to the ability control component for ability state management during simulation. */
+	UPROPERTY(Transient, VisibleInstanceOnly, Category = "WolfCore|Internal")
 	TObjectPtr<UWolfAbilityComponent> AbilityControl;
 
-	UPROPERTY(Transient, VisibleInstanceOnly, Category = "Wolf|Internal")
+	/** Cached reference to the Ability System Component (ASC) for performance optimization during simulation ticks. */
+	UPROPERTY(Transient, VisibleInstanceOnly, Category = "WolfCore|Internal")
 	TObjectPtr<UWolfAbilitySystemComponent> CachedASC;
 };

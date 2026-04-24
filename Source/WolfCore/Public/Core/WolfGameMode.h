@@ -15,5 +15,6 @@ class WOLFCORE_API AWolfGameMode : public AGameModeBase
 	GENERATED_BODY()
 
 public:
+	/** Called at runtime when the game mode is ready to begin functioning. Overrides AGameModeBase::BeginPlay(). */
 	virtual void BeginPlay() override;
 };

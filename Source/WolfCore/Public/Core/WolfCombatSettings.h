@@ -20,13 +20,15 @@ class WOLFCORE_API UWolfCombatSettings : public UDeveloperSettings
 	// ============================================================================================================================
 
 public:
-	UPROPERTY(Config, EditAnywhere, Category = "Presage")
+	/** Soft class pointer to the GameplayEffect applied when entering presage simulation mode. */
+	UPROPERTY(Config, EditAnywhere, Category = "WolfCore|Presage")
 	TSoftClassPtr<UGameplayEffect> PresageEffectClass;
 
 	// ============================================================================================================================
 	// Combat Mode Configuration
 	// ============================================================================================================================
 
-	UPROPERTY(Config, EditAnywhere, Category = "Combat", meta = (Categories = "InputState"))
+	/** Map of combat mode GameplayTags to TimeDilation multipliers for temporal prediction scaling. */
+	UPROPERTY(Config, EditAnywhere, Category = "WolfCore|Combat", meta = (Categories = "InputState"))
 	TMap<FGameplayTag, float> ModeTimeDilationMap;
 };

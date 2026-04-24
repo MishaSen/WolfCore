@@ -25,18 +25,25 @@ class WOLFCORE_API AWolfEnemyBase : public AWolfCharacterBase
 	// ============================================================================================================================
 
 public:
+	/** Default constructor for AWolfEnemyBase, initializing enemy-specific AI components. */
 	AWolfEnemyBase();
 
 protected:
+	/** Handles possession by a new controller, setting up behavior tree and AI state accordingly. Overrides ACharacter::PossessedBy(). */
+	/**
+	 * @param NewController The controller that has taken possession of this enemy character.
+	 */
 	virtual void PossessedBy(AController* NewController) override;
 
 	// ============================================================================================================================
 	// AI Configuration
 	// ============================================================================================================================
 
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "AI")
+	/** Behavior tree asset defining the decision-making logic and behavior patterns for this enemy. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "WolfCore|AI")
 	TObjectPtr<UBehaviorTree> BehaviorTree;
 
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "AI")
+	/** Team identifier used for ally/enemy grouping and team-based combat interactions. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "WolfCore|AI")
 	uint8 TeamID = 2;
 };

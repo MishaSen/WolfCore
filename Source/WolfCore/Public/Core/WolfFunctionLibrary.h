@@ -17,6 +17,12 @@ class WOLFCORE_API UWolfFunctionLibrary : public UBlueprintFunctionLibrary
 	// ============================================================================================================================
 
 public:
+	/** Retrieves a world subsystem of the specified type from the UObject's context. Template helper for internal C++ use only. */
+	/**
+	 * @tparam T The subclass of UWorldSubsystem to retrieve.
+	 * @param WorldContextObject Pointer to any UObject that can provide world context.
+	 * @return Pointer to the requested subsystem, or nullptr if the world could not be obtained.
+	 */
 	template<typename T>
 	static T* GetWorldSubsystem(const UObject* WorldContextObject)
 	{

@@ -21,14 +21,16 @@ struct FAbilityInfo
 {
 	GENERATED_BODY()
 
-	UPROPERTY(EditAnywhere, BlueprintReadOnly)
+	/** The Gameplay Ability subclass assigned to this ability entry. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "WolfCore|Abilities")
 	TSubclassOf<UGameplayAbility> Ability;
 
-	UPROPERTY(EditAnywhere, BlueprintReadOnly)
+	/** The GameplayTag used to identify and query this ability in the system. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "WolfCore|Abilities")
 	FGameplayTag AbilityTag;
 
-	// Optional: Other tags to describe ability
-	UPROPERTY(EditAnywhere, BlueprintReadOnly)
+	/** Container of additional GameplayTags that provide supplementary information about this ability. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "WolfCore|Abilities")
 	FGameplayTagContainer AdditionalAbTags;
 };
 
@@ -45,9 +47,15 @@ class WOLFCORE_API UAbilityConfig : public UDataAsset
 	// ============================================================================================================================
 
 public:
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Abilities")
+	/** Master array of FAbilityInfo entries defining all abilities granted to a character. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "WolfCore|Abilities")
 	TArray<FAbilityInfo> CharacterAbilities;
 
-	UFUNCTION(BlueprintCallable)
+	/** Queries the ability registry for all abilities matching a given GameplayTag and outputs them. */
+	UFUNCTION(BlueprintCallable, Meta = (DisplayName = "Get Abilities By Tag"), Category = "WolfCore|Abilities")
+	/**
+	 * @param SearchTag The GameplayTag to search for in the ability registry.
+	 * @param OutAbilities Output array populated with FAbilityInfo entries matching the search tag.
+	 */
 	void GetAbilitiesByTag(const FGameplayTag& SearchTag, TArray<FAbilityInfo>& OutAbilities) const;
 };

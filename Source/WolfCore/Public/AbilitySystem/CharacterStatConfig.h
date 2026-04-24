@@ -20,6 +20,7 @@ class WOLFCORE_API UCharacterStatConfig : public UDataAsset
 	// ============================================================================================================================
 
 public:
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Attributes")
+	/** Map of default stat values keyed by GameplayTag for character initialization and attribute assignment. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "WolfCore|Attributes")
 	TMap<FGameplayTag, float> DefaultStats;
 };

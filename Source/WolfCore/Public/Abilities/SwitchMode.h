@@ -19,8 +19,16 @@ class WOLFCORE_API USwitchMode : public UBaseCombatAbility
 	// ============================================================================================================================
 
 public:
+	/** Default constructor for USwitchMode. */
 	USwitchMode();
 
+	/** Activates the mode-switching ability, applying Presage-related gameplay effects and transitioning combat modes. Overrides UGameplayAbility::Activate(). */
+	/**
+	 * @param Handle The FGameplayAbilitySpecHandle identifying this ability instance.
+	 * @param ActorInfo Pointer to the FGameplayAbilityActorInfo containing actor context.
+	 * @param ActivationInfo Pointer to the FGameplayAbilityActivationInfo describing activation state.
+	 * @param TriggerEventData Optional pointer to FGameplayEventData providing trigger event context.
+	 */
 	virtual void ActivateAbility(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo,
 	                             const FGameplayAbilityActivationInfo ActivationInfo,
 	                             const FGameplayEventData* TriggerEventData) override;
@@ -29,6 +37,7 @@ public:
 	// Presage Configuration
 	// ============================================================================================================================
 
-	UPROPERTY(EditDefaultsOnly, Category = "Config|Presage")
+	/** Subclass of GameplayEffect applied to the character when switching combat modes via Presage. */
+	UPROPERTY(EditDefaultsOnly, Category = "WolfCore|Config|Presage")
 	TSubclassOf<UGameplayEffect> PresageModeGEClass;
 };

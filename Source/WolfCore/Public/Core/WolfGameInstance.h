@@ -20,9 +20,11 @@ class WOLFCORE_API UWolfGameInstance : public UGameInstance
 	// ============================================================================================================================
 
 public:
-	UPROPERTY(BlueprintReadWrite, Category = "Combat")
+	/** Currently active combat mode GameplayTag representing the player's selected combat state. */
+	UPROPERTY(BlueprintReadWrite, Category = "WolfCore|Combat")
 	FGameplayTag SelectedCombatMode;
 
-	UFUNCTION(BlueprintCallable)
+	/** Clears the currently selected combat mode by resetting it to an empty GameplayTag. */
+	UFUNCTION(BlueprintCallable, Meta = (DisplayName = "Clear Selected Combat Mode"), Category = "WolfCore|Combat")
 	void ClearSelectedCombatMode() { SelectedCombatMode = FGameplayTag(); }
 };

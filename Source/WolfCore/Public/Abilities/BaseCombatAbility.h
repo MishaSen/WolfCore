@@ -10,13 +10,19 @@
 // Enums
 // ============================================================================================================================
 
+/** Enumerates the different period types within a combat ability sequence. */
 UENUM()
 enum class EPeriodType : uint8
 {
+	/** The windup phase where animation begins but no attack has connected yet. */
 	Windup,
+	/** The active attack phase where damage and hit detection occur. */
 	Attack,
+	/** A waiting period between attacks before proceeding to the next sequence. */
 	Wait,
+	/** An evasion phase where the character dodges incoming attacks. */
 	Evasion,
+	/** A movement-to-target phase for repositioning during combat sequences. */
 	MoveTo
 };
 
@@ -28,32 +34,42 @@ struct FCombatPeriod
 {
 	GENERATED_BODY()
 
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly)
+	/** The type of this combat period (windup, attack, wait, etc.). */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "WolfCore|Period")
 	EPeriodType Type = EPeriodType::Attack;
 
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly)
+	/** The animation montage to play for this period's sequence. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "WolfCore|Period")
 	UAnimMontage* Montage = nullptr;
 
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly)
-	float Duration = 0.5f; // Fallback if no Montage
+	/** Duration of this period in seconds (fallback value if no montage is assigned). */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "WolfCore|Period")
+	float Duration = 0.5f;
 
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly)
-	float HitDelay = 0.2f; // For Presage prediction if no Montage/Notify
+	/** Hit delay time in seconds for Presage prediction when no montage notify is available. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "WolfCore|Period")
+	float HitDelay = 0.2f;
 
 	// --- Attribute Data ---
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Attribute Effects")
+
+	/** Scalable float defining the Flow gauge gain amount applied during this period. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "WolfCore|Attribute Effects")
 	FScalableFloat FlowGain = 0.f;
 
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Attribute Effects")
+	/** Scalable float defining the Adrenaline gauge gain amount applied during this period. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "WolfCore|Attribute Effects")
 	FScalableFloat AdrenalineGain = 0.f;
 
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Attribute Effects")
+	/** Scalable float defining the damage value dealt during this attack period. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "WolfCore|Attribute Effects")
 	FScalableFloat Damage = 0.f;
 
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Movement")
+	/** Attack range in centimeters for hit detection and collision prediction. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "WolfCore|Movement")
 	float Range = 150.f;
 
-	UPROPERTY(BlueprintReadOnly)
+	/** Destination FVector for movement-to targets during MoveTo periods. */
+	UPROPERTY(BlueprintReadOnly, Category = "WolfCore|Movement")
 	FVector MoveToDestination = FVector::ZeroVector;
 };
 
@@ -70,39 +86,75 @@ class WOLFCORE_API UBaseCombatAbility : public UGameplayAbility
 	// ============================================================================================================================
 
 public:
+	/** Default constructor for UBaseCombatAbility. */
 	UBaseCombatAbility();
 
 	// ============================================================================================================================
 	// Combat Data Configuration
 	// ============================================================================================================================
 
-	UPROPERTY(EditDefaultsOnly, Category = "Combat Data")
+	/** Array of FCombatPeriod entries defining the complete animation and attack sequence for this ability. */
+	UPROPERTY(EditDefaultsOnly, Category = "WolfCore|Combat Data")
 	TArray<FCombatPeriod> AbilitySequence;
 
-	UPROPERTY(EditDefaultsOnly, Category = "Combat Data")
+	/** GameplayTag used to identify input bindings that trigger the startup of this combat sequence. */
+	UPROPERTY(EditDefaultsOnly, Category = "WolfCore|Combat Data")
 	FGameplayTag StartupInputTag;
 
-	UPROPERTY(EditDefaultsOnly, Category = "Combat Data")
+	/** GameplayTag representing the hit event that triggers attack resolution and damage application. */
+	UPROPERTY(EditDefaultsOnly, Category = "WolfCore|Combat Data")
 	FGameplayTag HitEventTag;
 
 	// ============================================================================================================================
 	// Presage API
 	// ============================================================================================================================
 
-	UFUNCTION(BlueprintCallable, Category = "Presage")
+	/** Calculates the projected time until impact based on current prediction state and animation timing. */
+	UFUNCTION(BlueprintCallable, Meta = (DisplayName = "Calculate Projected Impact Time"), Category = "WolfCore|Presage")
+	/**
+	 * @return Float representing the projected time to impact in seconds.
+	 */
 	float CalculateProjectedImpactTime() const;
 
+	/** Returns the current index within the ability sequence that is actively executing. */
 	int32 GetCurrentPeriodIndex() const { return CurrentPeriodIndex; }
+
+	/** Sets the current period index in the ability sequence for direct state manipulation. */
+	/**
+	 * @param NewIndex The new period index to set as the active sequence position.
+	 */
 	void SetCurrentPeriodIndex(int32 NewIndex) { CurrentPeriodIndex = NewIndex; }
 
+	/** Checks whether the character is invulnerable at a given time relative to the current prediction window. */
+	/**
+	 * @param RelativeTime Time delta to query against the prediction buffer.
+	 * @return True if the character is invulnerable at the specified time; false otherwise.
+	 */
 	bool IsInvulnerableAt(float RelativeTime) const;
 
+	/** Returns the duration of a combat period from its configuration data. Static helper method. */
+	/**
+	 * @param Period The FCombatPeriod to retrieve duration information from.
+	 * @return Float representing the period duration in seconds.
+	 */
 	static float GetPeriodDuration(const FCombatPeriod& Period);
 
-	UFUNCTION(BlueprintCallable, Category = "Presage")
+	/** Returns the progress through the current combat period as a normalized value between 0 and 1. */
+	UFUNCTION(BlueprintCallable, Meta = (DisplayName = "Get Period Progress"), Category = "WolfCore|Presage")
+	/**
+	 * @return Float representing the progress percentage of the current period (0.0 to 1.0).
+	 */
 	float GetPeriodProgress() const;
 
-	UFUNCTION(BlueprintCallable, Category = "Presage")
+	/** Calculates the duration required for movement between two points given velocity and acceleration parameters. */
+	UFUNCTION(BlueprintCallable, Meta = (DisplayName = "Calculate Movement Duration"), Category = "WolfCore|Presage")
+	/**
+	 * @param TotalDistance The total distance to travel in centimeters.
+	 * @param MaxVelocity The maximum achievable velocity in cm/s.
+	 * @param Acceleration The acceleration rate in cm/s².
+	 * @param StartVelocity The initial velocity at the start of movement in cm/s.
+	 * @return Float representing the estimated movement duration in seconds.
+	 */
 	static float CalculateMovementDuration(float TotalDistance, float MaxVelocity, float Acceleration, float StartVelocity);
 
 	// ============================================================================================================================
@@ -110,35 +162,71 @@ public:
 	// ============================================================================================================================
 
 protected:
+	/** Index of the current period within the ability sequence that is actively executing. */
 	int32 CurrentPeriodIndex = 0;
+
+	/** Timestamp marking when the current period began its execution in seconds. */
 	float CurrentPeriodStartTime = 0.f;
 
 	// --- Main Loop ---
+
+	/** Initiates the complete combat sequence from the beginning of the ability's AbilitySequence array. */
 	UFUNCTION()
 	void StartCombatSequence();
 
+	/** Executes a waiting period, pausing the sequence for the specified duration before continuing. */
+	/**
+	 * @param Period The FCombatPeriod containing wait timing and configuration data.
+	 */
 	void ExecuteWait(const FCombatPeriod& Period);
+
+	/** Executes an animated period by playing the associated montage and handling animation notifies. */
+	/**
+	 * @param Period The FCombatPeriod containing montage and attack configuration data.
+	 */
 	void ExecuteAnimatedPeriod(const FCombatPeriod& Period);
+
+	/** Advances the sequence to the next period in the ability's combat timeline. */
 	UFUNCTION()
 	void PlayNextPeriod();
+
+	/** Executes a movement-to-target phase, moving the character toward the specified destination. */
+	/**
+	 * @param Period The FCombatPeriod containing movement parameters and target location.
+	 */
 	void ExecuteMoveTo(FCombatPeriod& Period);
 
+	/** Retrieves the target actor from the blackboard data for attack targeting and combat resolution. */
 	AActor* GetTargetFromBlackboard() const;
+
+	/** Handles completion events for the current period, triggering transitions to the next sequence phase. */
 	UFUNCTION()
 	void OnPeriodCompleted();
 
+	/** Handles event notifications received during animation montages for hit detection and state changes. */
+	/**
+	 * @param EventData The FGameplayEventData containing event context and parameters.
+	 */
 	UFUNCTION()
 	void OnEventReceived(FGameplayEventData EventData);
 
+	/** Processes the attack hit event, applying damage, flow gain, and collision prediction for the current period. */
+	/**
+	 * @param CurrentAttackPeriod Reference to the FCombatPeriod currently executing its attack phase.
+	 */
 	virtual void HandleAttackHitEvent(const FCombatPeriod& CurrentAttackPeriod);
 
 	// --- Attribute Effects ---
-	UPROPERTY(EditDefaultsOnly, Category = "Combat | Effects")
+
+	/** Subclass of GameplayEffect used for Flow gauge gain application during combat periods. */
+	UPROPERTY(EditDefaultsOnly, Category = "WolfCore|Combat | Effects")
 	TSubclassOf<UGameplayEffect> FlowGainEffect;
 
-	UPROPERTY(EditDefaultsOnly, Category = "Combat | Effects")
+	/** Subclass of GameplayEffect used for Adrenaline gauge gain application during combat periods. */
+	UPROPERTY(EditDefaultsOnly, Category = "WolfCore|Combat | Effects")
 	TSubclassOf<UGameplayEffect> AdrenalineGainEffect;
 
-	UPROPERTY(EditDefaultsOnly, Category = "Combat | Effects")
+	/** Subclass of GameplayEffect used for damage application and hit resolution during attacks. */
+	UPROPERTY(EditDefaultsOnly, Category = "WolfCore|Combat | Effects")
 	TSubclassOf<UGameplayEffect> DamageEffect;
 };

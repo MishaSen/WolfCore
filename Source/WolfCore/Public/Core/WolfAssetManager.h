@@ -19,11 +19,13 @@ class WOLFCORE_API UWolfAssetManager : public UAssetManager
 	// ============================================================================================================================
 
 public:
+	/** Retrieves the singleton instance of the Wolf Asset Manager for global asset management operations. */
 	static UWolfAssetManager& Get();
 
 	// ============================================================================================================================
 	// Asset Manager Hooks
 	// ============================================================================================================================
 
+	/** Initiates the initial asset loading pipeline, preloading core resources required for gameplay initialization. Overrides UAssetManager::StartInitialLoading(). */
 	virtual void StartInitialLoading() override;
 };
