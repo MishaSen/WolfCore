@@ -3,21 +3,21 @@
 
 #include "WolfCore/Public/Presage/PresageSubsystem.h"
 
-#include "Engine/World.h"
 #include "AbilitySystemBlueprintLibrary.h"
-#include "Kismet/GameplayStatics.h"
-#include "WolfCore/Public/Presage/ActorSnapshot.h"
-#include "WolfCore/Public/Presage/PresageAbilityRequest.h"
-#include "Components/PrimitiveComponent.h"
-#include "Animation/AnimInstance.h"
-#include "Components/SkeletalMeshComponent.h"
-#include "Core/WolfGameplayTags.h"
-#include "TimerManager.h"
 #include "AbilitySystem/WolfAttributeSet.h"
 #include "Algo/ForEach.h"
+#include "Animation/AnimInstance.h"
 #include "Character/WolfCharacterBase.h"
+#include "Components/PrimitiveComponent.h"
+#include "Components/SkeletalMeshComponent.h"
+#include "Core/WolfGameplayTags.h"
+#include "Engine/World.h"
 #include "GameFramework/CharacterMovementComponent.h"
+#include "Kismet/GameplayStatics.h"
 #include "Systems/CombatModeSubsystem.h"
+#include "TimerManager.h"
+#include "WolfCore/Public/Presage/ActorSnapshot.h"
+#include "WolfCore/Public/Presage/PresageAbilityRequest.h"
 
 void UPresageSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {

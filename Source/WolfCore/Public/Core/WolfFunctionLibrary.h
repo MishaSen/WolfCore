@@ -2,14 +2,19 @@
 
 #include "CoreMinimal.h"
 #include "Kismet/BlueprintFunctionLibrary.h"
-#include "Engine/Engine.h"
-#include "Engine/EngineTypes.h"
 #include "WolfFunctionLibrary.generated.h"
 
+/**
+ * Utility function library providing C++-only helper functions.
+ */
 UCLASS()
 class WOLFCORE_API UWolfFunctionLibrary : public UBlueprintFunctionLibrary
 {
 	GENERATED_BODY()
+
+	// ============================================================================================================================
+	// World Subsystem Accessors
+	// ============================================================================================================================
 
 public:
 	template<typename T>

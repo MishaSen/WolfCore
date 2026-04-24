@@ -3,22 +3,24 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "GameplayTagContainer.h"
-#include "Snapshot.h"
 #include "Abilities/GameplayAbilityTypes.h"
+#include "GameplayTagContainer.h"
 #include "Core/WolfGameplayTags.h"
+#include "Presage/Snapshot.h"
 #include "Subsystems/WorldSubsystem.h"
-
 #include "PresageSubsystem.generated.h"
 
 struct FCombatPeriod;
-class AWolfCharacterBase;
-struct FPresageAbilityRequest;
 struct FActorSnapshot;
-struct FGameplayAbilitySpecHandle;
-class UGameplayAbility;
-class UAbilitySystemComponent;
+struct FPresageAbilityRequest;
 
+class AWolfCharacterBase;
+class UAbilitySystemComponent;
+class UGameplayAbility;
+
+/**
+ * Single frame capturing a character's state at a specific timestamp during presage simulation.
+ */
 USTRUCT(BlueprintType)
 struct FCharacterFrame
 {
@@ -43,6 +45,9 @@ struct FCharacterFrame
 	float CurrentHealth = 0.f;
 };
 
+/**
+ * Timeline track containing a sequence of character frames for visualization.
+ */
 USTRUCT(BlueprintType)
 struct FCharacterTimelineTrack
 {
@@ -52,13 +57,16 @@ struct FCharacterTimelineTrack
 	TArray<FCharacterFrame> Frames;
 };
 
+/**
+ * Event on the presage timeline representing a predicted combat interaction.
+ */
 USTRUCT(BlueprintType)
 struct FPresageTimelineEvent
 {
 	GENERATED_BODY()
-	
+
 	FPresageTimelineEvent() = default;
-	
+
 	FPresageTimelineEvent(AActor* InAttacker, AActor* InVictim, float InTime, FGameplayTag InAbilityTag)
 		: Attacker(InAttacker)
 		, Victim(InVictim)
@@ -77,18 +85,22 @@ struct FPresageTimelineEvent
 
 	UPROPERTY(BlueprintReadOnly, Category = "Presage")
 	FGameplayTag ResultTag;
-
 };
+
 /**
- *
+ * Tickable world subsystem managing the presage prediction loop.
+ * Coordinates ability queuing, simulation baking, timeline scrubbing, and participant management.
  */
 UCLASS()
 class WOLFCORE_API UPresageSubsystem : public UTickableWorldSubsystem, public ISnapshot
 {
 	GENERATED_BODY()
 
+	// ============================================================================================================================
+	// Public API - Database of Predictions
+	// ============================================================================================================================
+
 public:
-	// --- Database of Predictions ---
 	UPROPERTY(BlueprintReadOnly)
 	TMap<AWolfCharacterBase*, FCharacterTimelineTrack> VisualTracks;
 
@@ -97,28 +109,39 @@ public:
 	UFUNCTION(BlueprintCallable)
 	void ScrubToTime(float Time);
 
-	// --- Subsystem Lifecycle ---
+	// ============================================================================================================================
+	// Subsystem Lifecycle
+	// ============================================================================================================================
+
 	virtual void Initialize(FSubsystemCollectionBase& Collection) override;
 	virtual void Deinitialize() override;
 
-	// --- Global Subsystem Accessor ---
 	static UPresageSubsystem* Get(const UWorld* World);
-	
-	// --- Tickables ---
+
+	// ============================================================================================================================
+	// Tickables
+	// ============================================================================================================================
+
 	virtual void Tick(float DeltaTime) override;
 	virtual TStatId GetStatId() const override
 	{
 		RETURN_QUICK_DECLARE_CYCLE_STAT(UPresageSubsystem, STATGROUP_Tickables);
 	}
 
-	// --- Presage Flow Functions ---
+	// ============================================================================================================================
+	// Public API - Presage Flow Control
+	// ============================================================================================================================
+
 	UFUNCTION(BlueprintCallable, Category = "Presage")
 	void StartLoop();
 
 	UFUNCTION(BlueprintCallable, Category = "Presage")
 	void StopLoop();
-	
-	// --- Ability Queue --- 
+
+	// ============================================================================================================================
+	// Public API - Ability Queue & Participants
+	// ============================================================================================================================
+
 	UFUNCTION(BlueprintCallable, Category = "Presage")
 	void QueueAbilityRequest(const FPresageAbilityRequest& Request);
 
@@ -127,6 +150,10 @@ public:
 
 	UPROPERTY(BlueprintReadOnly, Category = "Presage")
 	TArray<FPresageTimelineEvent> CurrentPredictedTimeline;
+
+	// ============================================================================================================================
+	// Protected - State
+	// ============================================================================================================================
 
 protected:
 	UPROPERTY(BlueprintReadOnly, Category = "Presage")
@@ -138,6 +165,10 @@ protected:
 	UPROPERTY()
 	TArray<FPresageAbilityRequest> AbilityQueue;
 
+	// ============================================================================================================================
+	// Private - Internal State
+	// ============================================================================================================================
+
 private:
 	const FWolfGameplayTags* WolfTags;
 	bool bLoopActive = false;
@@ -147,9 +178,17 @@ private:
 	TArray<TWeakObjectPtr<AWolfCharacterBase>> TBParticipants;
 	TArray<TWeakObjectPtr<AWolfCharacterBase>> RTParticipants;
 
+	// ============================================================================================================================
+	// Private - Event Gathering & Organization
+	// ============================================================================================================================
+
 	void GatherRTEvents(TArray<FPresageTimelineEvent>& Events);
 	void GatherTBEvents(TArray<FPresageTimelineEvent>& Events);
 	void OrganizeEventsByTime(TArray<FPresageTimelineEvent>& Events);
+
+	// ============================================================================================================================
+	// Private - Flow Timer & State Management
+	// ============================================================================================================================
 
 	void OnFlowTimerTick();
 	void CharacterSnapshot();

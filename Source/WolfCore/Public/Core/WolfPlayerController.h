@@ -3,47 +3,48 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "AbilitySystem/WolfAbilitySystemComponent.h"
 #include "GameFramework/PlayerController.h"
-#include "Engine/HitResult.h"
-
+#include "GameplayTagContainer.h"
 #include "WolfPlayerController.generated.h"
 
-struct FCombatModeInfo;
-class UEnhancedInputLocalPlayerSubsystem;
+// ============================================================================================================================
+// Forward Declarations
+// ============================================================================================================================
+
 struct FGameplayEventData;
 struct FInputActionValue;
-struct FGameplayTag;
+
+class UEnhancedInputLocalPlayerSubsystem;
 class UWolfAbilitySystemComponent;
 class UWolfInputConfig;
 class UInputMappingContext;
 class UInputAction;
-/**
- * 
- */
 
+/**
+ * Player Controller managing input, combat mode context switching, and ability system integration.
+ */
 UCLASS()
 class WOLFCORE_API AWolfPlayerController : public APlayerController
 {
 	GENERATED_BODY()
-	
 
-#pragma region Lifecycle Hooks
-	
+	// ============================================================================================================================
+	// Lifecycle Hooks
+	// ============================================================================================================================
+
 public:
 	AWolfPlayerController();
 	virtual void PlayerTick(float DeltaTime) override;
-	
+
 protected:
 	virtual void BeginPlay() override;
 	virtual void SetupInputComponent() override;
 	virtual void PostInitializeComponents() override;
-	
-#pragma endregion
-	
 
-#pragma region Input Behavior
-	
+	// ============================================================================================================================
+	// Input Behavior
+	// ============================================================================================================================
+
 private:
 	void HandleScrubInput(const FInputActionValue& Value);
 	void Move(const FInputActionValue& Value);
@@ -52,16 +53,15 @@ private:
 	void AbilityInputTagReleased(const FGameplayTag InputTag);
 	void AbilityInputTagHeld(const FGameplayTag InputTag);
 
-#pragma endregion
+	// ============================================================================================================================
+	// Combat Mode / Input Context Logic
+	// ============================================================================================================================
 
-#pragma region Combat Mode / Input Context Logic
-
-private:
 	void OnCombatTagChanged(const FGameplayTag Tag, int32 NewCount);
 
-#pragma endregion
-
-#pragma region Accessors / Helpers
+	// ============================================================================================================================
+	// Accessors / Helpers
+	// ============================================================================================================================
 
 public:
 	UWolfAbilitySystemComponent* GetASC();
@@ -69,23 +69,22 @@ public:
 private:
 	UEnhancedInputLocalPlayerSubsystem* GetEnhancedInputSubsystem();
 
-#pragma endregion
-	
-#pragma region Variables
-	
-	// Input System Components
-	
-private:
+	// ============================================================================================================================
+	// Member Variables - Input System Components
+	// ============================================================================================================================
+
 	UPROPERTY()
 	TObjectPtr<UEnhancedInputLocalPlayerSubsystem> EnhancedInputSubsystem;
-	
+
 	UPROPERTY(EditDefaultsOnly, Category = "Input")
 	TObjectPtr<UWolfInputConfig> InputConfig;
 
 	UPROPERTY(EditDefaultsOnly, Category = "Input")
 	TMap<FGameplayTag, TObjectPtr<UInputMappingContext>> CombatModeMappings;
 
-	// Input Actions
+	// ============================================================================================================================
+	// Member Variables - Input Actions
+	// ============================================================================================================================
 
 	UPROPERTY(EditAnywhere, Category = "Input")
 	TObjectPtr<UInputAction> ScrubAction;
@@ -95,11 +94,11 @@ private:
 
 	UPROPERTY(EditAnywhere, Category = "Input")
 	TObjectPtr<UInputAction> LookAction;
-	
-	// Ability System
-	
+
+	// ============================================================================================================================
+	// Member Variables - Ability System
+	// ============================================================================================================================
+
 	UPROPERTY()
 	TObjectPtr<UWolfAbilitySystemComponent> WolfASC;
-
-#pragma endregion
 };

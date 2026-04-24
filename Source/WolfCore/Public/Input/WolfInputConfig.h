@@ -6,8 +6,11 @@
 #include "GameplayTagContainer.h"
 #include "Engine/DataAsset.h"
 #include "InputAction.h"
-
 #include "WolfInputConfig.generated.h"
+
+// ============================================================================================================================
+// Forward Declarations
+// ============================================================================================================================
 
 USTRUCT(BlueprintType)
 struct FTaggedInputAction
@@ -22,12 +25,16 @@ struct FTaggedInputAction
 };
 
 /**
- * 
+ * DataAsset defining input actions and their associated gameplay tags.
  */
 UCLASS()
 class WOLFCORE_API UWolfInputConfig : public UDataAsset
 {
 	GENERATED_BODY()
+
+	// ============================================================================================================================
+	// Input Actions
+	// ============================================================================================================================
 
 public:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly)

@@ -7,6 +7,7 @@
 #include "Character/WolfCharacterBase.h"
 #include "Core/WolfGameplayTags.h"
 #include "Debug/WolfDebug.h"
+#include "GameplayTagContainer.h"
 
 TMap<FGameplayTag, TFunction<FGameplayAttribute()>> UWolfAttributeSet::TagToAttributeMap;
 

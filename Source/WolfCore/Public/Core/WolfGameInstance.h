@@ -8,12 +8,16 @@
 #include "WolfGameInstance.generated.h"
 
 /**
- * 
+ * Custom Game Instance that tracks the selected combat mode as a Gameplay Tag.
  */
 UCLASS()
 class WOLFCORE_API UWolfGameInstance : public UGameInstance
 {
 	GENERATED_BODY()
+
+	// ============================================================================================================================
+	// Combat Mode State
+	// ============================================================================================================================
 
 public:
 	UPROPERTY(BlueprintReadWrite, Category = "Combat")

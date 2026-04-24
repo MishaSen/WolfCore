@@ -3,19 +3,19 @@
 
 #include "Systems/CombatModeSubsystem.h"
 
+#include "Abilities/Effects/PresageMode.h"
 #include "AbilitySystemBlueprintLibrary.h"
-#include "GameFramework/PlayerController.h"
-#include "GameFramework/Pawn.h"
 #include "AbilitySystemComponent.h"
 #include "WolfLevelScript.h"
-#include "Abilities/Effects/PresageMode.h"
 #include "Character/WolfCharacterBase.h"
 #include "Core/WolfCombatSettings.h"
 #include "Core/WolfGameInstance.h"
 #include "Core/WolfGameplayTags.h"
+#include "Core/WolfPresageComponent.h"
 #include "Debug/WolfDebug.h"
 #include "Engine/AssetManager.h"
 #include "GameFramework/CharacterMovementComponent.h"
+#include "GameFramework/Pawn.h"
 #include "Interfaces/CombatModeListener.h"
 #include "Kismet/GameplayStatics.h"
 

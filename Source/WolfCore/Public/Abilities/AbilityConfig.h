@@ -7,8 +7,15 @@
 #include "Engine/DataAsset.h"
 #include "AbilityConfig.generated.h"
 
+// ============================================================================================================================
+// Forward Declarations
+// ============================================================================================================================
+
 class UGameplayAbility;
 
+/**
+ * Describes a single ability with its class, tag, and optional additional tags.
+ */
 USTRUCT(BlueprintType)
 struct FAbilityInfo
 {
@@ -17,7 +24,7 @@ struct FAbilityInfo
 	UPROPERTY(EditAnywhere, BlueprintReadOnly)
 	TSubclassOf<UGameplayAbility> Ability;
 
-	UPROPERTY(editAnywhere, BlueprintReadOnly)
+	UPROPERTY(EditAnywhere, BlueprintReadOnly)
 	FGameplayTag AbilityTag;
 
 	// Optional: Other tags to describe ability
@@ -26,17 +33,21 @@ struct FAbilityInfo
 };
 
 /**
- * 
+ * DataAsset containing the master list of all abilities for a character.
  */
 UCLASS()
 class WOLFCORE_API UAbilityConfig : public UDataAsset
 {
 	GENERATED_BODY()
 
+	// ============================================================================================================================
+	// Ability Registry
+	// ============================================================================================================================
+
 public:
-	// Master list of all abilities
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Abilities")
 	TArray<FAbilityInfo> CharacterAbilities;
 
+	UFUNCTION(BlueprintCallable)
 	void GetAbilitiesByTag(const FGameplayTag& SearchTag, TArray<FAbilityInfo>& OutAbilities) const;
 };

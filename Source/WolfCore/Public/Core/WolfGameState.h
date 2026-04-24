@@ -7,11 +7,10 @@
 #include "WolfGameState.generated.h"
 
 /**
- * 
+ * Custom GameState for Wolf-specific game state management.
  */
 UCLASS()
 class WOLFCORE_API AWolfGameState : public AGameStateBase
 {
 	GENERATED_BODY()
-	
 };

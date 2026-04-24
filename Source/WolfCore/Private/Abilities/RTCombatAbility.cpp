@@ -4,6 +4,7 @@
 #include "Abilities/RTCombatAbility.h"
 
 #include "AbilitySystemBlueprintLibrary.h"
+#include "AbilitySystemComponent.h"
 #include "Abilities/AbilityFrameData.h"
 #include "Debug/WolfDebug.h"
 #include "TimerManager.h"

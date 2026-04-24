@@ -8,22 +8,29 @@
 
 class USpringArmComponent;
 class UCameraComponent;
-class UWolfInputConfig;
 
+/**
+ * Default player character with camera boom and follow camera setup.
+ */
 UCLASS(Blueprintable)
 class WOLFCORE_API AWolfChar : public AWolfCharacterBase
 {
 	GENERATED_BODY()
 
+	// ============================================================================================================================
+	// Lifecycle
+	// ============================================================================================================================
+
 public:
 	AWolfChar();
 
-	// --- Camera ---
+	// ============================================================================================================================
+	// Camera Components
+	// ============================================================================================================================
+
 	UPROPERTY(VisibleAnywhere, Category = "Camera")
 	TObjectPtr<USpringArmComponent> CameraBoom;
 
 	UPROPERTY(VisibleAnywhere, Category = "Camera")
 	TObjectPtr<UCameraComponent> FollowCamera;
-
-protected:
 };

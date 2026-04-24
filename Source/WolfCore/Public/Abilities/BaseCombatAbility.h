@@ -6,6 +6,10 @@
 #include "Abilities/GameplayAbility.h"
 #include "BaseCombatAbility.generated.h"
 
+// ============================================================================================================================
+// Enums
+// ============================================================================================================================
+
 UENUM()
 enum class EPeriodType : uint8
 {
@@ -16,6 +20,9 @@ enum class EPeriodType : uint8
 	MoveTo
 };
 
+/**
+ * Describes a single period within a combat ability sequence (montage, duration, attribute effects).
+ */
 USTRUCT(BlueprintType)
 struct FCombatPeriod
 {
@@ -49,18 +56,26 @@ struct FCombatPeriod
 	UPROPERTY(BlueprintReadOnly)
 	FVector MoveToDestination = FVector::ZeroVector;
 };
+
 /**
- * 
+ * Base combat ability with period-based sequence execution and Presage integration.
  */
 UCLASS()
 class WOLFCORE_API UBaseCombatAbility : public UGameplayAbility
 {
 	GENERATED_BODY()
 
+	// ============================================================================================================================
+	// Lifecycle
+	// ============================================================================================================================
+
 public:
 	UBaseCombatAbility();
-	
-	// --- Data ---
+
+	// ============================================================================================================================
+	// Combat Data Configuration
+	// ============================================================================================================================
+
 	UPROPERTY(EditDefaultsOnly, Category = "Combat Data")
 	TArray<FCombatPeriod> AbilitySequence;
 
@@ -70,7 +85,10 @@ public:
 	UPROPERTY(EditDefaultsOnly, Category = "Combat Data")
 	FGameplayTag HitEventTag;
 
-	// --- Presage API ---
+	// ============================================================================================================================
+	// Presage API
+	// ============================================================================================================================
+
 	UFUNCTION(BlueprintCallable, Category = "Presage")
 	float CalculateProjectedImpactTime() const;
 
@@ -83,11 +101,15 @@ public:
 
 	UFUNCTION(BlueprintCallable, Category = "Presage")
 	float GetPeriodProgress() const;
-	
+
+	UFUNCTION(BlueprintCallable, Category = "Presage")
 	static float CalculateMovementDuration(float TotalDistance, float MaxVelocity, float Acceleration, float StartVelocity);
 
+	// ============================================================================================================================
+	// Execution State (Protected)
+	// ============================================================================================================================
+
 protected:
-	// --- Execution State ---
 	int32 CurrentPeriodIndex = 0;
 	float CurrentPeriodStartTime = 0.f;
 
@@ -111,7 +133,6 @@ protected:
 	virtual void HandleAttackHitEvent(const FCombatPeriod& CurrentAttackPeriod);
 
 	// --- Attribute Effects ---
-	
 	UPROPERTY(EditDefaultsOnly, Category = "Combat | Effects")
 	TSubclassOf<UGameplayEffect> FlowGainEffect;
 

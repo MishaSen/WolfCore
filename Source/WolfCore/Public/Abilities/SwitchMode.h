@@ -4,23 +4,31 @@
 
 #include "CoreMinimal.h"
 #include "BaseCombatAbility.h"
-#include "Abilities/GameplayAbility.h"
 #include "SwitchMode.generated.h"
 
 /**
- * 
+ * Ability that switches combat mode and applies Presage-related gameplay effects.
  */
 UCLASS()
 class WOLFCORE_API USwitchMode : public UBaseCombatAbility
 {
 	GENERATED_BODY()
 
+	// ============================================================================================================================
+	// Lifecycle
+	// ============================================================================================================================
+
 public:
 	USwitchMode();
-	UPROPERTY(EditDefaultsOnly, Category = "Config|Presage")
-	TSubclassOf<UGameplayEffect> PresageModeGEClass;
 
 	virtual void ActivateAbility(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo,
 	                             const FGameplayAbilityActivationInfo ActivationInfo,
 	                             const FGameplayEventData* TriggerEventData) override;
+
+	// ============================================================================================================================
+	// Presage Configuration
+	// ============================================================================================================================
+
+	UPROPERTY(EditDefaultsOnly, Category = "Config|Presage")
+	TSubclassOf<UGameplayEffect> PresageModeGEClass;
 };

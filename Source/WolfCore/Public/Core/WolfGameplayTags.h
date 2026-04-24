@@ -6,16 +6,23 @@
 #include "GameplayTagContainer.h"
 
 /**
- * 
+ * Singleton providing access to all native gameplay tags used by the Wolf framework.
+ * Tags are organized by category: Input, Input State, Attributes, Effects, Events, Presage Results, Data, and Status.
  */
-
 struct FWolfGameplayTags
 {
+	// ============================================================================================================================
+	// Static Access
+	// ============================================================================================================================
+
 	static const FWolfGameplayTags& Get() { return GameplayTags; }
 	static void AddNativeTag(FGameplayTag& Tag, const FName& TagName, const FString& Description);
 	static void InitializeNativeGameplayTags();
 
-	// --- Input Tags ---
+	// ============================================================================================================================
+	// Input Tags
+	// ============================================================================================================================
+
 	FGameplayTag Input_Ability1;
 	FGameplayTag Input_Ability2;
 	FGameplayTag Input_Ability3;
@@ -25,36 +32,57 @@ struct FWolfGameplayTags
 	FGameplayTag Input_Secondary;
 	FGameplayTag Input_Switch;
 
-	// --- Input State Tags ---
+	// ============================================================================================================================
+	// Input State Tags
+	// ============================================================================================================================
+
 	FGameplayTag InputState;
 	FGameplayTag InputState_RT;
 	FGameplayTag InputState_TB;
 	FGameplayTag InputState_OOC;
 	FGameplayTag InputState_Dead;
 
-	// --- Attributes ---
+	// ============================================================================================================================
+	// Attributes
+	// ============================================================================================================================
+
 	FGameplayTag Attribute_Health;
 	FGameplayTag Attribute_MaxHealth;
 	FGameplayTag Attribute_FlowGauge;
 	FGameplayTag Attribute_Adrenaline;
 
-	// --- Effects ---
+	// ============================================================================================================================
+	// Effects
+	// ============================================================================================================================
+
 	FGameplayTag Effect_Combat;
 
-	// --- Event Tags ---
+	// ============================================================================================================================
+	// Event Tags
+	// ============================================================================================================================
+
 	FGameplayTag Event_ModeSwitchReady;
 	FGameplayTag Event_Ability_Attack;
 
-	// --- Presage Result ---
+	// ============================================================================================================================
+	// Presage Result
+	// ============================================================================================================================
+
 	FGameplayTag Result_Hit;
 	FGameplayTag Result_Dodge;
-	
-	// --- Data ---
+
+	// ============================================================================================================================
+	// Data
+	// ============================================================================================================================
+
 	FGameplayTag Data_Amount;
 
-	// --- Status ---
+	// ============================================================================================================================
+	// Status
+	// ============================================================================================================================
+
 	FGameplayTag Status_Link;
-	
+
 private:
 	static FWolfGameplayTags GameplayTags;
 };

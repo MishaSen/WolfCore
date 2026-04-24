@@ -7,12 +7,16 @@
 #include "AbilityFrameData.generated.h"
 
 /**
- * 
+ * DataAsset defining timing windows for ability frames (startup, active, recovery).
  */
 UCLASS()
 class WOLFCORE_API UAbilityFrameData : public UDataAsset
 {
 	GENERATED_BODY()
+
+	// ============================================================================================================================
+	// Timing Windows
+	// ============================================================================================================================
 
 public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Frame Data", meta = (ClampMin = "0"))
@@ -23,6 +27,10 @@ public:
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Frame Data", meta = (ClampMin = "0"))
 	float RecoveryTime = 0.3f;
+
+	// ============================================================================================================================
+	// Helpers
+	// ============================================================================================================================
 
 	UFUNCTION(BlueprintPure, Category = "Frame Data")
 	float GetTotalTime() const { return StartupTime + ActiveTime + RecoveryTime; }
