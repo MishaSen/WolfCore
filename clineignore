@@ -1,0 +1,15 @@
+# Cline Ignore File
+# Directories and files to exclude from context analysis
+
+# Unreal Engine generated directories
+Binaries/
+DerivedDataCache/
+Intermediate/
+Saved/
+
+# IDE artifacts
+.idea/
+*.user
+
+# Visual Studio cache (if any)
+.vs/
