@@ -11,6 +11,7 @@
 #include "Core/WolfAbilityComponent.h"
 #include "Presage/ActorSnapshot.h"
 #include "Presage/Snapshot.h"
+#include "Interfaces/IWolfCombatant.h"
 #include "WolfCharacterBase.generated.h"
 
 class UAbilityConfig;
@@ -25,7 +26,7 @@ class UWolfPresageComponent;
  * Serves as the foundation for all playable characters in the Wolf framework.
  */
 UCLASS(Blueprintable, BlueprintType)
-class WOLFCORE_API AWolfCharacterBase : public ACharacter, public IAbilitySystemInterface, public ISnapshot, public ICombatModeListener
+class WOLFCORE_API AWolfCharacterBase : public ACharacter, public IAbilitySystemInterface, public ISnapshot, public ICombatModeListener, public IWolfCombatant
 {
 	GENERATED_BODY()
 
@@ -94,6 +95,31 @@ public:
 	 * @return Pointer to the UCombatModeSubsystem, or nullptr if unavailable.
 	 */
 	UCombatModeSubsystem* GetCMS() const;
+
+	// ============================================================================================================================
+	// IWolfCombatant Interface Implementation
+	// ============================================================================================================================
+
+public:
+	/// @brief Checks if this combatant is currently killable (not invulnerable, not dead).
+	/// @return True if the combatant can receive fatal damage; false otherwise.
+	virtual bool IsKillable() const override;
+
+	/// @brief Retrieves the current combat mode of this combatant.
+	/// @return FGameplayTag representing the active combat mode (RT, TB, OOC).
+	virtual FGameplayTag GetCurrentCombatMode() const override;
+
+	/// @brief Provides access to the AbilitySystemComponent for GAS interactions.
+	/// @return Pointer to the UAbilitySystemComponent, or nullptr if unavailable.
+	virtual UAbilitySystemComponent* GetASC() const override;
+
+	/// @brief Called when this combatant has been selected for death by the subsystem.
+	/// @note The concrete actor decides how to execute death (animations, particles, etc).
+	virtual void OnTriggerDeath() override;
+
+	/// @brief Handles notification when the global combat mode changes.
+	/// @param NewMode The FGameplayTag representing the new combat mode being entered.
+	virtual void OnCombatModeChanged_Implementation(FGameplayTag NewMode) override;
 
 	/** Returns the presage control component for temporal prediction queries. */
 	UFUNCTION(BlueprintCallable, Meta = (DisplayName = "Get Presage Component"), Category = "WolfCore|Presage")
@@ -204,13 +230,6 @@ public:
 	// ============================================================================================================================
 
 protected:
-	/** Handles changes to the combat mode tag, updating ability state and animation layers accordingly. */
-	/**
-	 * @param NewMode The GameplayTag representing the new combat mode being entered.
-	 */
-	UFUNCTION()
-	void HandleCombatModeChanged(FGameplayTag NewMode);
-
 	/** Extracts root motion transform from an animation montage at a specific time position. Static helper for temporal scrubbing. */
 	/**
 	 * @param Montage The UAnimMontage to extract root motion data from.

@@ -17,6 +17,7 @@
 #include "GameFramework/CharacterMovementComponent.h"
 #include "GameFramework/Pawn.h"
 #include "Interfaces/CombatModeListener.h"
+#include "Interfaces/IWolfCombatant.h"
 #include "Kismet/GameplayStatics.h"
 
 void UCombatModeSubsystem::Initialize(FSubsystemCollectionBase& Collection)
@@ -56,18 +57,35 @@ void UCombatModeSubsystem::OnPresageEffectLoaded()
 	}
 }
 
-void UCombatModeSubsystem::RegisterCombatant(AWolfCharacterBase* Character)
+void UCombatModeSubsystem::RegisterCombatant(const TScriptInterface<IWolfCombatant>& Combatant)
 {
-	if (Character && !TrackedCombatants.Contains(Character))
+	if (!Combatant.GetInterface()) return;
+
+	const auto* Actor = Cast<AActor>(Combatant.GetObject());
+	if (!Actor) return;
+	
+	// Avoid duplicate entries in the TrackedCombatants array.
+	for (const auto& Existing : TrackedCombatants)
 	{
-		TrackedCombatants.Add(Character);
-		ApplyModeToActor(Character, CurrentMode); // Adds Actor to Presage
+		if (Existing.GetObject() == Actor) return;
 	}
+
+	TrackedCombatants.Add(Combatant);
+
+	ApplyModeToActor(Combatant, CurrentMode); // Adds Actor to Presage
 }
 
-void UCombatModeSubsystem::UnregisterCombatant(AWolfCharacterBase* Character)
+void UCombatModeSubsystem::UnregisterCombatant(const TScriptInterface<IWolfCombatant>& Combatant)
 {
-	TrackedCombatants.RemoveSingleSwap(Character); // Remove() already handles if check
+	// Remove matching interface reference.
+	for (auto It = TrackedCombatants.CreateIterator(); It; ++It)
+	{
+		if (It->GetObject() == Combatant.GetObject())
+		{
+			It.RemoveCurrent();
+			return;
+		}
+	}
 }
 
 FTemporalStates UCombatModeSubsystem::CaptureCurrentWorldState(float Timestamp)
@@ -79,19 +97,22 @@ FTemporalStates UCombatModeSubsystem::CaptureCurrentWorldState(float Timestamp)
 
 	for (auto It = TrackedCombatants.CreateIterator(); It; ++It)
 	{
-		auto* WolfChar = It->Get();
-		if (WolfChar)
-		{
-			FActorSnapshot ActorState;
-			ISnapshot::Execute_CreateSnapshot(WolfChar, ActorState);
-			WOLF_LOG(Log, TEXT("Snapshotted [%s] at %s"), *WolfChar->GetName(), *ActorState.Location.ToString());
-			NewState.ActorStates.Add(WolfChar, ActorState);
-		}
-		else
+		auto& Combatant = *It;
+		if (!Combatant.GetInterface() || !IsValid(Combatant.GetObject()))
 		{
 			It.RemoveCurrent();
+			continue;
 		}
+
+		auto* CombatantActor = Cast<AActor>(Combatant.GetObject());
+		if (!CombatantActor) continue;
+
+		FActorSnapshot ActorState;
+		ISnapshot::Execute_CreateSnapshot(CombatantActor, ActorState);
+		WOLF_LOG(Log, TEXT("Snapshotted [%s] at %s"), *CombatantActor->GetName(), *ActorState.Location.ToString());
+		NewState.ActorStates.Add(CombatantActor, ActorState);
 	}
+
 	WOLF_LOG(Log, TEXT("Snapshot Complete. Captured %d combatants."), NewState.ActorStates.Num());
 	return NewState;
 }
@@ -137,15 +158,19 @@ void UCombatModeSubsystem::ScrubTimeline(float NewTime)
 	if (FMath::IsNearlyEqual(ClampedTime, CurrentTimelineTime)) return; // No time change; no snapshot change
 	CurrentTimelineTime = ClampedTime;
 
-	for (auto Combatant : TrackedCombatants)
+	for (auto& Combatant : TrackedCombatants)
 	{
-		auto* WolfChar = Cast<AWolfCharacterBase>(Combatant.Get());
+		auto* WolfChar = Cast<AWolfCharacterBase>(Combatant.GetObject());
 		if (!IsValid(WolfChar)) continue;
 
-		const auto* BakedFrame = WolfChar->GetPresageComponent()->GetSnapshotAtTime(CurrentTimelineTime);
-		if (BakedFrame) WolfChar->RestoreSnapshot_Implementation(*BakedFrame);
-		else WOLF_WARN(TEXT("No snapshot found for %s at %.2fs"), *WolfChar->GetName(), CurrentTimelineTime);
+		if (auto* Presage = WolfChar->GetPresageComponent())
+		{
+			const auto* BakedFrame = Presage->GetSnapshotAtTime(CurrentTimelineTime);
+			if (BakedFrame) ISnapshot::Execute_RestoreSnapshot(WolfChar, *BakedFrame);
+			else WOLF_WARN(TEXT("No snapshot found for %s at %.2fs"), *WolfChar->GetName(), CurrentTimelineTime);
+		}
 	}
+
 	WOLF_LOG(Log, TEXT("Timeline Scrubbed to : %.2fs /  %.2fs"), CurrentTimelineTime, MaxTimelineDuration);
 }
 
@@ -176,13 +201,17 @@ void UCombatModeSubsystem::HandlePresageDrainEffect(UAbilitySystemComponent* ASC
 	}
 }
 
-void UCombatModeSubsystem::ApplyModeToActor(AActor* Combatant, FGameplayTag NewMode)
+void UCombatModeSubsystem::ApplyModeToActor(TScriptInterface<IWolfCombatant> Combatant, FGameplayTag NewMode)
 {
-	auto* ASC = UAbilitySystemBlueprintLibrary::GetAbilitySystemComponent(Combatant);
+	auto* Obj = Combatant.GetObject();
+	auto* Actor = Cast<AActor>(Obj);
+	if (!IsValid(Actor)) return;
+
+	auto* ASC = UAbilitySystemBlueprintLibrary::GetAbilitySystemComponent(Actor);
 	if (!ASC) return;
 
-	// Enemies and unlinked allies don't need to switch
-	const auto* Pawn = Cast<APawn>(Combatant);
+	// Enemies and unlinked allies don't need to switch.
+	const auto* Pawn = Cast<APawn>(Actor);
 	const bool bIsPlayer = Pawn && Pawn->IsPlayerControlled();
 	const bool bCanChangeMode = bIsPlayer || ASC->HasMatchingGameplayTag(WolfTag.Status_Link);
 	const auto ActualModeForActor = bCanChangeMode ? NewMode : WolfTag.InputState_RT;
@@ -198,16 +227,17 @@ void UCombatModeSubsystem::ApplyModeToActor(AActor* Combatant, FGameplayTag NewM
 	ASC->RemoveLooseGameplayTags(ModeTags);
 	WOLF_LOG(Log, TEXT("Removing Mode Tags: %s"), *ModeTags.ToString());
 	ASC->AddLooseGameplayTag(ActualModeForActor);
-	WOLF_LOG(Log, TEXT("Adding Mode Tag %s for %s"), *ActualModeForActor.ToString(), *Combatant->GetName());
+	WOLF_LOG(Log, TEXT("Adding Mode Tag %s for %s"), *ActualModeForActor.ToString(), *Actor->GetName());
 
 	if (bIsPlayer)
 	{
 		HandlePresageDrainEffect(ASC, ActualModeForActor);
 	}
 
-	if (Combatant->Implements<UCombatModeListener>())
+	// Safest way to call UINTERFACE functions that might be implemented in C++ or BP.
+	if (Combatant.GetInterface())
 	{
-		ICombatModeListener::Execute_OnCombatModeChanged(Combatant, ActualModeForActor);
+		IWolfCombatant::Execute_OnCombatModeChanged(Combatant.GetObject(), ActualModeForActor);
 	}
 }
 
@@ -265,27 +295,40 @@ void UCombatModeSubsystem::GenerateFutureState(float Duration)
 {
 	for (auto& Combatant : TrackedCombatants)
 	{
-		if (const auto* WolfChar = Combatant.Get())
+		auto* Actor = Cast<AActor>(Combatant.GetObject());
+		if (!IsValid(Actor)) continue;
+
+		const auto* WolfChar = Cast<AWolfCharacterBase>(Actor);
+		if (!WolfChar) continue;
+
+		auto* Presage = WolfChar->GetPresageComponent();
+		if (!IsValid(Presage)) continue;
+
+		Presage->ClearPredictionBuffer(Duration);
+		Presage->SetIsSimulating(true);
+		Presage->SetSimulationTransform(Actor->GetActorTransform());
+
+		// Sync sim timer to the current period.
+		auto* ASC = UAbilitySystemBlueprintLibrary::GetAbilitySystemComponent(Actor);
+		if (ASC)
 		{
-			auto* Presage = WolfChar->GetPresageComponent();
-			if (IsValid(Presage))
+			for (const auto& Spec : ASC->GetActivatableAbilities())
 			{
-				Presage->ClearPredictionBuffer(Duration);
-				Presage->SetIsSimulating(true);
-				Presage->SetSimulationTransform(WolfChar->GetActorTransform());
-			}
+				if (!Spec.IsActive()) continue;
 
-			if (const auto* ActiveAbility = WolfChar->GetActiveCombatAbility()) // Sync sim timer to the current period.
-			{
-				Presage->SimPeriodTime = ActiveAbility->GetPeriodProgress();
-			}
-			else Presage->SimPeriodTime = 0.f;
-
-			if (auto* MoveComp = WolfChar->GetCharacterMovement())
-			{
-				if (!IsValid(WolfChar->GetCurrentMontage())) MoveComp->StopMovementImmediately();
+				for (auto* Instance : Spec.GetAbilityInstances())
+				{
+					if (const auto* CombatAbility = Cast<UBaseCombatAbility>(Instance))
+					{
+						Presage->SimPeriodTime = CombatAbility->GetPeriodProgress();
+						break;
+					}
+				}
 			}
 		}
+
+		auto* MoveComp = Actor->FindComponentByClass<UCharacterMovementComponent>();
+		if (MoveComp) MoveComp->StopMovementImmediately();
 	}
 
 	constexpr float Step = WolfSimConfig::Step;
@@ -298,21 +341,24 @@ void UCombatModeSubsystem::GenerateFutureState(float Duration)
 		WOLF_LOG(Log, TEXT("[SIM] Step %d"), i);
 		for (auto& Combatant : TrackedCombatants)
 		{
-			if (const auto* WolfChar = Combatant.Get())
-			{
-				if (auto* Presage = WolfChar->GetPresageComponent())
-				{
-					Presage->SimulateTick(Step);
-				}
-			}
+			const auto* WolfChar = Cast<AWolfCharacterBase>(Combatant.GetObject());
+			if (!IsValid(WolfChar)) continue;
+
+			auto* Presage = WolfChar->GetPresageComponent();
+			if (!IsValid(Presage)) continue;
+
+			Presage->SimulateTick(Step);
 		}
 	}
 
 	for (auto& Combatant : TrackedCombatants)
 	{
-		if (const auto* WolfChar = Combatant.Get())
-		{
-			if (auto* Presage = WolfChar->GetPresageComponent()) Presage->SetIsSimulating(false);
-		}
+		const auto* WolfChar = Cast<AWolfCharacterBase>(Combatant.GetObject());
+		if (!IsValid(WolfChar)) continue;
+
+		auto* Presage = WolfChar->GetPresageComponent();
+		if (!IsValid(Presage)) continue;
+
+		Presage->SetIsSimulating(false);
 	}
 }

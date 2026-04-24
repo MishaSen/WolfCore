@@ -76,6 +76,9 @@ struct FWolfGameplayTags
 	/** GameplayTag representing the dead input state where player control is disabled. */
 	FGameplayTag InputState_Dead;
 
+	/** GameplayTag representing the invulnerable input state where player actions are blocked. */
+	FGameplayTag InputState_Invulnerable;
+
 	// ============================================================================================================================
 	// Attributes
 	// ============================================================================================================================

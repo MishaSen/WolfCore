@@ -17,6 +17,7 @@
 #include "Navigation/PathFollowingComponent.h"
 #include "Presage/ActorSnapshot.h"
 #include "Systems/CombatModeSubsystem.h"
+#include "Interfaces/IWolfCombatant.h"
 
 AWolfCharacterBase::AWolfCharacterBase() 
 {
@@ -41,8 +42,9 @@ void AWolfCharacterBase::BeginPlay()
 
 	if (auto* CMS = GetCMS())
 	{
-		CMS->RegisterCombatant(this);
-		CMS->OnCombatModeChanged.AddDynamic(this, &AWolfCharacterBase::HandleCombatModeChanged);
+		// Register using TScriptInterface<IWolfCombatant> for interface-based decoupling.
+		// This is the only thing needed to sync the character's initial state via the subsystem.
+		CMS->RegisterCombatant(TScriptInterface<IWolfCombatant>(this));
 	}
 }
 
@@ -50,9 +52,8 @@ void AWolfCharacterBase::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
 	if (auto* CMS = GetCMS())
 	{
-		// RemoveDynamic is fine here, but the UE delegate macro should handle this automatically
-		CMS->OnCombatModeChanged.RemoveDynamic(this, &AWolfCharacterBase::HandleCombatModeChanged);
-		CMS->UnregisterCombatant(this);
+		// Unregister only - the interface-based OnCombatModeChanged is handled by the subsystem directly.
+		CMS->UnregisterCombatant(TScriptInterface<IWolfCombatant>(this));
 	}
 	Super::EndPlay(EndPlayReason);
 }
@@ -88,29 +89,49 @@ void AWolfCharacterBase::PossessedBy(AController* NewController)
 	}
 }
 
-void AWolfCharacterBase::HandleCombatModeChanged(FGameplayTag NewMode)
+// IWolfCombatant Interface Implementations
+
+bool AWolfCharacterBase::IsKillable() const
 {
-	auto* CMS = GetCMS();
-	if (!IsValid(CMS)) return;
-	CMS->ApplyModeToActor(this, NewMode);
+	auto* ASC = GetAbilitySystemComponent();
+	if (!ASC) return false;
 
-	if (const auto* AIControl = Cast<AAIController>(GetController()))
+	// Stateless query: check if dead or invulnerable tags exist on the ASC.
+	return !ASC->HasMatchingGameplayTag(FWolfGameplayTags::Get().InputState_Dead)
+		   && !ASC->HasMatchingGameplayTag(FWolfGameplayTags::Get().InputState_Invulnerable);
+}
+
+FGameplayTag AWolfCharacterBase::GetCurrentCombatMode() const
+{
+	auto* ASC = GetAbilitySystemComponent();
+	if (!ASC) return FWolfGameplayTags::Get().InputState_RT;
+
+	// Use HasMatchingGameplayTag directly for performance.
+	if (ASC->HasMatchingGameplayTag(FWolfGameplayTags::Get().InputState_TB))
 	{
-		auto* BTComp = Cast<UBehaviorTreeComponent>(AIControl->GetBrainComponent());
-		auto* PathFollowComp = AIControl->GetPathFollowingComponent();
-		if (!IsValid(BTComp) || !PathFollowComp) return; // PFComp should be valid; separate check if buggy.
-
-		if (CMS->bIsInTB)
-		{
-			BTComp->PauseLogic(TEXT("Entering TB"));
-			PathFollowComp->PauseMove();
-		}
-		else
-		{
-			BTComp->ResumeLogic(TEXT("Exiting TB"));
-			PathFollowComp->ResumeMove();
-		}
+		return FWolfGameplayTags::Get().InputState_TB;
 	}
+	return FWolfGameplayTags::Get().InputState_RT;
+}
+
+UAbilitySystemComponent* AWolfCharacterBase::GetASC() const
+{
+	return GetAbilitySystemComponent();
+}
+
+void AWolfCharacterBase::OnTriggerDeath()
+{
+	Die();
+}
+
+/**
+ * @brief Handles notification when the global combat mode changes.
+ * This is a local-only reaction (e.g., UI updates, VFX). Does NOT call the Subsystem.
+ */
+void AWolfCharacterBase::OnCombatModeChanged_Implementation(FGameplayTag NewMode)
+{
+	// Local-only reactions: UI updates, VFX, or other client-side effects.
+	// The subsystem is the source of truth; this character simply reacts to state changes.
 }
 
 void AWolfCharacterBase::Die_Implementation()

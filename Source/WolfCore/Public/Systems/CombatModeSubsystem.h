@@ -6,11 +6,12 @@
 #include "Core/WolfGameplayTags.h"
 #include "Presage/ActorSnapshot.h"
 #include "Subsystems/WorldSubsystem.h"
+#include "Interfaces/IWolfCombatant.h"
 #include "CombatModeSubsystem.generated.h"
 
 struct FStreamableHandle;
-class AWolfCharacterBase;
 class UAbilitySystemComponent;
+class UWolfCombatant;
 
 /**
  * Delegate broadcast when the global combat mode changes.
@@ -58,10 +59,10 @@ public:
 
 	/** Applies a specific combat mode to an individual actor, updating their ability system and state accordingly. */
 	/**
-	 * @param Combatant Pointer to the AActor whose combat mode is being updated.
+	 * @param Combatant Pointer to the AActor whose combat mode is being updated (can be any actor type).
 	 * @param NewMode The FGameplayTag representing the new combat mode to apply.
 	 */
-	void ApplyModeToActor(AActor* Combatant, FGameplayTag NewMode);
+	void ApplyModeToActor(TScriptInterface<IWolfCombatant> Combatant, FGameplayTag NewMode);
 
 	/** Returns the current global combat mode as a GameplayTag for Blueprint queries and runtime checks. */
 	UFUNCTION(BlueprintPure, Meta = (DisplayName = "Get Current Mode"), Category = "WolfCore|Combat")
@@ -107,20 +108,20 @@ public:
 	// Public API - Combatant Tracking
 	// ============================================================================================================================
 
-	/** Registers a character as an active combat participant, enabling it to receive mode updates and prediction data. */
+	/** Registers a combatant as an active participant, enabling it to receive mode updates and prediction data. */
 	/**
-	 * @param Character Pointer to the AWolfCharacterBase being registered for combat tracking.
+	 * @param Combatant TScriptInterface<IWolfCombatant> representing the combatant being registered.
 	 */
-	void RegisterCombatant(AWolfCharacterBase* Character);
+	void RegisterCombatant(const TScriptInterface<IWolfCombatant>& Combatant);
 
-	/** Unregisters a character from active combat participation, removing it from mode updates and prediction processing. */
+	/** Unregisters a combatant from active participation, removing it from mode updates and prediction processing. */
 	/**
-	 * @param Character Pointer to the AWolfCharacterBase being removed from combat tracking.
+	 * @param Combatant TScriptInterface<IWolfCombatant> representing the combatant being removed.
 	 */
-	void UnregisterCombatant(AWolfCharacterBase* Character);
+	void UnregisterCombatant(const TScriptInterface<IWolfCombatant>& Combatant);
 
 	/** Returns the array of weak references to tracked combatants currently registered with this subsystem. */
-	const TArray<TWeakObjectPtr<AWolfCharacterBase>>& GetTrackedCombatants() const { return TrackedCombatants; }
+	const TArray<TScriptInterface<IWolfCombatant>>& GetTrackedCombatants() const { return TrackedCombatants; }
 
 	// ============================================================================================================================
 	// Events
@@ -188,7 +189,7 @@ private:
 	UPROPERTY()
 	TSubclassOf<UGameplayEffect> PresageEffectClass;
 
-	/** Array of weak references to combatants currently tracked by this subsystem for mode updates and prediction processing. */
+	/** Array of weak script interfaces to combatants currently tracked by this subsystem for mode updates and prediction processing. */
 	UPROPERTY()
-	TArray<TWeakObjectPtr<AWolfCharacterBase>> TrackedCombatants;
+	TArray<TScriptInterface<IWolfCombatant>> TrackedCombatants;
 };
