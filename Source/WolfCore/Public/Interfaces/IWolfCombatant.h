@@ -9,6 +9,7 @@
 #include "IWolfCombatant.generated.h"
 
 class UAbilitySystemComponent;
+class UWolfPresageComponent;
 
 /**
  * Interface for any actor that can participate in combat mode management.
@@ -51,4 +52,16 @@ public:
 	/// @param NewMode The FGameplayTag representing the new combat mode being entered.
 	UFUNCTION(BlueprintNativeEvent, Category = "Combat")
 	void OnCombatModeChanged(FGameplayTag NewMode);
+
+	// ============================================================================================================================
+	// Presage Simulation Accessors
+	// ============================================================================================================================
+
+	/// @brief Provides access to the presage component for temporal prediction and simulation.
+	/// @return Pointer to the UWolfPresageComponent, or nullptr if unavailable.
+	virtual UWolfPresageComponent* GetPresageComponent() const = 0;
+
+	/// @brief Retrieves the current ability progress (period time) for simulation sync.
+	/// @return Float representing the active ability's period progress in seconds.
+	virtual float GetActiveAbilityProgress() const = 0;
 };

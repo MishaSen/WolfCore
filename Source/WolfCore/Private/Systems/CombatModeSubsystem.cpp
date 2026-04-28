@@ -3,20 +3,17 @@
 
 #include "Systems/CombatModeSubsystem.h"
 
-#include "Abilities/Effects/PresageMode.h"
 #include "AbilitySystemBlueprintLibrary.h"
 #include "AbilitySystemComponent.h"
 #include "WolfLevelScript.h"
-#include "Character/WolfCharacterBase.h"
+#include "Core/WolfPresageSimulator.h"
 #include "Core/WolfCombatSettings.h"
 #include "Core/WolfGameInstance.h"
 #include "Core/WolfGameplayTags.h"
 #include "Core/WolfPresageComponent.h"
 #include "Debug/WolfDebug.h"
 #include "Engine/AssetManager.h"
-#include "GameFramework/CharacterMovementComponent.h"
 #include "GameFramework/Pawn.h"
-#include "Interfaces/CombatModeListener.h"
 #include "Interfaces/IWolfCombatant.h"
 #include "Kismet/GameplayStatics.h"
 
@@ -131,7 +128,7 @@ void UCombatModeSubsystem::SetMode(FGameplayTag NewMode)
 		MasterStartSnapshot = CaptureCurrentWorldState(World->GetTimeSeconds());
 		WOLF_LOG(Log, TEXT("TB started. Master Snapshot captured for %d actors."), MasterStartSnapshot.ActorStates.Num());
 
-		GenerateFutureState(MaxTimelineDuration);
+		FWolfPresageSimulator::ExecuteFutureBake(TrackedCombatants, MaxTimelineDuration);
 		ScrubTimeline(0.f);
 	}
 	else
@@ -146,8 +143,8 @@ void UCombatModeSubsystem::SetMode(FGameplayTag NewMode)
 void UCombatModeSubsystem::SwitchCombatMode()
 {
 	const auto NewMode = CurrentMode == WolfTag.InputState_RT
-		                     ? WolfTag.InputState_TB
-		                     : WolfTag.InputState_RT;
+	                     ? WolfTag.InputState_TB
+	                     : WolfTag.InputState_RT;
 
 	SetMode(NewMode);
 }
@@ -160,15 +157,15 @@ void UCombatModeSubsystem::ScrubTimeline(float NewTime)
 
 	for (auto& Combatant : TrackedCombatants)
 	{
-		auto* WolfChar = Cast<AWolfCharacterBase>(Combatant.GetObject());
-		if (!IsValid(WolfChar)) continue;
+		auto* Obj = Combatant.GetObject();
+		if (!IsValid(Obj)) continue;
 
-		if (auto* Presage = WolfChar->GetPresageComponent())
-		{
-			const auto* BakedFrame = Presage->GetSnapshotAtTime(CurrentTimelineTime);
-			if (BakedFrame) ISnapshot::Execute_RestoreSnapshot(WolfChar, *BakedFrame);
-			else WOLF_WARN(TEXT("No snapshot found for %s at %.2fs"), *WolfChar->GetName(), CurrentTimelineTime);
-		}
+		auto* Presage = Combatant.GetInterface()->GetPresageComponent();
+		if (!Presage) continue;
+
+		const auto* BakedFrame = Presage->GetSnapshotAtTime(CurrentTimelineTime);
+		if (BakedFrame) ISnapshot::Execute_RestoreSnapshot(Obj, *BakedFrame);
+		else WOLF_WARN(TEXT("No snapshot found for %s at %.2fs"), *Obj->GetName(), CurrentTimelineTime);
 	}
 
 	WOLF_LOG(Log, TEXT("Timeline Scrubbed to : %.2fs /  %.2fs"), CurrentTimelineTime, MaxTimelineDuration);
@@ -176,29 +173,7 @@ void UCombatModeSubsystem::ScrubTimeline(float NewTime)
 
 void UCombatModeSubsystem::HandlePresageDrainEffect(UAbilitySystemComponent* ASC, FGameplayTag CurrentActorMode)
 {
-	auto* WolfChar = Cast<AWolfCharacterBase>(ASC->GetAvatarActor());
-	if (!WolfChar) return;
-
-	const bool bShouldHaveEffect = CurrentActorMode == WolfTag.InputState_TB;
-
-	// If GE and GTag match, skip. We want to remove or add the GE if there's a mismatch.
-	if (bShouldHaveEffect == WolfChar->PresageEffectHandle.IsValid()) return;
-
-	if (bShouldHaveEffect && PresageEffectClass)
-	{
-		auto Context = ASC->MakeEffectContext();
-		Context.AddInstigator(ASC->GetOwner(), ASC->GetOwner());
-
-		const auto Spec = ASC->MakeOutgoingSpec(PresageEffectClass, 1.f, Context);
-		if (!Spec.IsValid()) return;
-
-		WolfChar->PresageEffectHandle = ASC->ApplyGameplayEffectSpecToSelf(*Spec.Data.Get());
-	}
-	else
-	{
-		ASC->RemoveActiveGameplayEffect(WolfChar->PresageEffectHandle);
-		WolfChar->PresageEffectHandle.Invalidate();
-	}
+	FWolfPresageSimulator::ApplyPresageDrainEffect(ASC, CurrentActorMode, PresageEffectClass);
 }
 
 void UCombatModeSubsystem::ApplyModeToActor(TScriptInterface<IWolfCombatant> Combatant, FGameplayTag NewMode)
@@ -289,76 +264,4 @@ float UCombatModeSubsystem::GetDilationForMode(const FGameplayTag& Mode)
 
 	WOLF_WARN(TEXT("Dilation Map missing tag: %s. Defaulting to 1.f"), *Mode.ToString());
 	return 1.f;
-}
-
-void UCombatModeSubsystem::GenerateFutureState(float Duration)
-{
-	for (auto& Combatant : TrackedCombatants)
-	{
-		auto* Actor = Cast<AActor>(Combatant.GetObject());
-		if (!IsValid(Actor)) continue;
-
-		const auto* WolfChar = Cast<AWolfCharacterBase>(Actor);
-		if (!WolfChar) continue;
-
-		auto* Presage = WolfChar->GetPresageComponent();
-		if (!IsValid(Presage)) continue;
-
-		Presage->ClearPredictionBuffer(Duration);
-		Presage->SetIsSimulating(true);
-		Presage->SetSimulationTransform(Actor->GetActorTransform());
-
-		// Sync sim timer to the current period.
-		auto* ASC = UAbilitySystemBlueprintLibrary::GetAbilitySystemComponent(Actor);
-		if (ASC)
-		{
-			for (const auto& Spec : ASC->GetActivatableAbilities())
-			{
-				if (!Spec.IsActive()) continue;
-
-				for (auto* Instance : Spec.GetAbilityInstances())
-				{
-					if (const auto* CombatAbility = Cast<UBaseCombatAbility>(Instance))
-					{
-						Presage->SimPeriodTime = CombatAbility->GetPeriodProgress();
-						break;
-					}
-				}
-			}
-		}
-
-		auto* MoveComp = Actor->FindComponentByClass<UCharacterMovementComponent>();
-		if (MoveComp) MoveComp->StopMovementImmediately();
-	}
-
-	constexpr float Step = WolfSimConfig::Step;
-	const int32 TotalSteps = FMath::CeilToInt(Duration / Step);
-
-	WOLF_LOG(Log, TEXT("Baking Future: %d steps over %.2fs"), TotalSteps, Duration);
-
-	for (int32 i = 0; i < TotalSteps; ++i)
-	{
-		WOLF_LOG(Log, TEXT("[SIM] Step %d"), i);
-		for (auto& Combatant : TrackedCombatants)
-		{
-			const auto* WolfChar = Cast<AWolfCharacterBase>(Combatant.GetObject());
-			if (!IsValid(WolfChar)) continue;
-
-			auto* Presage = WolfChar->GetPresageComponent();
-			if (!IsValid(Presage)) continue;
-
-			Presage->SimulateTick(Step);
-		}
-	}
-
-	for (auto& Combatant : TrackedCombatants)
-	{
-		const auto* WolfChar = Cast<AWolfCharacterBase>(Combatant.GetObject());
-		if (!IsValid(WolfChar)) continue;
-
-		auto* Presage = WolfChar->GetPresageComponent();
-		if (!IsValid(Presage)) continue;
-
-		Presage->SetIsSimulating(false);
-	}
 }

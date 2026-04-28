@@ -121,12 +121,17 @@ public:
 	/// @param NewMode The FGameplayTag representing the new combat mode being entered.
 	virtual void OnCombatModeChanged_Implementation(FGameplayTag NewMode) override;
 
-	/** Returns the presage control component for temporal prediction queries. */
-	UFUNCTION(BlueprintCallable, Meta = (DisplayName = "Get Presage Component"), Category = "WolfCore|Presage")
-	/**
-	 * @return Pointer to the UWolfPresageComponent.
-	 */
-	UWolfPresageComponent* GetPresageComponent() const { return PresageControl; }
+	// ============================================================================================================================
+	// Presage Simulation Accessors (IWolfCombatant Interface)
+	// ============================================================================================================================
+
+	/// @brief Provides access to the presage component for temporal prediction and simulation.
+	/// @return Pointer to the UWolfPresageComponent.
+	virtual UWolfPresageComponent* GetPresageComponent() const override;
+
+	/// @brief Retrieves the current ability progress (period time) for simulation sync.
+	/// @return Float representing the active ability's period progress in seconds.
+	virtual float GetActiveAbilityProgress() const override;
 
 	/** Retrieves the currently active combat ability instance, if any. */
 	/**

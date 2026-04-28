@@ -134,6 +134,20 @@ void AWolfCharacterBase::OnCombatModeChanged_Implementation(FGameplayTag NewMode
 	// The subsystem is the source of truth; this character simply reacts to state changes.
 }
 
+UWolfPresageComponent* AWolfCharacterBase::GetPresageComponent() const
+{
+	return PresageControl;
+}
+
+float AWolfCharacterBase::GetActiveAbilityProgress() const
+{
+	if (const auto* CurrentAbility = GetActiveCombatAbility())
+	{
+		return CurrentAbility->GetPeriodProgress();
+	}
+	return 0.f;
+}
+
 void AWolfCharacterBase::Die_Implementation()
 {
 	auto* WolfASC = AbilityControl ? AbilityControl->GetWolfASC() : nullptr;

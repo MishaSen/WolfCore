@@ -97,13 +97,6 @@ public:
 	/** Returns a reference to the master snapshot captured at the start of the current simulation session. */
 	const FTemporalStates& GetMasterSnapshot() const { return MasterStartSnapshot; }
 
-	/** Generates future state predictions for the specified duration by processing queued ability requests and events. */
-	UFUNCTION(BlueprintCallable, Meta = (DisplayName = "Generate Future State"), Category = "WolfCore|Presage")
-	/**
-	 * @param Duration The simulation duration in seconds to generate future state predictions for.
-	 */
-	void GenerateFutureState(float Duration);
-
 	// ============================================================================================================================
 	// Public API - Combatant Tracking
 	// ============================================================================================================================
