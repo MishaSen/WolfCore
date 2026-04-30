@@ -235,14 +235,6 @@ public:
 	// ============================================================================================================================
 
 protected:
-	/** Extracts root motion transform from an animation montage at a specific time position. Static helper for temporal scrubbing. */
-	/**
-	 * @param Montage The UAnimMontage to extract root motion data from.
-	 * @param Time The playback time in seconds within the montage.
-	 * @return FTransform representing the root motion transform at the specified time.
-	 */
-	static FTransform ExtractRootMotionAtTime(UAnimMontage* Montage, float Time);
-
 	/** Retrieves the current active animation montage from the cached anim instance. */
 	UAnimMontage* GetWolfCurrentMontage() const { return CachedAnimInst ? CachedAnimInst->GetCurrentActiveMontage() : nullptr; }
 

@@ -194,23 +194,20 @@ FTransform AWolfCharacterBase::GetProjectedTransform(float FutureTimeDelta) cons
 	if (!AnchorStatePtr) return GetActorTransform();
 
 	const auto& AnchorState = *AnchorStatePtr;
+	
 	if (!AnchorState.CurrentMontage.IsValid())
 	{
 		const auto ProjectedLocation = AnchorState.Location + AnchorState.Velocity * FutureTimeDelta;
 		return FTransform(AnchorState.Rotation, ProjectedLocation, GetActorScale3D());
 	}
 
-	const auto* Montage = AnchorState.CurrentMontage.Get();
-	const float TargetPosition = AnchorState.MontagePosition + FutureTimeDelta;
-
-	const auto RootMotionDelta = Montage->ExtractRootMotionFromRange(
-		AnchorState.MontagePosition,
-		TargetPosition,
-		FAnimExtractContext()
-	);
-
 	const FTransform AnchorTransform(AnchorState.Rotation, AnchorState.Location, GetActorScale3D());
-	return RootMotionDelta * AnchorTransform;
+
+	return UWolfFunctionLibrary::GetProjectedTransform(
+		CachedAnimInst,
+		AnchorState.CurrentMontage.Get(),
+		AnchorState.MontagePosition + FutureTimeDelta,
+		AnchorTransform);
 }
 
 void AWolfCharacterBase::UpdateTemporalPreview(float PreviewTime)
@@ -254,13 +251,6 @@ void AWolfCharacterBase::GetPresageCollisionDimensions(float& OutRadius, float& 
 
 	OutRadius = Capsule->GetScaledCapsuleRadius();
 	OutHalfHeight = Capsule->GetScaledCapsuleHalfHeight();
-}
-
-FTransform AWolfCharacterBase::ExtractRootMotionAtTime(UAnimMontage* Montage, float Time)
-{
-	if (!Montage) return FTransform::Identity;
-
-	return Montage->ExtractRootMotionFromRange(0.f, Time, FAnimExtractContext());
 }
 
 bool AWolfCharacterBase::IsInvulnerableAt(float RelativeTime) const
