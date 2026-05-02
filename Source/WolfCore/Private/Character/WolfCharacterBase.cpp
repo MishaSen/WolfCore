@@ -59,6 +59,10 @@ void AWolfCharacterBase::EndPlay(const EEndPlayReason::Type EndPlayReason)
 		// Unregister only - the interface-based OnCombatModeChanged is handled by the subsystem directly.
 		CMS->UnregisterCombatant(TScriptInterface<IWolfCombatant>(this));
 	}
+
+	// Clear cached active ability on destruction.
+	CachedActiveAbility = nullptr;
+
 	Super::EndPlay(EndPlayReason);
 }
 
@@ -273,6 +277,9 @@ bool AWolfCharacterBase::IsInvulnerableAt(float RelativeTime) const
 
 UBaseCombatAbility* AWolfCharacterBase::GetActiveCombatAbility() const
 {
+	if (CachedActiveAbility.IsValid()) return CachedActiveAbility.Get();
+
+	// Fallback scan if cache is stale or not yet initialized.
 	auto* ASC = GetAbilitySystemComponent();
 	if (!ASC) return nullptr;
 
@@ -286,6 +293,16 @@ UBaseCombatAbility* AWolfCharacterBase::GetActiveCombatAbility() const
 		}
 	}
 	return nullptr;
+}
+
+void AWolfCharacterBase::OnAbilityActivated(UBaseCombatAbility* Ability)
+{
+	if (IsValid(Ability)) CachedActiveAbility = Ability;
+}
+
+void AWolfCharacterBase::OnAbilityDeactivated(const UBaseCombatAbility* Ability)
+{
+	if (CachedActiveAbility == Ability) CachedActiveAbility = nullptr;
 }
 
 void AWolfCharacterBase::CreateSnapshot_Implementation(FActorSnapshot& NewSnapshot)

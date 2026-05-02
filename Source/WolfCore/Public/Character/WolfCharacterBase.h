@@ -240,6 +240,21 @@ public:
 	bool bIsRestoringSnapshot = false;
 
 	// ============================================================================================================================
+	// Protected - Ability Lifecycle Listeners
+	// ============================================================================================================================
+
+protected:
+	/** Weak reference cache for the currently active combat ability. Updated by ability lifecycle events. */
+	UPROPERTY(Transient)
+	TWeakObjectPtr<UBaseCombatAbility> CachedActiveAbility;
+
+	/** Called when a combat ability activates via UBaseCombatAbility::OnAbilityActivated delegate. */
+	void OnAbilityActivated(UBaseCombatAbility* Ability);
+
+	/** Called when a combat ability deactivates via UBaseCombatAbility::OnAbilityDeactivated delegate. */
+	void OnAbilityDeactivated(const UBaseCombatAbility* Ability);
+
+	// ============================================================================================================================
 	// Protected - Combat Mode Handling
 	// ============================================================================================================================
 

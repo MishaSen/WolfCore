@@ -21,6 +21,25 @@ UBaseCombatAbility::UBaseCombatAbility()
 	CancelAbilitiesWithTag.AddTag(FWolfGameplayTags::Get().InputState_Dead);
 }
 
+void UBaseCombatAbility::ActivateAbility(const FGameplayAbilitySpecHandle Handle,
+	const FGameplayAbilityActorInfo* ActorInfo,
+	const FGameplayAbilityActivationInfo ActivationInfo,
+	const FGameplayEventData* TriggerEventData)
+{
+	Super::ActivateAbility(Handle, ActorInfo, ActivationInfo, TriggerEventData);
+	OnAbilityActivated.Broadcast(this);
+}
+
+void UBaseCombatAbility::EndAbility(const FGameplayAbilitySpecHandle Handle,
+	const FGameplayAbilityActorInfo* ActorInfo,
+	const FGameplayAbilityActivationInfo ActivationInfo,
+	bool bReplicateEndAbility,
+	bool bWasCancelled)
+{
+	OnAbilityDeactivated.Broadcast(this);
+	Super::EndAbility(Handle, ActorInfo, ActivationInfo, bReplicateEndAbility, bWasCancelled);
+}
+
 
 void UBaseCombatAbility::StartCombatSequence()
 {

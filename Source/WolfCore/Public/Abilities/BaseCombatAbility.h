@@ -89,6 +89,32 @@ public:
 	/** Default constructor for UBaseCombatAbility. */
 	UBaseCombatAbility();
 
+	/** Overrides UGameplayAbility::ActivateAbility to broadcast OnAbilityActivated after parent execution. */
+	virtual void ActivateAbility(const FGameplayAbilitySpecHandle Handle,
+		const FGameplayAbilityActorInfo* ActorInfo,
+		const FGameplayAbilityActivationInfo ActivationInfo,
+		const FGameplayEventData* TriggerEventData) override;
+
+	/** Overrides UGameplayAbility::EndAbility to broadcast OnAbilityDeactivated before parent execution. */
+	virtual void EndAbility(const FGameplayAbilitySpecHandle Handle,
+		const FGameplayAbilityActorInfo* ActorInfo,
+		const FGameplayAbilityActivationInfo ActivationInfo,
+		bool bReplicateEndAbility,
+		bool bWasCancelled) override;
+
+	// ============================================================================================================================
+	// Ability Lifecycle Events
+	// ============================================================================================================================
+
+	DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnAbilityActivated, UBaseCombatAbility*, Ability);
+	DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnAbilityDeactivated, UBaseCombatAbility*, Ability);
+
+	UPROPERTY(BlueprintAssignable, Category = "WolfCore|Events")
+	FOnAbilityActivated OnAbilityActivated;
+
+	UPROPERTY(BlueprintAssignable, Category = "WolfCore|Events")
+	FOnAbilityDeactivated OnAbilityDeactivated;
+
 	// ============================================================================================================================
 	// Combat Data Configuration
 	// ============================================================================================================================
