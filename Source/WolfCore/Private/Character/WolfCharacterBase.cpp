@@ -170,11 +170,8 @@ void AWolfCharacterBase::Die_Implementation()
 		MoveComp->DisableMovement();
 	}
 
-	if (IsValid(WolfASC))
-	{
-		WolfASC->CancelAllAbilities();
-		WolfASC->AddLooseGameplayTag(FWolfGameplayTags::Get().InputState_Dead);
-	}
+	WolfASC->CancelAllAbilities();
+	WolfASC->AddLooseGameplayTag(FWolfGameplayTags::Get().InputState_Dead);
 
 	WOLF_INFO(TEXT("Character %s has died."), *GetName());
 }
