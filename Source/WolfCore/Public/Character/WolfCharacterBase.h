@@ -16,7 +16,6 @@
 #include "WolfCharacterBase.generated.h"
 
 class UAbilityConfig;
-class UAnimInstance;
 class UBaseCombatAbility;
 class UCombatModeSubsystem;
 class UGameplayAbility;
