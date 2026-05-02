@@ -62,10 +62,12 @@ void UWolfAbilityComponent::ApplyDefaultAttributes()
 	WOLF_LOG(Log, TEXT("Applied all attributes from StatConfig to %s"), *GetOwner()->GetName());
 }
 
-void UWolfAbilityComponent::AddStartupAbilities(const TArray<TSubclassOf<UGameplayAbility>>& Abilities)
+TMap<TSubclassOf<UGameplayAbility>, FGameplayAbilitySpecHandle> UWolfAbilityComponent::AddStartupAbilities(const TArray<TSubclassOf<UGameplayAbility>>& Abilities)
 {
-	if (GetOwnerRole() != ROLE_Authority || !IsValid(CacheASC)) return;
+	if (GetOwnerRole() != ROLE_Authority || !IsValid(CacheASC)) return TMap<TSubclassOf<UGameplayAbility>, FGameplayAbilitySpecHandle>();
 	
-	CacheASC->AddCharacterAbilities(Abilities);
+	const auto OutHandles = CacheASC->AddCharacterAbilities(Abilities);
 	WOLF_LOG(Log, TEXT("Added %d startup abilities to %s"), Abilities.Num(), *GetOwner()->GetName());
+
+	return OutHandles;
 }

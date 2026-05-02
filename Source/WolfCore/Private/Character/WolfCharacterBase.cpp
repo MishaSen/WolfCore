@@ -3,6 +3,7 @@
 #include "WolfCore/Public/Character/WolfCharacterBase.h"
 
 #include "AIController.h"
+#include "Abilities/BaseCombatAbility.h"
 #include "AbilitySystem/WolfAttributeSet.h"
 #include "Animation/AnimInstance.h"
 #include "BehaviorTree/BehaviorTreeComponent.h"
@@ -85,7 +86,18 @@ void AWolfCharacterBase::PossessedBy(AController* NewController)
 			ASC->InitAbilityActorInfo(this, this);
 		}
 		AbilityControl->ApplyDefaultAttributes();
-		AbilityControl->AddStartupAbilities(StartupAbilities);
+		
+		GrantedAbilityHandles = AbilityControl->AddStartupAbilities(StartupAbilities);
+
+		// Populate GrantedAbilityTags for secondary lookups
+		GrantedAbilityTags.Empty();
+		for (const auto& [AbilityClass, Handle] : GrantedAbilityHandles)
+		{
+			if (const auto* AbilityCDO = Cast<UBaseCombatAbility>(AbilityClass->GetDefaultObject()))
+			{
+				GrantedAbilityTags.Add(AbilityCDO->StartupInputTag);
+			}
+		}
 
 		WOLF_LOG(Log, TEXT("Character %s has been possessed by %s."), *GetName(), *NewController->GetName());
 	}

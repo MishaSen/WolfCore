@@ -59,20 +59,24 @@ void UWolfAbilitySystemComponent::AbilityInputTagHeld(const FGameplayTag& Tag)
 	}
 }
 
-void UWolfAbilitySystemComponent::AddCharacterAbilities(TArray<TSubclassOf<UGameplayAbility>> StartupAbilities)
+TMap<TSubclassOf<UGameplayAbility>, FGameplayAbilitySpecHandle> UWolfAbilitySystemComponent::AddCharacterAbilities(TArray<TSubclassOf<UGameplayAbility>> StartupAbilities)
 {
+	TMap<TSubclassOf<UGameplayAbility>, FGameplayAbilitySpecHandle> OutHandles;
+
 	for (const auto AbilityClass : StartupAbilities)
 	{
 		auto AbilitySpec = FGameplayAbilitySpec(AbilityClass, 1);
 		if (const auto* WolfAbility = Cast<UBaseCombatAbility>(AbilitySpec.Ability))
 		{
 			AbilitySpec.GetDynamicSpecSourceTags().AddTag(WolfAbility->StartupInputTag);
-			GiveAbility(AbilitySpec);
+			FGameplayAbilitySpecHandle Handle = GiveAbility(AbilitySpec);
+			OutHandles.Add(AbilityClass, Handle);
 
 			WOLF_LOG(Log, TEXT("Added ability %s for tag %s"), *AbilitySpec.Ability->GetName(),
 			         *WolfAbility->StartupInputTag.ToString());
 		}
 	}
+	return OutHandles;
 }
 
 FPresageAbilityRequest UWolfAbilitySystemComponent::BuildInitialPresageRequest(const FGameplayTag& Tag,

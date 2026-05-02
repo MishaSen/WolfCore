@@ -37,8 +37,9 @@ public:
 	/** Grants startup abilities to the character's ASC for activation during gameplay. */
 	/**
 	 * @param Abilities Array of ability subclasses to grant and activate on this component.
+	 * @return TMap of ability classes to their granted spec handles.
 	 */
-	void AddStartupAbilities(const TArray<TSubclassOf<UGameplayAbility>>& Abilities);
+	TMap<TSubclassOf<UGameplayAbility>, FGameplayAbilitySpecHandle> AddStartupAbilities(const TArray<TSubclassOf<UGameplayAbility>>& Abilities);
 
 	/** Applies default attribute values from the character stat configuration to the attribute set. */
 	void ApplyDefaultAttributes();

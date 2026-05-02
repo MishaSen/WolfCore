@@ -45,8 +45,9 @@ public:
 	/** Grants startup abilities to this ASC, registering them with the Gameplay Ability System for activation. */
 	/**
 	 * @param StartupAbilities Array of ability subclasses to grant and activate on this component.
+	 * @return TMap of ability classes to their granted spec handles.
 	 */
-	void AddCharacterAbilities(TArray<TSubclassOf<UGameplayAbility>> StartupAbilities);
+	TMap<TSubclassOf<UGameplayAbility>, FGameplayAbilitySpecHandle> AddCharacterAbilities(TArray<TSubclassOf<UGameplayAbility>> StartupAbilities);
 
 	// ============================================================================================================================
 	// Public API - Presage Integration
