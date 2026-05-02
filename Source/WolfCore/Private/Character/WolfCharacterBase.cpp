@@ -42,6 +42,7 @@ void AWolfCharacterBase::BeginPlay()
 	Super::BeginPlay();
 
 	CachedAnimInst = GetMesh() ? GetMesh()->GetAnimInstance() : nullptr;
+	CachedCMS = UWolfFunctionLibrary::GetWorldSubsystem<UCombatModeSubsystem>(GetWorld());
 
 	if (auto* CMS = GetCMS())
 	{
@@ -63,14 +64,7 @@ void AWolfCharacterBase::EndPlay(const EEndPlayReason::Type EndPlayReason)
 
 UCombatModeSubsystem* AWolfCharacterBase::GetCMS() const
 {
-	if (CachedCMS.IsValid()) return CachedCMS.Get();
-
-	const auto* World = GetWorld();
-	if (!IsValid(World)) return nullptr;
-
-	auto* Subsystem = UWolfFunctionLibrary::GetWorldSubsystem<UCombatModeSubsystem>(World);
-	this->CachedCMS = Subsystem;
-	return Subsystem;
+	return CachedCMS.Get();
 }
 
 void AWolfCharacterBase::PossessedBy(AController* NewController)

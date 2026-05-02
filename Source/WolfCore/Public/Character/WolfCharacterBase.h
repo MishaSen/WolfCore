@@ -256,9 +256,9 @@ protected:
 	UPROPERTY(Transient)
 	TObjectPtr<UAnimInstance> CachedAnimInst;
 
-	/** Weak reference cache for the Combat Mode subsystem to avoid repeated lookups. */
+	/** Weak reference cache for the Combat Mode subsystem. Initialized in BeginPlay for thread-safe const access. */
 	UPROPERTY(Transient)
-	mutable TWeakObjectPtr<UCombatModeSubsystem> CachedCMS;
+	TWeakObjectPtr<UCombatModeSubsystem> CachedCMS;
 
 private:
 	/** Map tracking granted ability handles by their class for lifecycle management. */
