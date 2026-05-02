@@ -36,26 +36,14 @@ void UWolfPresageComponent::BeginPlay()
 
 void UWolfPresageComponent::SimulateTick(float Step)
 {
-	if (PredictionBuffer.Num() == 0)
-	{
-		SimulationTransform = CharacterOwner->GetActorTransform();
-		SimPeriodTime = 0.f;
-	}
-	
+	if (PredictionBuffer.Num() == 0) SimulationTransform = CharacterOwner->GetActorTransform();
+
 	SimulatePhysicsStep(Step);
 	SimulateAnimationStep(Step);
 
+	// Advance period BEFORE snapshot capture so that both CreateSnapshot and
+	// CurrentPeriodIndex assignment reflect the same post-advancement state.
 	SimPeriodTime += Step;
-
-	FActorSnapshot FutureFrame;
-	if (auto* SnapshotControl = GetSnapshotControl())
-	{
-		SnapshotControl->SetIsSimulating(true);
-		SnapshotControl->SetSimulationTransform(SimulationTransform);
-		ISnapshot::Execute_CreateSnapshot(SnapshotControl, FutureFrame);
-		SnapshotControl->SetIsSimulating(false);
-	}
-
 	if (auto* ActiveAbility = CharacterOwner->GetActiveCombatAbility())
 	{
 		SimPeriodTime = FAbilityPeriodAdvancer::AdvancePeriod(
@@ -68,11 +56,20 @@ void UWolfPresageComponent::SimulateTick(float Step)
 		);
 	}
 
+	FActorSnapshot FutureFrame;
+	if (auto* SnapshotControl = GetSnapshotControl())
+	{
+		SnapshotControl->SetIsSimulating(true);
+		SnapshotControl->SetSimulationTransform(SimulationTransform);
+		ISnapshot::Execute_CreateSnapshot(SnapshotControl, FutureFrame);
+		SnapshotControl->SetIsSimulating(false);
+	}
+
 	FutureFrame.ActiveAbility = CharacterOwner->GetActiveCombatAbility();
 	FutureFrame.CurrentPeriodIndex = FutureFrame.ActiveAbility.IsValid()
 		? FutureFrame.ActiveAbility->GetCurrentPeriodIndex()
 		: -1;
-	
+
 	WOLF_LOG(Log, TEXT("[STEP %d] Character: %s | Location: %s| Ability: %s | Period: %d | Montage: %s (Pos: %.2f)"),
 		PredictionBuffer.Num(),
 		*CharacterOwner.GetName(),
