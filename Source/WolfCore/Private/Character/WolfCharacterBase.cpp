@@ -152,8 +152,11 @@ float AWolfCharacterBase::GetActiveAbilityProgress() const
 
 void AWolfCharacterBase::Die_Implementation()
 {
-	auto* WolfASC = AbilityControl ? AbilityControl->GetWolfASC() : nullptr;
-	if (WolfASC && WolfASC->HasMatchingGameplayTag(FWolfGameplayTags::Get().InputState_Dead)) return; // Already dead.
+	if (!IsValid(AbilityControl)) return;
+	
+	auto* WolfASC = AbilityControl->GetWolfASC();
+	if (!IsValid(WolfASC)) return;
+	if (WolfASC->HasMatchingGameplayTag(FWolfGameplayTags::Get().InputState_Dead)) return; // Already dead.
 
 	if (auto* Capsule = GetCapsuleComponent())
 	{
