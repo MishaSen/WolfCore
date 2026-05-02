@@ -2,11 +2,9 @@
 
 #include "WolfCore/Public/Character/WolfCharacterBase.h"
 
-#include "AIController.h"
 #include "Abilities/BaseCombatAbility.h"
 #include "AbilitySystem/WolfAttributeSet.h"
 #include "Animation/AnimInstance.h"
-#include "BehaviorTree/BehaviorTreeComponent.h"
 #include "Components/CapsuleComponent.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "Core/WolfAbilityComponent.h"
