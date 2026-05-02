@@ -6,6 +6,7 @@
 #include "GameFramework/Character.h"
 #include "AbilitySystemInterface.h"
 #include "ActiveGameplayEffectHandle.h"
+#include "Animation/AnimInstance.h"
 #include "Interfaces/CombatModeListener.h"
 #include "GameplayAbilitySpecHandle.h"
 #include "Core/WolfAbilityComponent.h"
