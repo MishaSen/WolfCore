@@ -1,6 +1,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Engine/Engine.h"
 #include "Kismet/BlueprintFunctionLibrary.h"
 #include "WolfFunctionLibrary.generated.h"
 
