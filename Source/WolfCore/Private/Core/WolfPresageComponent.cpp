@@ -36,6 +36,7 @@ void UWolfPresageComponent::BeginPlay()
 
 void UWolfPresageComponent::SimulateTick(float Step)
 {
+	if (!CharacterOwner) return;
 	if (PredictionBuffer.Num() == 0) SimulationTransform = CharacterOwner->GetActorTransform();
 
 	SimulatePhysicsStep(Step);
@@ -70,14 +71,14 @@ void UWolfPresageComponent::SimulateTick(float Step)
 		? FutureFrame.ActiveAbility->GetCurrentPeriodIndex()
 		: -1;
 
-	WOLF_LOG(Log, TEXT("[STEP %d] Character: %s | Location: %s| Ability: %s | Period: %d | Montage: %s (Pos: %.2f)"),
+	/*WOLF_LOG(Log, TEXT("[STEP %d] Character: %s | Location: %s| Ability: %s | Period: %d | Montage: %s (Pos: %.2f)"),
 		PredictionBuffer.Num(),
 		*CharacterOwner.GetName(),
 		*FutureFrame.Location.ToCompactString(),
 		FutureFrame.ActiveAbility.IsValid() ? *FutureFrame.ActiveAbility->GetName() : TEXT("None"),
 		FutureFrame.CurrentPeriodIndex,
 		FutureFrame.CurrentMontage.IsValid() ? *FutureFrame.CurrentMontage->GetName() : TEXT("None"),
-		FutureFrame.MontagePosition);
+		FutureFrame.MontagePosition);*/
 	PredictionBuffer.Add(FutureFrame); // Remember to clear PredictionBuffer in CombatModeSubsystem
 }
 
@@ -105,7 +106,7 @@ void UWolfPresageComponent::SimulatePhysicsStep(float Step)
 	FVector Destination;
 	const auto SimVelocity = GetSimulatedVelocity(Destination);
 	
-	if (SimVelocity.IsNearlyZero()) return; // Direction might be very small.
+	if (SimVelocity.IsNearlyZero()) return; // Return early if simulated velocity is negligible.
 
 	const FVector Start = SimulationTransform.GetLocation();
 	FVector Delta = SimVelocity * Step;

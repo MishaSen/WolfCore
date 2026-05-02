@@ -60,6 +60,7 @@ void AWolfPlayerController::SetupInputComponent()
 	auto BindInputAction = [&](UInputAction* Action, auto Method)
 	{
 		if (Action) WolfInputComponent->BindAction(Action, ETriggerEvent::Triggered, this, Method);
+		else WOLF_WARN(TEXT("Tried to bind an input action to a null action"));
 	};
 
 	BindInputAction(ScrubAction, &ThisClass::HandleScrubInput);

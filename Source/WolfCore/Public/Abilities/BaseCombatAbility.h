@@ -167,7 +167,7 @@ public:
 	/** Returns the progress through the current combat period as a normalized value between 0 and 1. */
 	UFUNCTION(BlueprintCallable, Meta = (DisplayName = "Get Period Progress"), Category = "WolfCore|Presage")
 	/**
-	 * @return Float representing the progress percentage of the current period (0.0 to 1.0).
+	 * @return Float representing the progress (in seconds) of the current period (0.0 to 1.0).
 	 */
 	float GetPeriodProgress() const;
 

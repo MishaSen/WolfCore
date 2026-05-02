@@ -131,13 +131,22 @@ void UCombatModeSubsystem::SetMode(FGameplayTag NewMode)
 		FWolfPresageSimulator::ExecuteFutureBake(TrackedCombatants, MaxTimelineDuration);
 		ScrubTimeline(0.f);
 	}
-	else
-	{
-		MasterStartSnapshot.ActorStates.Empty();
-		bIsInTB = false;
-	}
-	
-	OnCombatModeChanged.Broadcast(NewMode);
+    else
+    {
+        MasterStartSnapshot.ActorStates.Empty();
+        bIsInTB = false;
+    }
+
+    // Apply new mode tags to all tracked combatants.
+    for (auto& Combatant : TrackedCombatants)
+    {
+        if (Combatant.GetInterface() && IsValid(Combatant.GetObject()))
+        {
+            ApplyModeToActor(Combatant, NewMode);
+        }
+    }
+
+    OnCombatModeChanged.Broadcast(NewMode);
 }
 
 void UCombatModeSubsystem::SwitchCombatMode()
@@ -145,6 +154,7 @@ void UCombatModeSubsystem::SwitchCombatMode()
 	const auto NewMode = CurrentMode == WolfTag.InputState_RT
 	                     ? WolfTag.InputState_TB
 	                     : WolfTag.InputState_RT;
+	WOLF_INFO(TEXT("Current Mode: %s. Switching to %s"), *CurrentMode.ToString(), *NewMode.ToString());
 
 	SetMode(NewMode);
 }
@@ -160,7 +170,7 @@ void UCombatModeSubsystem::ScrubTimeline(float NewTime)
 		auto* Obj = Combatant.GetObject();
 		if (!IsValid(Obj)) continue;
 
-		auto* Presage = Combatant.GetInterface()->GetPresageComponent();
+		const auto* Presage = Combatant.GetInterface()->GetPresageComponent();
 		if (!Presage) continue;
 
 		const auto* BakedFrame = Presage->GetSnapshotAtTime(CurrentTimelineTime);

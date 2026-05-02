@@ -29,7 +29,7 @@ void FWolfPresageSimulator::ExecuteFutureBake(const TArray<TScriptInterface<IWol
 
 	for (int32 i = 0; i < TotalSteps; ++i)
 	{
-		WOLF_LOG(Log, TEXT("[SIM] Step %d"), i);
+		//WOLF_LOG(Log, TEXT("[SIM] Step %d"), i);
 		for (auto& Combatant : Combatants)
 		{
 			BakeSimulationStep(Combatant, Step);

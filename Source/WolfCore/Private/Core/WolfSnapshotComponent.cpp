@@ -62,8 +62,8 @@ void UWolfSnapshotComponent::SnapshotPhysics(FActorSnapshot& Snapshot) const
 	Snapshot.MovementMode = GetMoveComp()->MovementMode;
 	Snapshot.CustomMovementMode = GetMoveComp()->CustomMovementMode;
 	
-	const auto* AICont = Cast<AAIController>(OwnerCharacter->GetController());
-	if (!IsValid(AICont)) return;
+	const auto* Controller = OwnerCharacter->GetController();
+	if (!IsValid(Controller)) return;
 
 	if (const auto* ActiveAbility = OwnerCharacter->GetActiveCombatAbility())
 	{
@@ -83,24 +83,26 @@ void UWolfSnapshotComponent::SnapshotPhysics(FActorSnapshot& Snapshot) const
 	}
 	else { Snapshot.bIsMoving = false; Snapshot.Destination = FVector::ZeroVector; }
 
-	if (const auto* BB = AICont->GetBlackboardComponent())
+	if (const auto* AICont = Cast<AAIController>(Controller);
+		const auto* BB = AICont->GetBlackboardComponent())
 	{
 		Snapshot.TargetActor = Cast<AActor>(BB->GetValueAsObject(TEXT("TargetActor")));
 		if (Snapshot.TargetActor.IsValid())
 		{
 			const auto TargetBox = Snapshot.TargetActor->GetRootComponent()->Bounds.GetBox();
+			if (!TargetBox.IsValid) return;
 			DrawDebugBox(GetWorld(), TargetBox.GetCenter(), TargetBox.GetExtent(), FColor::Orange, false, 5.f, 0, 3.f);
 		}
 	}
 
 	const FString FrameType = bIsSimulating ? TEXT("Simulated") : TEXT("Master");
 
-	WOLF_LOG(Log, TEXT("[Snapshot: %s] Character %s has Path Destination %s targeting %s. IsMoving = %s."),
+	/*WOLF_LOG(Log, TEXT("[Snapshot: %s] Character %s has Path Destination %s targeting %s. IsMoving = %s."),
 		*FrameType,
 		*OwnerCharacter->GetName(),
 		*Snapshot.Destination.ToCompactString(),
 		Snapshot.TargetActor.IsValid() ? *Snapshot.TargetActor->GetName() : TEXT("None"),
-		Snapshot.bIsMoving ? TEXT ("True") : TEXT("False"));
+		Snapshot.bIsMoving ? TEXT ("True") : TEXT("False"));*/
 }
 
 void UWolfSnapshotComponent::RestorePhysics(const FActorSnapshot& Snapshot)
