@@ -71,8 +71,11 @@ public:
 	// ============================================================================================================================
 
 public:
-	/** Time delta between each simulation tick step during temporal prediction. */
-	float SimPeriodTime = 0.f;
+	/** Sets the current simulation period time. */
+	void SetSimPeriodTime(float Value) { SimPeriodTime = Value; }
+
+	/** Retrieves the current simulation period time. */
+	float GetSimPeriodTime() const { return SimPeriodTime; }
 
 	// ============================================================================================================================
 	// Private - Physics Simulation
@@ -150,6 +153,9 @@ private:
 
 	/** Flag indicating whether temporal simulation is currently active for this component. */
 	bool bIsSimulating = false;
+
+	/** Time delta accumulated during the current simulation period. */
+	float SimPeriodTime = 0.f;
 
 	/** The base transform representing the simulated world-space position during prediction. */
 	FTransform SimulationTransform;

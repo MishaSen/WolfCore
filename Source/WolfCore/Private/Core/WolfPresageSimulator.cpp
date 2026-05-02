@@ -61,7 +61,7 @@ void FWolfPresageSimulator::SetupCombatantSimulation(const TScriptInterface<IWol
 	if (ASC)
 	{
 		const float CurrentProgress = Combatant.GetInterface()->GetActiveAbilityProgress();
-		Presage->SimPeriodTime = CurrentProgress;
+		Presage->SetSimPeriodTime(CurrentProgress);
 	}
 
 	// Stop character movement during simulation.

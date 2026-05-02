@@ -3,6 +3,7 @@
 
 #include "Core/WolfPresageComponent.h"
 
+#include "Abilities/AbilityPeriodAdvancer.h"
 #include "AIController.h"
 #include "BehaviorTree/BlackboardComponent.h"
 #include "Character/WolfCharacterBase.h"
@@ -46,9 +47,6 @@ void UWolfPresageComponent::SimulateTick(float Step)
 
 	SimPeriodTime += Step;
 
-	auto* ActiveAbility = CharacterOwner->GetActiveCombatAbility();
-	const bool bSequenceIsActive = IsValid(ActiveAbility) && ActiveAbility->AbilitySequence.IsValidIndex(ActiveAbility->GetCurrentPeriodIndex());
-	
 	FActorSnapshot FutureFrame;
 	if (auto* SnapshotControl = GetSnapshotControl())
 	{
@@ -57,49 +55,23 @@ void UWolfPresageComponent::SimulateTick(float Step)
 		ISnapshot::Execute_CreateSnapshot(SnapshotControl, FutureFrame);
 		SnapshotControl->SetIsSimulating(false);
 	}
-	
-	if (bSequenceIsActive)
-	{
-		if (IsValid(ActiveAbility))
-		{
-			const auto& AbilitySequence = ActiveAbility->AbilitySequence;
-			const auto CurrentIndex = ActiveAbility->GetCurrentPeriodIndex();
-			if (AbilitySequence.IsValidIndex(CurrentIndex))
-			{
-				auto Duration = 0.f;
-				auto& CurrentPeriod = AbilitySequence[CurrentIndex];
-				if (CurrentPeriod.Type == EPeriodType::MoveTo)
-				{
-					Duration = ActiveAbility->CalculateMovementDuration(FVector::Distance(SimulationTransform.GetLocation(), CurrentPeriod.MoveToDestination),
-															 GetMoveComp()->MaxWalkSpeed,
-															 GetMoveComp()->MaxAcceleration,
-															 GetMoveComp()->Velocity.Size());
-					WOLF_LOG(Log, TEXT("[CALCULATE MOVEMENT DURATION TEST] Duration is %f."), Duration);
-				}
-				else Duration = ActiveAbility->GetPeriodDuration(CurrentPeriod);
-			
-				if (SimPeriodTime >= Duration)
-				{
-					const auto NextIndex = CurrentIndex + 1;
-					ActiveAbility->SetCurrentPeriodIndex(NextIndex);
-					SimPeriodTime = 0.f;
 
-					if (AbilitySequence.IsValidIndex(NextIndex))
-					{
-						WOLF_LOG(Log, TEXT("[SIM] Period %d %s completed. Next: %d %s."),
-							CurrentIndex, *UEnum::GetValueAsString(AbilitySequence[CurrentIndex].Type),
-							NextIndex, *UEnum::GetValueAsString(AbilitySequence[NextIndex].Type));
-					}
-					else WOLF_LOG(Log, TEXT("[SIM] Ability Sequence finished at Step %d."), CurrentIndex);
-				}
-			}
-		}
-	}
-	else
+	if (auto* ActiveAbility = CharacterOwner->GetActiveCombatAbility())
 	{
-		FutureFrame.ActiveAbility = nullptr;
-		FutureFrame.CurrentPeriodIndex = -1;	
+		SimPeriodTime = FAbilityPeriodAdvancer::AdvancePeriod(
+			ActiveAbility,
+			SimPeriodTime,
+			GetMoveComp()->MaxWalkSpeed,
+			GetMoveComp()->MaxAcceleration,
+			GetMoveComp()->Velocity.Size(),
+			SimulationTransform.GetLocation()
+		);
 	}
+
+	FutureFrame.ActiveAbility = CharacterOwner->GetActiveCombatAbility();
+	FutureFrame.CurrentPeriodIndex = FutureFrame.ActiveAbility.IsValid()
+		? FutureFrame.ActiveAbility->GetCurrentPeriodIndex()
+		: -1;
 	
 	WOLF_LOG(Log, TEXT("[STEP %d] Character: %s | Location: %s| Ability: %s | Period: %d | Montage: %s (Pos: %.2f)"),
 		PredictionBuffer.Num(),
@@ -158,7 +130,7 @@ FVector UWolfPresageComponent::GetSimulatedVelocity(FVector& Destination) const
 	
 	if (const auto* Ability = CharacterOwner->GetActiveCombatAbility())
 	{
-		const auto& Sequence = Ability->AbilitySequence;
+		const auto& Sequence = Ability->GetAbilitySequence();
 		const auto Index = Ability->GetCurrentPeriodIndex();
 		if (Sequence.IsValidIndex(Index) && Sequence[Index].Type == EPeriodType::MoveTo)
 		{

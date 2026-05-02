@@ -95,7 +95,7 @@ FPresageAbilityRequest UWolfAbilitySystemComponent::BuildInitialPresageRequest(c
 			this,
 			Tag,
 			0.f,
-			TBAbility->AbilitySequence,
+			TBAbility->GetAbilitySequence(),
 			Targets
 		);
 	}

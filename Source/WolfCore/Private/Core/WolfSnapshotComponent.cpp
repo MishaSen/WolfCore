@@ -68,9 +68,10 @@ void UWolfSnapshotComponent::SnapshotPhysics(FActorSnapshot& Snapshot) const
 	if (const auto* ActiveAbility = OwnerCharacter->GetActiveCombatAbility())
 	{
 		const auto Index = ActiveAbility->GetCurrentPeriodIndex();
-		if (!ActiveAbility->AbilitySequence.IsValidIndex(Index)) return;
+		const auto& Sequence = ActiveAbility->GetAbilitySequence();
+		if (!Sequence.IsValidIndex(Index)) return;
 
-		const auto& CurrentPeriod = ActiveAbility->AbilitySequence[Index];
+		const auto& CurrentPeriod = Sequence[Index];
 		if (CurrentPeriod.Type == EPeriodType::MoveTo)
 		{
 			Snapshot.Destination = CurrentPeriod.MoveToDestination;
@@ -194,7 +195,7 @@ void UWolfSnapshotComponent::SnapshotGAS(FActorSnapshot& Snapshot) const
 	
 	auto* ActiveAbility = OwnerCharacter->GetActiveCombatAbility();
 	const auto CurrentIndex = ActiveAbility ? ActiveAbility->GetCurrentPeriodIndex() : -1;
-	if (IsValid(ActiveAbility) && ActiveAbility->AbilitySequence.IsValidIndex(CurrentIndex))
+	if (IsValid(ActiveAbility) && ActiveAbility->GetAbilitySequence().IsValidIndex(CurrentIndex))
 	{
 		Snapshot.ActiveAbility = ActiveAbility;
 		Snapshot.CurrentPeriodIndex = CurrentIndex;

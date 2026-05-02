@@ -93,9 +93,8 @@ public:
 	// Combat Data Configuration
 	// ============================================================================================================================
 
-	/** Array of FCombatPeriod entries defining the complete animation and attack sequence for this ability. */
-	UPROPERTY(EditDefaultsOnly, Category = "WolfCore|Combat Data")
-	TArray<FCombatPeriod> AbilitySequence;
+	/** Returns the complete animation and attack sequence for this ability. */
+	const TArray<FCombatPeriod>& GetAbilitySequence() const { return AbilitySequence; }
 
 	/** GameplayTag used to identify input bindings that trigger the startup of this combat sequence. */
 	UPROPERTY(EditDefaultsOnly, Category = "WolfCore|Combat Data")
@@ -162,6 +161,10 @@ public:
 	// ============================================================================================================================
 
 protected:
+	/** Array of FCombatPeriod entries defining the complete animation and attack sequence for this ability. */
+	UPROPERTY(EditDefaultsOnly, Category = "WolfCore|Combat Data")
+	TArray<FCombatPeriod> AbilitySequence;
+
 	/** Index of the current period within the ability sequence that is actively executing. */
 	int32 CurrentPeriodIndex = 0;
 
