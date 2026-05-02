@@ -14,6 +14,7 @@
 #include "Navigation/PathFollowingComponent.h"
 #include "DrawDebugHelpers.h"
 #include "Misc/TransactionObjectEvent.h"
+#include "Core/WolfSnapshotComponent.h"
 
 UWolfPresageComponent::UWolfPresageComponent()
 {
@@ -49,7 +50,13 @@ void UWolfPresageComponent::SimulateTick(float Step)
 	const bool bSequenceIsActive = IsValid(ActiveAbility) && ActiveAbility->AbilitySequence.IsValidIndex(ActiveAbility->GetCurrentPeriodIndex());
 	
 	FActorSnapshot FutureFrame;
-	CreateSnapshot_Implementation(FutureFrame);
+	if (auto* SnapshotControl = GetSnapshotControl())
+	{
+		SnapshotControl->SetIsSimulating(true);
+		SnapshotControl->SetSimulationTransform(SimulationTransform);
+		ISnapshot::Execute_CreateSnapshot(SnapshotControl, FutureFrame);
+		SnapshotControl->SetIsSimulating(false);
+	}
 	
 	if (bSequenceIsActive)
 	{
@@ -122,26 +129,6 @@ const FActorSnapshot* UWolfPresageComponent::GetSnapshotAtTime(float RelativeTim
 	return &PredictionBuffer[Index];
 }
 
-void UWolfPresageComponent::CreateSnapshot_Implementation(FActorSnapshot& OutSnapshot)
-{
-	OutSnapshot.ActorRef = CharacterOwner.Get();
-	SnapshotPhysics(OutSnapshot);
-	SnapshotGAS(OutSnapshot);
-	SnapshotAnim(OutSnapshot);
-}
-
-void UWolfPresageComponent::RestoreSnapshot_Implementation(const FActorSnapshot& InSnapshot)
-{
-	bIsRestoringSnapshot = true;
-
-	RestorePhysics(InSnapshot);
-	RestoreGAS(InSnapshot);
-	RestoreAnim(InSnapshot);
-
-	bIsRestoringSnapshot = false;
-	// In UI or animation code, check if (bIsRestoringSnapshot) return; before doing effects
-}
-
 void UWolfPresageComponent::SimulatePhysicsStep(float Step)
 {
 	if (!GetCMS() || !GetMoveComp()) return;
@@ -207,94 +194,6 @@ void UWolfPresageComponent::ResolveMovementWithCollision(const FVector& Start, c
 	SimulationTransform.SetLocation(bSlideHit ? SlideHit.Location : SlideEnd);
 }
 
-void UWolfPresageComponent::SnapshotPhysics(FActorSnapshot& Snapshot) const
-{
-	Snapshot.Location = GetSimLocation();
-	Snapshot.Rotation = GetSimRotation();
-	Snapshot.Velocity = CharacterOwner->GetVelocity();
-	Snapshot.MovementMode = GetMoveComp()->MovementMode;
-	Snapshot.CustomMovementMode = GetMoveComp()->CustomMovementMode;
-	
-	const auto* AICont = Cast<AAIController>(CharacterOwner->GetController());
-	if (!IsValid(AICont)) return;
-
-	if (const auto* ActiveAbility = CharacterOwner->GetActiveCombatAbility())
-	{
-		const auto Index = ActiveAbility->GetCurrentPeriodIndex();
-		if (!ActiveAbility->AbilitySequence.IsValidIndex(Index)) return;
-
-		const auto& CurrentPeriod = ActiveAbility->AbilitySequence[Index];
-		if (CurrentPeriod.Type == EPeriodType::MoveTo)
-		{
-			Snapshot.Destination = CurrentPeriod.MoveToDestination;
-			Snapshot.bIsMoving = true;
-
-			DrawDebugSphere(GetWorld(), Snapshot.Destination, 25.f, 12, FColor::Red, false,
-				5.f);
-			DrawDebugLine(GetWorld(), GetOwnerLocation(), Snapshot.Destination, FColor::Red,
-				false, 5.f, 0, 2.f);
-		}
-	}
-	else { Snapshot.bIsMoving = false; Snapshot.Destination = FVector::ZeroVector; }
-
-	if (const auto* BB = AICont->GetBlackboardComponent())
-	{
-		Snapshot.TargetActor = Cast<AActor>(BB->GetValueAsObject(TEXT("TargetActor")));
-		if (Snapshot.TargetActor.IsValid())
-		{
-			const auto TargetBox = Snapshot.TargetActor->GetRootComponent()->Bounds.GetBox();
-			DrawDebugBox(GetWorld(), TargetBox.GetCenter(), TargetBox.GetExtent(), FColor::Orange, false,
-				5.f, 0, 3.f);
-		}
-	}
-
-	const int32 FrameIndex = bIsSimulating ? PredictionBuffer.Num() : -1;
-	const FString FrameType = FrameIndex == -1 ? TEXT("Master") : FString::Printf(TEXT("STEP %d"), FrameIndex);
-
-	WOLF_LOG(Log, TEXT("[Frame: %s] Character %s has Path Destination %s targeting %s. IsMoving = %s."),
-		*FrameType,
-		*CharacterOwner->GetName(),
-		*Snapshot.Destination.ToCompactString(),
-		Snapshot.TargetActor.IsValid() ? *Snapshot.TargetActor->GetName() : TEXT("None"),
-		Snapshot.bIsMoving ? TEXT ("True") : TEXT("False"));
-}
-
-void UWolfPresageComponent::RestorePhysics(const FActorSnapshot& Snapshot)
-{
-	CharacterOwner->SetActorLocationAndRotation
-	(
-		Snapshot.Location,
-		Snapshot.Rotation,
-		false,
-		nullptr,
-		ETeleportType::TeleportPhysics
-	);
-	
-	auto* Capsule = CharacterOwner->GetCapsuleComponent();
-	if (IsValid(Capsule))
-	{
-		Capsule->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
-		Capsule->SetCollisionProfileName(UCollisionProfile::Pawn_ProfileName);
-	}
-
-	if (IsValid(GetMoveComp()))
-	{
-		GetMoveComp()->SetComponentTickEnabled(true);
-		GetMoveComp()->Activate();
-
-		GetMoveComp()->SetMovementMode(Snapshot.MovementMode, Snapshot.CustomMovementMode);
-		GetMoveComp()->Velocity = Snapshot.Velocity;
-		GetMoveComp()->UpdateComponentVelocity();
-	}
-	
-	auto* PrimitiveComp = Cast<UPrimitiveComponent>(CharacterOwner->GetRootComponent());
-	if (IsValid(PrimitiveComp))
-	{
-		if (!PrimitiveComp->IsSimulatingPhysics()) return;
-		PrimitiveComp->SetPhysicsLinearVelocity(Snapshot.Velocity);
-	}
-}
-
 void UWolfPresageComponent::SimulateAnimationStep(float DeltaTime)
 {
 	auto* AnimInst = GetAnimInst();
@@ -323,133 +222,6 @@ void UWolfPresageComponent::SimulateAnimationStep(float DeltaTime)
 	}
 }
 
-void UWolfPresageComponent::SnapshotAnim(FActorSnapshot& Snapshot) const
-{
-	if (auto* CurrentMontage = GetCurrentMontage())
-	{
-		Snapshot.CurrentMontage = CurrentMontage;
-		Snapshot.MontagePosition = GetAnimInst()->Montage_GetPosition(CurrentMontage);
-	}
-}
-
-void UWolfPresageComponent::RestoreAnim(const FActorSnapshot& Snapshot)
-{
-	if (auto* AnimInst = GetAnimInst())
-	{
-		AnimInst->StopAllMontages(0.f);
-		if (!Snapshot.CurrentMontage.IsValid()) return;
-
-		AnimInst->Montage_Play(Snapshot.CurrentMontage.Get(), 1.f);
-		AnimInst->Montage_SetPosition(Snapshot.CurrentMontage.Get(), Snapshot.MontagePosition);
-	}
-}
-
-void UWolfPresageComponent::SnapshotGAS(FActorSnapshot& Snapshot) const
-{
-	if (!IsValid(CachedASC)) return;
-
-	const auto& Attributes = AbilityControl->GetCachedAttributes();
-	
-	Snapshot.AttributeValues.Empty(Attributes.Num());
-	for (const auto& Attribute : Attributes)
-	{
-		Snapshot.AttributeValues.Add(CachedASC->GetNumericAttribute(Attribute));
-	}
-
-	Snapshot.ActiveEffects.Reset();
-	const FGameplayEffectQuery Query;
-	const auto ActiveHandles = CachedASC->GetActiveEffects(Query);
-	Snapshot.ActiveEffects.Reserve(ActiveHandles.Num());
-
-	for (const auto& Handle : ActiveHandles)
-	{
-		if (const auto* Effect = CachedASC->GetActiveGameplayEffect(Handle))
-		{
-			FStoredEffect StoredEffect;
-			StoredEffect.EffectClass = Effect->Spec.Def.GetClass();
-			StoredEffect.Level = Effect->Spec.GetLevel();
-			StoredEffect.Stacks = Effect->Spec.GetStackCount();
-			StoredEffect.RemainingDuration = Effect->GetDuration() > 0.f
-				                                 ? Effect->GetTimeRemaining(GetWorld()->GetTimeSeconds())
-				                                 : -1.f;
-
-			Snapshot.ActiveEffects.Add(StoredEffect);
-		}
-	}
-	
-	auto* ActiveAbility = CharacterOwner->GetActiveCombatAbility();
-	const auto CurrentIndex = ActiveAbility ? ActiveAbility->GetCurrentPeriodIndex() : -1;
-	if (IsValid(ActiveAbility) && ActiveAbility->AbilitySequence.IsValidIndex(CurrentIndex))
-	{
-		Snapshot.ActiveAbility = ActiveAbility;
-		Snapshot.CurrentPeriodIndex = CurrentIndex;
-	}
-}
-
-void UWolfPresageComponent::RestoreGAS(const FActorSnapshot& Snapshot)
-{
-	if (!IsValid(CachedASC) || !AbilityControl->GetStatConfig()) return;
-
-	const auto& Attributes = AbilityControl->GetCachedAttributes();
-	CachedASC->SetTagMapCount(FWolfGameplayTags::Get().InputState_Dead, 0);
-
-	for (int32 StatIndex = 0; StatIndex < Attributes.Num(); ++StatIndex)
-	{
-		if (!Snapshot.AttributeValues.IsValidIndex(StatIndex)) break;
-
-		const auto& Attribute = Attributes[StatIndex];
-		const auto SavedValue = Snapshot.AttributeValues[StatIndex];
-
-		if (!FMath::IsNearlyEqual(CachedASC->GetNumericAttribute(Attribute), SavedValue))
-		{
-			CachedASC->SetNumericAttributeBase(Attribute, SavedValue);
-		}
-	}
-
-	FGameplayEffectQuery Query;
-	FGameplayTagContainer TagContainer;
-	TagContainer.AddTag(FWolfGameplayTags::Get().Effect_Combat);
-	Query.OwningTagQuery = FGameplayTagQuery::MakeQuery_MatchAnyTags(TagContainer);
-	CachedASC->RemoveActiveEffects(Query); // Don't want to remove effects like Presage
-
-	for (const auto& Effect : Snapshot.ActiveEffects)
-	{
-		if (!Effect.EffectClass) continue;
-
-		auto SpecHandle = CachedASC->MakeOutgoingSpec(Effect.EffectClass, Effect.Level, CachedASC->MakeEffectContext());
-		if (!SpecHandle.IsValid()) continue;
-
-		SpecHandle.Data->SetStackCount(Effect.Stacks);
-
-		if (Effect.RemainingDuration > 0.f)
-		{
-			SpecHandle.Data->Duration = Effect.RemainingDuration;
-		}
-		CachedASC->ApplyGameplayEffectSpecToSelf(*SpecHandle.Data.Get());
-	}
-
-	if (Snapshot.ActiveAbility.IsValid())
-	{
-		auto* Ability = Snapshot.ActiveAbility.Get();
-		Ability->SetCurrentPeriodIndex(Snapshot.CurrentPeriodIndex);
-
-		const auto Montage = Snapshot.CurrentMontage.Get();
-		if (!IsValid(Montage) || !IsValid(GetAnimInst())) return;
-
-		if (GetAnimInst()->Montage_IsPlaying(Montage)) GetAnimInst()->Montage_SetPosition(Montage, Snapshot.MontagePosition);
-		else
-		{
-			AbilityControl->GetWolfASC()->PlayMontage(
-				Ability,
-				Ability->GetCurrentActivationInfo(),
-				Montage,
-				1.f,
-				NAME_None,
-				Snapshot.MontagePosition);
-		}
-	}
-}
-
 FVector UWolfPresageComponent::GetOwnerLocation() const { return CharacterOwner ? CharacterOwner->GetActorLocation() : FVector::ZeroVector; }
 FRotator UWolfPresageComponent::GetOwnerRotation() const { return CharacterOwner ? CharacterOwner->GetActorRotation() : FRotator::ZeroRotator; }
 FVector UWolfPresageComponent::GetSimLocation() const { return bIsSimulating ? SimulationTransform.GetLocation() : GetOwnerLocation(); }
@@ -460,3 +232,8 @@ UWolfAbilitySystemComponent* UWolfPresageComponent::GetASC() const { return Cach
 UAnimInstance* UWolfPresageComponent::GetAnimInst() const { return CharacterOwner ? CharacterOwner->GetAnimInst() : nullptr; }
 UAnimMontage* UWolfPresageComponent::GetCurrentMontage() const { return GetAnimInst() ? GetAnimInst()->GetCurrentActiveMontage() : nullptr; }
 UCombatModeSubsystem* UWolfPresageComponent::GetCMS() const { return CharacterOwner ? CharacterOwner->GetCMS() : nullptr; }
+
+UWolfSnapshotComponent* UWolfPresageComponent::GetSnapshotControl() const
+{
+	return CharacterOwner ? CharacterOwner->GetSnapshotComponent() : nullptr;
+}

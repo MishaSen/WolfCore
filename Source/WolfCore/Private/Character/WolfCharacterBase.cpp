@@ -12,6 +12,7 @@
 #include "Core/WolfFunctionLibrary.h"
 #include "Core/WolfGameplayTags.h"
 #include "Core/WolfPresageComponent.h"
+#include "Core/WolfSnapshotComponent.h"
 #include "Debug/WolfDebug.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "Navigation/PathFollowingComponent.h"
@@ -25,6 +26,7 @@ AWolfCharacterBase::AWolfCharacterBase()
 
 	AbilityControl = CreateDefaultSubobject<UWolfAbilityComponent>(TEXT("AbilityControl"));
 	PresageControl = CreateDefaultSubobject<UWolfPresageComponent>(TEXT("PresageControl"));
+	SnapshotControl = CreateDefaultSubobject<UWolfSnapshotComponent>(TEXT("SnapshotControl"));
 
 	bUseControllerRotationPitch = false;
 	bUseControllerRotationYaw = true;
@@ -282,10 +284,10 @@ UBaseCombatAbility* AWolfCharacterBase::GetActiveCombatAbility() const
 
 void AWolfCharacterBase::CreateSnapshot_Implementation(FActorSnapshot& NewSnapshot)
 {
-	if (PresageControl) PresageControl->CreateSnapshot_Implementation(NewSnapshot);
+	if (SnapshotControl) ISnapshot::Execute_CreateSnapshot(SnapshotControl, NewSnapshot);
 }
 
 void AWolfCharacterBase::RestoreSnapshot_Implementation(const FActorSnapshot& Snapshot)
 {
-	if (PresageControl) PresageControl->RestoreSnapshot_Implementation(Snapshot);
+	if (SnapshotControl) ISnapshot::Execute_RestoreSnapshot(SnapshotControl, Snapshot);
 }

@@ -20,6 +20,7 @@ class UBaseCombatAbility;
 class UCombatModeSubsystem;
 class UGameplayAbility;
 class UWolfPresageComponent;
+class UWolfSnapshotComponent;
 
 /**
  * Base character class implementing the Ability System Interface, Snapshot interface, and Combat Mode Listener.
@@ -42,6 +43,10 @@ protected:
 	/** Component responsible for presage simulation and temporal prediction. */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "WolfCore|Components")
 	TObjectPtr<UWolfPresageComponent> PresageControl;
+
+	/** Component responsible for actor snapshot capture and restoration. */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "WolfCore|Components")
+	TObjectPtr<UWolfSnapshotComponent> SnapshotControl;
 
 	// ============================================================================================================================
 	// Configuration Data
@@ -128,6 +133,10 @@ public:
 	/// @brief Provides access to the presage component for temporal prediction and simulation.
 	/// @return Pointer to the UWolfPresageComponent.
 	virtual UWolfPresageComponent* GetPresageComponent() const override;
+
+	/** Retrieves the Snapshot component used for state capture and restoration. */
+	UFUNCTION(BlueprintPure, Category = "WolfCore|Components")
+	UWolfSnapshotComponent* GetSnapshotComponent() const { return SnapshotControl; }
 
 	/// @brief Retrieves the current ability progress (period time) for simulation sync.
 	/// @return Float representing the active ability's period progress in seconds.

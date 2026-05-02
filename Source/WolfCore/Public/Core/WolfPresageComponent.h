@@ -19,7 +19,7 @@ class UWolfAbilitySystemComponent;
  * Handles physics simulation, animation scrubbing, and Gameplay Ability System state during temporal prediction.
  */
 UCLASS(ClassGroup=(Custom), meta=(BlueprintSpawnableComponent))
-class WOLFCORE_API UWolfPresageComponent : public UActorComponent, public ISnapshot
+class WOLFCORE_API UWolfPresageComponent : public UActorComponent
 {
 	GENERATED_BODY()
 
@@ -67,23 +67,6 @@ public:
 	 */
 	virtual void SimulateTick(float Step);
 
-	// ============================================================================================================================
-	// Public API - Snapshot Interface
-	// ============================================================================================================================
-
-	/**Creates a full actor snapshot representing the current simulated state for temporal prediction storage. Implements ISnapshot. */
-	/**
-	 * @param OutSnapshot Reference to the FActorSnapshot to populate with simulation state data.
-	 */
-	virtual void CreateSnapshot_Implementation(FActorSnapshot& OutSnapshot) override;
-
-	/** Restores the component's simulated state from a previously captured snapshot, reversing temporal prediction changes. Implements ISnapshot. */
-	/**
-	 * @param Snapshot The FActorSnapshot containing the state to restore.
-	 */
-	virtual void RestoreSnapshot_Implementation(const FActorSnapshot& Snapshot) override;
-
-	// ============================================================================================================================
 	// Simulation State
 	// ============================================================================================================================
 
@@ -117,18 +100,6 @@ private:
 	 */
 	void ResolveMovementWithCollision(const FVector& Start, const FVector& End, FVector& Delta);
 
-	/** Captures physics state (location, velocity, collision) into a snapshot for temporal prediction storage. */
-	/**
-	 * @param Snapshot Reference to the FActorSnapshot to populate with physics data.
-	 */
-	void SnapshotPhysics(FActorSnapshot& Snapshot) const;
-
-	/** Restores physics state from a previously captured snapshot, reversing simulation changes. */
-	/**
-	 * @param Snapshot The FActorSnapshot containing physics state to restore.
-	 */
-	void RestorePhysics(const FActorSnapshot& Snapshot);
-
 	// ============================================================================================================================
 	// Private - Animation Simulation
 	// ============================================================================================================================
@@ -138,34 +109,6 @@ private:
 	 * @param DeltaTime The time delta in seconds for this animation step.
 	 */
 	void SimulateAnimationStep(float DeltaTime);
-
-	/** Captures animation state (montage position, playback rate, blend layers) into a snapshot. */
-	/**
-	 * @param Snapshot Reference to the FActorSnapshot to populate with animation data.
-	 */
-	void SnapshotAnim(FActorSnapshot& Snapshot) const;
-
-	/** Restores animation state from a previously captured snapshot, reversing simulation changes. */
-	/**
-	 * @param Snapshot The FActorSnapshot containing animation state to restore.
-	 */
-	void RestoreAnim(const FActorSnapshot& Snapshot);
-
-	// ============================================================================================================================
-	// Private - GAS State Management
-	// ============================================================================================================================
-
-	/** Captures Gameplay Ability System state (attributes, active effects, cooldowns) into a snapshot. */
-	/**
-	 * @param Snapshot Reference to the FActorSnapshot to populate with GAS data.
-	 */
-	void SnapshotGAS(FActorSnapshot& Snapshot) const;
-
-	/** Restores Gameplay Ability System state from a previously captured snapshot. */
-	/**
-	 * @param Snapshot The FActorSnapshot containing GAS state to restore.
-	 */
-	void RestoreGAS(const FActorSnapshot& Snapshot);
 
 	// ============================================================================================================================
 	// Private - Inline Accessors
@@ -198,12 +141,12 @@ private:
 	/** Provides fast access to the Combat Mode subsystem singleton for combat mode queries during simulation. */
 	FORCEINLINE UCombatModeSubsystem* GetCMS() const;
 
+	/** Provides fast access to the Snapshot component for state capture during simulation. */
+	class UWolfSnapshotComponent* GetSnapshotControl() const;
+
 	// ============================================================================================================================
 	// Internal State
 	// ============================================================================================================================
-
-	/** Flag indicating whether the component is currently in a snapshot restoration sequence. */
-	bool bIsRestoringSnapshot = false;
 
 	/** Flag indicating whether temporal simulation is currently active for this component. */
 	bool bIsSimulating = false;

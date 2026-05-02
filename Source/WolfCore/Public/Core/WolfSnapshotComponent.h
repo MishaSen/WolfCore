@@ -9,8 +9,12 @@
 
 
 class UCharacterMovementComponent;
-class UAbilitySystemComponent;
+class UWolfAbilitySystemComponent;
+class UWolfAbilityComponent;
 class AWolfCharacterBase;
+class UAnimInstance;
+class UAnimMontage;
+class UCombatModeSubsystem;
 
 UCLASS(ClassGroup=(WolfCore), meta=(BlueprintSpawnableComponent))
 class WOLFCORE_API UWolfSnapshotComponent : public UActorComponent, public ISnapshot
@@ -44,7 +48,13 @@ public:
 	FORCEINLINE AWolfCharacterBase* GetOwnerCharacter() const { return OwnerCharacter; }
 
 	/** Returns the cached Ability System Component for direct GAS interactions during snapshot operations. */
-	FORCEINLINE UAbilitySystemComponent* GetCachedASC() const { return CachedASC; }
+	FORCEINLINE UWolfAbilitySystemComponent* GetASC() const { return CachedASC; }
+
+	/** Sets whether temporal simulation is currently active for this component. */
+	void SetIsSimulating(bool bState) { bIsSimulating = bState; }
+
+	/** Overrides the simulation transform to a specific world-space transform value. */
+	void SetSimulationTransform(const FTransform& NewTransform) { SimulationTransform = NewTransform; }
 
 	// ============================================================================================================================
 	// Private - Snapshot Operations (Physics / Animation / GAS)
@@ -68,18 +78,62 @@ private:
 
 	/** Restores Gameplay Ability System state from a previously captured snapshot. */
 	void RestoreGAS(const FActorSnapshot& Snapshot);
-	
+
 	// ============================================================================================================================
-    // Private - Cached References (Populated at BeginPlay)
-    // ============================================================================================================================
-    
+	// Private - Inline Accessors
+	// ============================================================================================================================
+
+	/** Provides fast access to the owner's current world-space location. */
+	FORCEINLINE FVector GetOwnerLocation() const;
+
+	/** Provides fast access to the owner's current rotation in FRotator format. */
+	FORCEINLINE FRotator GetOwnerRotation() const;
+
+	/** Provides fast access to the simulated location for temporal prediction queries. */
+	FORCEINLINE FVector GetSimLocation() const;
+
+	/** Provides fast access to the simulated rotation for temporal prediction queries. */
+	FORCEINLINE FRotator GetSimRotation() const;
+
+	/** Provides fast access to the character's movement component for simulation state management. */
+	FORCEINLINE UCharacterMovementComponent* GetMoveComp() const { return CachedMoveComp; }
+
+	/** Provides fast access to the cached animation instance for animation scrubbing operations. */
+	FORCEINLINE UAnimInstance* GetAnimInst() const;
+
+	/** Provides fast access to the current active animation montage being simulated. */
+	FORCEINLINE UAnimMontage* GetCurrentMontage() const;
+
+	/** Provides fast access to the Combat Mode subsystem singleton for combat mode queries during simulation. */
+	FORCEINLINE UCombatModeSubsystem* GetCMS() const;
+
+	// ============================================================================================================================
+	// Internal State
+	// ============================================================================================================================
+
 private:
+	/** Flag indicating whether the component is currently in a snapshot restoration sequence. */
+	bool bIsRestoringSnapshot = false;
+
+	/** Flag indicating whether temporal simulation is currently active for this component. */
+	bool bIsSimulating = false;
+
+	/** The base transform representing the simulated world-space position during prediction. */
+	FTransform SimulationTransform;
+
 	/** Strong reference to the owner character actor that owns this snapshot component. */
+	UPROPERTY(Transient, VisibleInstanceOnly, Category = "WolfCore|Internal")
 	TObjectPtr<AWolfCharacterBase> OwnerCharacter;
 
+	/** Strong reference to the ability control component for ability state management during simulation. */
+	UPROPERTY(Transient, VisibleInstanceOnly, Category = "WolfCore|Internal")
+	TObjectPtr<UWolfAbilityComponent> AbilityControl;
+
 	/** Cached reference to the Ability System Component for performance optimization during snapshot operations. */
-	TObjectPtr<UAbilitySystemComponent> CachedASC;
+	UPROPERTY(Transient, VisibleInstanceOnly, Category = "WolfCore|Internal")
+	TObjectPtr<UWolfAbilitySystemComponent> CachedASC;
 
 	/** Cached reference to the Character Movement Component for physics state capture/restore. */
+	UPROPERTY(Transient, VisibleInstanceOnly, Category = "WolfCore|Internal")
 	TObjectPtr<UCharacterMovementComponent> CachedMoveComp;
 };
