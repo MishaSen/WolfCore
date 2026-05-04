@@ -112,6 +112,8 @@ private:
 	// ============================================================================================================================
 
 private:
+	mutable int32 SnapshotIndex = 0;
+	
 	/** Flag indicating whether the component is currently in a snapshot restoration sequence. */
 	bool bIsRestoringSnapshot = false;
 

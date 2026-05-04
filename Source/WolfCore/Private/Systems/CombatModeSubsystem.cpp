@@ -147,15 +147,6 @@ void UCombatModeSubsystem::SetMode(FGameplayTag NewMode)
         bIsInTB = false;
     }
 
-    // Apply new mode tags to all tracked combatants.
-    for (auto& Combatant : TrackedCombatants)
-    {
-        if (Combatant.GetInterface() && IsValid(Combatant.GetObject()))
-        {
-            ApplyModeToActor(Combatant, NewMode);
-        }
-    }
-
     OnCombatModeChanged.Broadcast(NewMode);
 }
 

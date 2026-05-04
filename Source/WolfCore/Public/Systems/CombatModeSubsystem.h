@@ -62,7 +62,7 @@ public:
 	 * @param Combatant Pointer to the AActor whose combat mode is being updated (can be any actor type).
 	 * @param NewMode The FGameplayTag representing the new combat mode to apply.
 	 */
-	void ApplyModeToActor(TScriptInterface<IWolfCombatant> Combatant, FGameplayTag NewMode);
+	void ApplyModeToActor(const TScriptInterface<IWolfCombatant>& Combatant, FGameplayTag NewMode);
 
 	/** Returns the current global combat mode as a GameplayTag for Blueprint queries and runtime checks. */
 	UFUNCTION(BlueprintPure, Meta = (DisplayName = "Get Current Mode"), Category = "WolfCore|Combat")
