@@ -126,6 +126,16 @@ void UCombatModeSubsystem::SetMode(FGameplayTag NewMode)
 	{
 		bIsInTB = true;
 		MasterStartSnapshot = CaptureCurrentWorldState(World->GetTimeSeconds());
+
+		// Apply new mode tags to all tracked combatants.
+		for (auto& Combatant : TrackedCombatants)
+		{
+			if (Combatant.GetInterface() && IsValid(Combatant.GetObject()))
+			{
+				ApplyModeToActor(Combatant, NewMode);
+			}
+		}
+		
 		WOLF_LOG(Log, TEXT("TB started. Master Snapshot captured for %d actors."), MasterStartSnapshot.ActorStates.Num());
 
 		FWolfPresageSimulator::ExecuteFutureBake(TrackedCombatants, MaxTimelineDuration);
@@ -186,7 +196,7 @@ void UCombatModeSubsystem::HandlePresageDrainEffect(UAbilitySystemComponent* ASC
 	FWolfPresageSimulator::ApplyPresageDrainEffect(ASC, CurrentActorMode, PresageEffectClass);
 }
 
-void UCombatModeSubsystem::ApplyModeToActor(TScriptInterface<IWolfCombatant> Combatant, FGameplayTag NewMode)
+void UCombatModeSubsystem::ApplyModeToActor(const TScriptInterface<IWolfCombatant>& Combatant, FGameplayTag NewMode)
 {
 	auto* Obj = Combatant.GetObject();
 	auto* Actor = Cast<AActor>(Obj);

@@ -95,18 +95,28 @@ void UWolfSnapshotComponent::SnapshotPhysics(FActorSnapshot& Snapshot) const
 		}
 	}
 
-	const FString FrameType = bIsSimulating ? TEXT("Simulated") : TEXT("Master");
-
-	/*WOLF_LOG(Log, TEXT("[Snapshot: %s] Character %s has Path Destination %s targeting %s. IsMoving = %s."),
-		*FrameType,
-		*OwnerCharacter->GetName(),
-		*Snapshot.Destination.ToCompactString(),
-		Snapshot.TargetActor.IsValid() ? *Snapshot.TargetActor->GetName() : TEXT("None"),
-		Snapshot.bIsMoving ? TEXT ("True") : TEXT("False"));*/
+	if (Snapshot.TargetActor.IsValid())
+	{
+		WOLF_LOG(Log, TEXT("[Snapshot: %d] Character %s has Path Destination %s targeting %s. IsMoving = %s."),
+			SnapshotIndex,
+			*OwnerCharacter->GetName(),
+			*Snapshot.Destination.ToCompactString(),
+			Snapshot.TargetActor.IsValid() ? *Snapshot.TargetActor->GetName() : TEXT("None"),
+			Snapshot.bIsMoving ? TEXT ("True") : TEXT("False"));
+		SnapshotIndex++;
+	}
 }
 
 void UWolfSnapshotComponent::RestorePhysics(const FActorSnapshot& Snapshot)
 {
+	if (Snapshot.TargetActor.IsValid())
+	{
+		WOLF_LOG(Log, TEXT("Character %s has location %s and rotation %s."),
+			*OwnerCharacter.GetName(),
+			*OwnerCharacter->GetActorLocation().ToCompactString(),
+			*OwnerCharacter->GetActorRotation().ToCompactString());
+	}
+	
 	OwnerCharacter->SetActorLocationAndRotation
 	(
 		Snapshot.Location,
@@ -115,6 +125,15 @@ void UWolfSnapshotComponent::RestorePhysics(const FActorSnapshot& Snapshot)
 		nullptr,
 		ETeleportType::TeleportPhysics
 	);
+	if (Snapshot.TargetActor.IsValid())
+	{
+		WOLF_LOG(Log, TEXT("Set Character %s to location %s and rotation %s. He now has location %s and rotation %s"),
+			*OwnerCharacter.GetName(),
+			*Snapshot.Location.ToCompactString(),
+			*Snapshot.Rotation.ToCompactString(),
+			*OwnerCharacter->GetActorLocation().ToCompactString(),
+			*OwnerCharacter->GetActorRotation().ToCompactString());
+	}
 	
 	auto* Capsule = OwnerCharacter->GetCapsuleComponent();
 	if (IsValid(Capsule))
