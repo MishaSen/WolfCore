@@ -185,3 +185,20 @@ UEnhancedInputLocalPlayerSubsystem* AWolfPlayerController::GetEnhancedInputSubsy
 
 	return EnhancedInputSubsystem;
 }
+
+void AWolfPlayerController::ApplyInputMappingForMode(const FGameplayTag& Mode)
+{
+	if (!EnhancedInputSubsystem) EnhancedInputSubsystem = GetEnhancedInputSubsystem();
+	if (!EnhancedInputSubsystem) return;
+
+	if (const auto* IMC = CombatModeMappings.Find(Mode))
+	{
+		EnhancedInputSubsystem->ClearAllMappings();
+		EnhancedInputSubsystem->AddMappingContext(*IMC, 0);
+		WOLF_INFO(TEXT("Applied input mapping for mode: %s"), *Mode.ToString());
+	}
+	else
+	{
+		WOLF_WARN(TEXT("No InputMappingContext found for mode: %s"), *Mode.ToString());
+	}
+}

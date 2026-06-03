@@ -112,6 +112,14 @@ public:
 	/** Retrieves the Ability System Component (ASC) for Gameplay Ability System interactions and ability management. */
 	UWolfAbilitySystemComponent* GetASC();
 
+	/**
+	 * Applies the input mapping context for a given combat mode tag.
+	 * Called by CombatModeSubsystem during mode transitions to ensure input context is always applied.
+	 * @param Mode The FGameplayTag representing the combat mode to apply input mappings for.
+	 */
+	UFUNCTION(BlueprintCallable, Category = "WolfCore|Input")
+	void ApplyInputMappingForMode(const FGameplayTag& Mode);
+	
 private:
 	/** Retrieves the Enhanced Input Local Player subsystem for input system initialization and access. */
 	UEnhancedInputLocalPlayerSubsystem* GetEnhancedInputSubsystem();

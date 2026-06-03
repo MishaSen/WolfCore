@@ -11,6 +11,7 @@
 #include "Core/WolfGameInstance.h"
 #include "Core/WolfGameplayTags.h"
 #include "Core/WolfPresageComponent.h"
+#include "Core/WolfPlayerController.h"
 #include "Debug/WolfDebug.h"
 #include "Engine/AssetManager.h"
 #include "GameFramework/Pawn.h"
@@ -138,6 +139,8 @@ void UCombatModeSubsystem::SetMode(FGameplayTag NewMode)
 		
 		WOLF_LOG(Log, TEXT("TB started. Master Snapshot captured for %d actors."), MasterStartSnapshot.ActorStates.Num());
 
+		// Reset to a sentinel value so ScrubTimeline(0.f) is not skipped by the IsNearlyEqual check.
+		CurrentTimelineTime = -1.f;
 		FWolfPresageSimulator::ExecuteFutureBake(TrackedCombatants, MaxTimelineDuration);
 		ScrubTimeline(0.f);
 	}
@@ -145,6 +148,15 @@ void UCombatModeSubsystem::SetMode(FGameplayTag NewMode)
     {
         MasterStartSnapshot.ActorStates.Empty();
         bIsInTB = false;
+    }
+
+    // Apply input mapping context directly to ensure controls work regardless of tag event firing.
+    if (auto* PC = GetWorld()->GetFirstPlayerController())
+    {
+        if (auto* WolfPC = Cast<AWolfPlayerController>(PC))
+        {
+            WolfPC->ApplyInputMappingForMode(NewMode);
+        }
     }
 
     OnCombatModeChanged.Broadcast(NewMode);
