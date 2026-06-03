@@ -4,11 +4,13 @@
 
 #include "AbilitySystemComponent.h"
 #include "Abilities/BaseCombatAbility.h"
+#include "AIController.h"
 #include "Core/WolfGameplayTags.h"
 #include "Core/WolfPresageComponent.h"
 #include "Debug/WolfDebug.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "Interfaces/IWolfCombatant.h"
+#include "Navigation/PathFollowingComponent.h"
 #include "Presage/ActorSnapshot.h"
 
 void FWolfPresageSimulator::ExecuteFutureBake(const TArray<TScriptInterface<IWolfCombatant>>& Combatants, float Duration)
@@ -51,22 +53,29 @@ void FWolfPresageSimulator::SetupCombatantSimulation(const TScriptInterface<IWol
 	auto* Presage = Combatant.GetInterface()->GetPresageComponent();
 	if (!IsValid(Presage)) return;
 
-	// Clear prediction buffer and enable simulation.
+	// Clear prediction buffer. SetSimPeriodTime to 0 so AdvancePeriod computes
+	// remaining duration from the actor's current position, not elapsed time.
 	Presage->ClearPredictionBuffer(Duration);
-	Presage->SetIsSimulating(true);
-	Presage->SetSimulationTransform(Actor->GetActorTransform());
+	Presage->SetSimPeriodTime(0.f);
 
-	// Sync sim timer to the current period from active abilities via interface.
-	const auto* ASC = Combatant.GetInterface()->GetASC();
-	if (ASC)
+	// Freeze movement components so the AI cannot move the actor during the synchronous bake.
+	auto* MoveComp = Actor->FindComponentByClass<UCharacterMovementComponent>();
+	if (MoveComp)
 	{
-		const float CurrentProgress = Combatant.GetInterface()->GetActiveAbilityProgress();
-		Presage->SetSimPeriodTime(CurrentProgress);
+		MoveComp->StopMovementImmediately();
+		MoveComp->SetComponentTickEnabled(false);
 	}
 
-	// Stop character movement during simulation.
-	auto* MoveComp = Actor->FindComponentByClass<UCharacterMovementComponent>();
-	if (MoveComp) MoveComp->StopMovementImmediately();
+	if (const auto* Pawn = Cast<APawn>(Actor))
+	{
+		if (auto* AIC = Cast<AAIController>(Pawn->GetController()))
+		{
+			if (auto* PFC = AIC->GetPathFollowingComponent())
+			{
+				PFC->SetComponentTickEnabled(false);
+			}
+		}
+	}
 }
 
 void FWolfPresageSimulator::BakeSimulationStep(const TScriptInterface<IWolfCombatant>& Combatant, float StepSize)
@@ -85,10 +94,24 @@ void FWolfPresageSimulator::CleanupCombatantSimulation(const TScriptInterface<IW
 	const auto* Actor = Cast<AActor>(Combatant.GetObject());
 	if (!IsValid(Actor)) return;
 
-	auto* Presage = Combatant.GetInterface()->GetPresageComponent();
-	if (!IsValid(Presage)) return;
+	// Re-enable movement ticks. The subsequent ScrubTimeline(0.f) in SetMode
+	// will restore the actor to its pre-bake position via MasterStartSnapshot.
+	auto* MoveComp = Actor->FindComponentByClass<UCharacterMovementComponent>();
+	if (MoveComp)
+	{
+		MoveComp->SetComponentTickEnabled(true);
+	}
 
-	Presage->SetIsSimulating(false);
+	if (const auto* Pawn = Cast<APawn>(Actor))
+	{
+		if (auto* AIC = Cast<AAIController>(Pawn->GetController()))
+		{
+			if (auto* PFC = AIC->GetPathFollowingComponent())
+			{
+				PFC->SetComponentTickEnabled(true);
+			}
+		}
+	}
 }
 
 void FWolfPresageSimulator::ApplyPresageDrainEffect(UAbilitySystemComponent* ASC, FGameplayTag CurrentActorMode, TSubclassOf<UGameplayEffect> PresageEffectClass)
