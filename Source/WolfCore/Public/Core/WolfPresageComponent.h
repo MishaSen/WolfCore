@@ -52,14 +52,6 @@ public:
 	// Public API - Simulation Control
 	// ============================================================================================================================
 
-	/** Sets whether temporal simulation is currently active for this component. */
-	void SetIsSimulating(bool bState) { bIsSimulating = bState; }
-
-	/** Overrides the simulation transform to a specific world-space transform value. */
-	/**
-	 * @param NewTransform The FTransform to set as the new simulation base transform.
-	 */
-	void SetSimulationTransform(const FTransform& NewTransform) { SimulationTransform = NewTransform; }
 
 	/** Executes a single simulation tick step, advancing the temporal prediction state by one frame. */
 	/**
@@ -123,11 +115,6 @@ private:
 	/** Provides fast access to the owner's current rotation in FRotator format. */
 	FORCEINLINE FRotator GetOwnerRotation() const;
 
-	/** Provides fast access to the simulated location for temporal prediction queries. */
-	FORCEINLINE FVector GetSimLocation() const;
-
-	/** Provides fast access to the simulated rotation for temporal prediction queries. */
-	FORCEINLINE FRotator GetSimRotation() const;
 
 	/** Provides fast access to the character's movement component for simulation state management. */
 	FORCEINLINE UCharacterMovementComponent* GetMoveComp() const;
@@ -151,14 +138,8 @@ private:
 	// Internal State
 	// ============================================================================================================================
 
-	/** Flag indicating whether temporal simulation is currently active for this component. */
-	bool bIsSimulating = false;
-
 	/** Time delta accumulated during the current simulation period. */
 	float SimPeriodTime = 0.f;
-
-	/** The base transform representing the simulated world-space position during prediction. */
-	FTransform SimulationTransform;
 
 	/** Array of snapshots capturing the prediction buffer for temporal state queries and visualization. */
 	UPROPERTY(Transient, VisibleInstanceOnly, Category = "WolfCore|Internal")

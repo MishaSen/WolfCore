@@ -37,7 +37,6 @@ void UWolfPresageComponent::BeginPlay()
 void UWolfPresageComponent::SimulateTick(float Step)
 {
 	if (!CharacterOwner) return;
-	if (PredictionBuffer.Num() == 0) SimulationTransform = CharacterOwner->GetActorTransform();
 
 	SimulatePhysicsStep(Step);
 	SimulateAnimationStep(Step);
@@ -53,17 +52,14 @@ void UWolfPresageComponent::SimulateTick(float Step)
 			GetMoveComp()->MaxWalkSpeed,
 			GetMoveComp()->MaxAcceleration,
 			GetMoveComp()->Velocity.Size(),
-			SimulationTransform.GetLocation()
+			CharacterOwner->GetActorLocation()
 		);
 	}
 
 	FActorSnapshot FutureFrame;
 	if (auto* SnapshotControl = GetSnapshotControl())
 	{
-		SnapshotControl->SetIsSimulating(true);
-		SnapshotControl->SetSimulationTransform(SimulationTransform);
 		ISnapshot::Execute_CreateSnapshot(SnapshotControl, FutureFrame);
-		SnapshotControl->SetIsSimulating(false);
 	}
 
 	FutureFrame.ActiveAbility = CharacterOwner->GetActiveCombatAbility();
@@ -108,7 +104,7 @@ void UWolfPresageComponent::SimulatePhysicsStep(float Step)
 	
 	if (SimVelocity.IsNearlyZero()) return; // Return early if simulated velocity is negligible.
 
-	const FVector Start = SimulationTransform.GetLocation();
+	const FVector Start = CharacterOwner->GetActorLocation();
 	FVector Delta = SimVelocity * Step;
 	// Not considering starting acceleration, but might not make a difference. Look out for bugs.
 	
@@ -124,7 +120,6 @@ void UWolfPresageComponent::SimulatePhysicsStep(float Step)
 FVector UWolfPresageComponent::GetSimulatedVelocity(FVector& Destination) const
 {
 	const FVector Velocity = GetMoveComp()->Velocity;
-	if (!bIsSimulating && Velocity.IsNearlyZero()) return Velocity;
 	
 	if (const auto* Ability = CharacterOwner->GetActiveCombatAbility())
 	{
@@ -133,7 +128,7 @@ FVector UWolfPresageComponent::GetSimulatedVelocity(FVector& Destination) const
 		if (Sequence.IsValidIndex(Index) && Sequence[Index].Type == EPeriodType::MoveTo)
 		{
 			Destination = Sequence[Index].MoveToDestination;
-			const FVector ToDestination = Destination - SimulationTransform.GetLocation();
+			const FVector ToDestination = Destination - CharacterOwner->GetActorLocation();
 			return ToDestination.GetSafeNormal() * GetMoveComp()->MaxWalkSpeed;
 		}
 	}
@@ -145,23 +140,23 @@ void UWolfPresageComponent::ResolveMovementWithCollision(const FVector& Start, c
 	FCollisionQueryParams Params;
 	Params.AddIgnoredActor(CharacterOwner);
 	
-	const FQuat Rotation = SimulationTransform.GetRotation();
+	const FQuat Rotation = CharacterOwner->GetActorQuat();
 	const FCollisionShape Shape = CharacterOwner->GetCapsuleComponent()->GetCollisionShape();
 	
 	FHitResult Hit(1.f);
 	const bool bHit = GetWorld()->SweepSingleByChannel(Hit, Start, End, Rotation,ECC_Pawn, Shape, Params);
-	if (!bHit) { SimulationTransform.SetLocation(End); return; }
+	if (!bHit) { CharacterOwner->SetActorLocation(End, false, nullptr, ETeleportType::TeleportPhysics); return; }
 
 	const FVector RemainingDelta = Delta * (1.f - Hit.Time);
 	const FVector SlideDelta = FVector::VectorPlaneProject(RemainingDelta, Hit.Normal);
-	if (SlideDelta.IsNearlyZero()) { SimulationTransform.SetLocation(Hit.Location); return; }
+	if (SlideDelta.IsNearlyZero()) { CharacterOwner->SetActorLocation(Hit.Location, false, nullptr, ETeleportType::TeleportPhysics); return; }
 
 	FHitResult SlideHit;
 	const FVector SlideEnd = Hit.Location + SlideDelta;
 	const bool bSlideHit = GetWorld()->
 		SweepSingleByChannel(SlideHit,Hit.Location, SlideEnd, Rotation,ECC_Pawn, Shape, Params);
 	
-	SimulationTransform.SetLocation(bSlideHit ? SlideHit.Location : SlideEnd);
+	CharacterOwner->SetActorLocation(bSlideHit ? SlideHit.Location : SlideEnd, false, nullptr, ETeleportType::TeleportPhysics);
 }
 
 void UWolfPresageComponent::SimulateAnimationStep(float DeltaTime)
@@ -182,8 +177,7 @@ void UWolfPresageComponent::SimulateAnimationStep(float DeltaTime)
 		const auto RootMotionDelta = CurrentMontage->ExtractRootMotionFromRange(CurrentPos,NewPos, FAnimExtractContext());
 		const auto WorldDelta = GetOwnerRotation().RotateVector(RootMotionDelta.GetLocation());
 
-		if (bIsSimulating) SimulationTransform.AddToTranslation(WorldDelta);
-		else WOLF_WARN(TEXT("SimulateAnimStep() activating during outside of Simulation."));
+		CharacterOwner->AddActorWorldOffset(WorldDelta, false, nullptr, ETeleportType::TeleportPhysics);
 	}
 
 	if (NewPos >= CurrentMontage->GetPlayLength())
@@ -194,8 +188,6 @@ void UWolfPresageComponent::SimulateAnimationStep(float DeltaTime)
 
 FVector UWolfPresageComponent::GetOwnerLocation() const { return CharacterOwner ? CharacterOwner->GetActorLocation() : FVector::ZeroVector; }
 FRotator UWolfPresageComponent::GetOwnerRotation() const { return CharacterOwner ? CharacterOwner->GetActorRotation() : FRotator::ZeroRotator; }
-FVector UWolfPresageComponent::GetSimLocation() const { return bIsSimulating ? SimulationTransform.GetLocation() : GetOwnerLocation(); }
-FRotator UWolfPresageComponent::GetSimRotation() const { return bIsSimulating ? SimulationTransform.GetRotation().Rotator() : GetOwnerRotation(); }
 
 UCharacterMovementComponent* UWolfPresageComponent::GetMoveComp() const { return CharacterOwner ? CharacterOwner->GetCharacterMovement() : nullptr; }
 UWolfAbilitySystemComponent* UWolfPresageComponent::GetASC() const { return CachedASC; }

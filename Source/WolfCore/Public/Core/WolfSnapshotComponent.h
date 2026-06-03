@@ -50,12 +50,6 @@ public:
 	/** Returns the cached Ability System Component for direct GAS interactions during snapshot operations. */
 	FORCEINLINE UWolfAbilitySystemComponent* GetASC() const { return CachedASC; }
 
-	/** Sets whether temporal simulation is currently active for this component. */
-	void SetIsSimulating(bool bState) { bIsSimulating = bState; }
-
-	/** Overrides the simulation transform to a specific world-space transform value. */
-	void SetSimulationTransform(const FTransform& NewTransform) { SimulationTransform = NewTransform; }
-
 	// ============================================================================================================================
 	// Private - Snapshot Operations (Physics / Animation / GAS)
 	// ============================================================================================================================
@@ -89,13 +83,6 @@ private:
 	/** Provides fast access to the owner's current rotation in FRotator format. */
 	FORCEINLINE FRotator GetOwnerRotation() const;
 
-	/** Provides fast access to the simulated location for temporal prediction queries. */
-	FORCEINLINE FVector GetSimLocation() const;
-
-	/** Provides fast access to the simulated rotation for temporal prediction queries. */
-	FORCEINLINE FRotator GetSimRotation() const;
-
-	/** Provides fast access to the character's movement component for simulation state management. */
 	FORCEINLINE UCharacterMovementComponent* GetMoveComp() const { return CachedMoveComp; }
 
 	/** Provides fast access to the cached animation instance for animation scrubbing operations. */
@@ -116,12 +103,6 @@ private:
 	
 	/** Flag indicating whether the component is currently in a snapshot restoration sequence. */
 	bool bIsRestoringSnapshot = false;
-
-	/** Flag indicating whether temporal simulation is currently active for this component. */
-	bool bIsSimulating = false;
-
-	/** The base transform representing the simulated world-space position during prediction. */
-	FTransform SimulationTransform;
 
 	/** Strong reference to the owner character actor that owns this snapshot component. */
 	UPROPERTY(Transient, VisibleInstanceOnly, Category = "WolfCore|Internal")

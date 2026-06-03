@@ -56,8 +56,8 @@ void UWolfSnapshotComponent::RestoreSnapshot_Implementation(const FActorSnapshot
 
 void UWolfSnapshotComponent::SnapshotPhysics(FActorSnapshot& Snapshot) const
 {
-	Snapshot.Location = GetSimLocation();
-	Snapshot.Rotation = GetSimRotation();
+	Snapshot.Location = GetOwnerLocation();
+	Snapshot.Rotation = GetOwnerRotation();
 	Snapshot.Velocity = OwnerCharacter->GetVelocity();
 	Snapshot.MovementMode = GetMoveComp()->MovementMode;
 	Snapshot.CustomMovementMode = GetMoveComp()->CustomMovementMode;
@@ -73,13 +73,13 @@ void UWolfSnapshotComponent::SnapshotPhysics(FActorSnapshot& Snapshot) const
 
 		const auto& CurrentPeriod = Sequence[Index];
 		if (CurrentPeriod.Type == EPeriodType::MoveTo)
-		{
-			Snapshot.Destination = CurrentPeriod.MoveToDestination;
-			Snapshot.bIsMoving = true;
+			{
+				Snapshot.Destination = CurrentPeriod.MoveToDestination;
+				Snapshot.bIsMoving = true;
 
-			DrawDebugSphere(GetWorld(), Snapshot.Destination, 25.f, 12, FColor::Red, false, 5.f);
-			DrawDebugLine(GetWorld(), GetOwnerLocation(), Snapshot.Destination, FColor::Red, false, 5.f, 0, 2.f);
-		}
+				DrawDebugSphere(GetWorld(), Snapshot.Destination, 25.f, 12, FColor::Red, false, 5.f);
+				DrawDebugLine(GetWorld(), GetOwnerLocation(), Snapshot.Destination, FColor::Red, false, 5.f, 0, 2.f);
+			}
 	}
 	else { Snapshot.bIsMoving = false; Snapshot.Destination = FVector::ZeroVector; }
 
@@ -127,12 +127,14 @@ void UWolfSnapshotComponent::RestorePhysics(const FActorSnapshot& Snapshot)
 	);
 	if (Snapshot.TargetActor.IsValid())
 	{
-		WOLF_LOG(Log, TEXT("Set Character %s to location %s and rotation %s. He now has location %s and rotation %s"),
+		WOLF_LOG(Log, TEXT("Set Character %s to location %s and rotation %s. He now has location %s and rotation %s."),
 			*OwnerCharacter.GetName(),
 			*Snapshot.Location.ToCompactString(),
 			*Snapshot.Rotation.ToCompactString(),
 			*OwnerCharacter->GetActorLocation().ToCompactString(),
 			*OwnerCharacter->GetActorRotation().ToCompactString());
+
+			DrawDebugSphere(GetWorld(), OwnerCharacter->GetActorLocation(), 25.f, 12, FColor::Green, false, 5.f);
 	}
 	
 	auto* Capsule = OwnerCharacter->GetCapsuleComponent();
@@ -144,10 +146,10 @@ void UWolfSnapshotComponent::RestorePhysics(const FActorSnapshot& Snapshot)
 
 	if (IsValid(GetMoveComp()))
 	{
-		GetMoveComp()->SetComponentTickEnabled(true);
+		/*GetMoveComp()->SetComponentTickEnabled(true);
 		GetMoveComp()->Activate();
 
-		GetMoveComp()->SetMovementMode(Snapshot.MovementMode, Snapshot.CustomMovementMode);
+		GetMoveComp()->SetMovementMode(Snapshot.MovementMode, Snapshot.CustomMovementMode);*/
 		GetMoveComp()->Velocity = Snapshot.Velocity;
 		GetMoveComp()->UpdateComponentVelocity();
 	}
@@ -155,7 +157,6 @@ void UWolfSnapshotComponent::RestorePhysics(const FActorSnapshot& Snapshot)
 	auto* PrimitiveComp = Cast<UPrimitiveComponent>(OwnerCharacter->GetRootComponent());
 	if (IsValid(PrimitiveComp))
 	{
-		if (!PrimitiveComp->IsSimulatingPhysics()) return;
 		PrimitiveComp->SetPhysicsLinearVelocity(Snapshot.Velocity);
 	}
 }
@@ -289,10 +290,7 @@ void UWolfSnapshotComponent::RestoreGAS(const FActorSnapshot& Snapshot)
 
 FVector UWolfSnapshotComponent::GetOwnerLocation() const { return OwnerCharacter ? OwnerCharacter->GetActorLocation() : FVector::ZeroVector; }
 FRotator UWolfSnapshotComponent::GetOwnerRotation() const { return OwnerCharacter ? OwnerCharacter->GetActorRotation() : FRotator::ZeroRotator; }
-FVector UWolfSnapshotComponent::GetSimLocation() const { return bIsSimulating ? SimulationTransform.GetLocation() : GetOwnerLocation(); }
-FRotator UWolfSnapshotComponent::GetSimRotation() const { return bIsSimulating ? SimulationTransform.GetRotation().Rotator() : GetOwnerRotation(); }
 
 UAnimInstance* UWolfSnapshotComponent::GetAnimInst() const { return OwnerCharacter ? OwnerCharacter->GetAnimInst() : nullptr; }
 UAnimMontage* UWolfSnapshotComponent::GetCurrentMontage() const { return GetAnimInst() ? GetAnimInst()->GetCurrentActiveMontage() : nullptr; }
 UCombatModeSubsystem* UWolfSnapshotComponent::GetCMS() const { return OwnerCharacter ? OwnerCharacter->GetCMS() : nullptr; }
-
