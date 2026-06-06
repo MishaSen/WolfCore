@@ -13,6 +13,7 @@
 #include "Abilities/Tasks/AbilityTask_WaitGameplayEvent.h"
 #include "Kismet/KismetSystemLibrary.h"
 #include "Systems/CombatModeSubsystem.h"
+#include "Character/WolfCharacterBase.h"
 
 void URTCombatAbility::ActivateAbility(const FGameplayAbilitySpecHandle Handle,
                                        const FGameplayAbilityActorInfo* ActorInfo,
@@ -33,23 +34,35 @@ void URTCombatAbility::HandleAttackHitEvent(const FCombatPeriod& ContextPeriod)
 	WOLF_INFO(TEXT("Actor location is at %s"), *StartVector.ToString());
 	const auto EndVector = StartVector + Avatar->GetActorForwardVector() * AttackRange;
 
-	FHitResult HitResult;
-	const auto bHit = UKismetSystemLibrary::SphereTraceSingle(
+	TArray<FHitResult> Hits;
+	UKismetSystemLibrary::SphereTraceMulti(
 		this, StartVector, EndVector, AttackRadius,
 		UEngineTypes::ConvertToTraceType(ECC_Pawn), false, {Avatar},
-		EDrawDebugTrace::ForDuration, HitResult, true
+		EDrawDebugTrace::ForDuration, Hits, true, FLinearColor::Black, FLinearColor::Blue
 	);
 
-	if (bHit && HitResult.GetActor())
+	auto* MyASC = GetAbilitySystemComponentFromActorInfo();
+	if (!MyASC) return;
+
+	const auto AbilityLevel = GetAbilityLevel();
+
+	for (const FHitResult& Hit : Hits)
 	{
-		auto* MyASC = GetAbilitySystemComponentFromActorInfo();
-		auto* TargetASC = UAbilitySystemBlueprintLibrary::GetAbilitySystemComponent(HitResult.GetActor());
-		if (!MyASC || !TargetASC) return;
+		if (!Hit.GetActor() || Hit.GetActor() == Avatar) continue;
+
+		auto* TargetChar = Cast<AWolfCharacterBase>(Hit.GetActor());
+		if (!TargetChar)
+		{
+			WOLF_INFO("Hit actor is not a WolfCharacterBase: %s", *Hit.GetActor()->GetName());
+			continue;
+		}
+
+		WOLF_INFO("Hit character: %s", *TargetChar->GetName());
+		auto* TargetASC = UAbilitySystemBlueprintLibrary::GetAbilitySystemComponent(TargetChar);
+		if (!TargetASC) continue;
 
 		auto EffectContextHandle = MyASC->MakeEffectContext();
-		EffectContextHandle.AddHitResult(HitResult);
-
-		const auto AbilityLevel = GetAbilityLevel();
+		EffectContextHandle.AddHitResult(Hit);
 
 		auto ApplyEffect = [&](const TSubclassOf<UGameplayEffect>& EffectClass, const FScalableFloat& AttributeAmount,
 		                       bool bToTarget, FGameplayTag DataAmountTag = FWolfGameplayTags::Get().Data_Amount)
