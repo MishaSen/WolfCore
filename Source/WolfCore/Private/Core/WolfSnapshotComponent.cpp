@@ -36,7 +36,7 @@ void UWolfSnapshotComponent::BeginPlay()
 void UWolfSnapshotComponent::CreateSnapshot_Implementation(FActorSnapshot& OutSnapshot)
 {
 	if (!OwnerCharacter) return;
-	
+
 	OutSnapshot.ActorRef = OwnerCharacter.Get();
 	SnapshotPhysics(OutSnapshot);
 	SnapshotGAS(OutSnapshot);
@@ -61,7 +61,7 @@ void UWolfSnapshotComponent::SnapshotPhysics(FActorSnapshot& Snapshot) const
 	Snapshot.Velocity = OwnerCharacter->GetVelocity();
 	Snapshot.MovementMode = GetMoveComp()->MovementMode;
 	Snapshot.CustomMovementMode = GetMoveComp()->CustomMovementMode;
-	
+
 	const auto* Controller = OwnerCharacter->GetController();
 	if (!IsValid(Controller)) return;
 
@@ -73,15 +73,19 @@ void UWolfSnapshotComponent::SnapshotPhysics(FActorSnapshot& Snapshot) const
 
 		const auto& CurrentPeriod = Sequence[Index];
 		if (CurrentPeriod.Type == EPeriodType::MoveTo)
-			{
-				Snapshot.Destination = CurrentPeriod.MoveToDestination;
-				Snapshot.bIsMoving = true;
+		{
+			Snapshot.Destination = CurrentPeriod.MoveToDestination;
+			Snapshot.bIsMoving = true;
 
-				DrawDebugSphere(GetWorld(), Snapshot.Destination, 25.f, 12, FColor::Red, false, 5.f);
-				DrawDebugLine(GetWorld(), GetOwnerLocation(), Snapshot.Destination, FColor::Red, false, 5.f, 0, 2.f);
-			}
+			DrawDebugSphere(GetWorld(), Snapshot.Destination, 25.f, 12, FColor::Red, false, 5.f);
+			DrawDebugLine(GetWorld(), GetOwnerLocation(), Snapshot.Destination, FColor::Red, false, 5.f, 0, 2.f);
+		}
 	}
-	else { Snapshot.bIsMoving = false; Snapshot.Destination = FVector::ZeroVector; }
+	else
+	{
+		Snapshot.bIsMoving = false;
+		Snapshot.Destination = FVector::ZeroVector;
+	}
 
 	if (const auto* AICont = Cast<AAIController>(Controller);
 		const auto* BB = AICont->GetBlackboardComponent())
@@ -95,28 +99,24 @@ void UWolfSnapshotComponent::SnapshotPhysics(FActorSnapshot& Snapshot) const
 		}
 	}
 
-	if (Snapshot.TargetActor.IsValid())
-	{
-		WOLF_LOG(Log, TEXT("[Snapshot: %d] Character %s has Path Destination %s targeting %s. IsMoving = %s."),
-			SnapshotIndex,
-			*OwnerCharacter->GetName(),
-			*Snapshot.Destination.ToCompactString(),
-			Snapshot.TargetActor.IsValid() ? *Snapshot.TargetActor->GetName() : TEXT("None"),
-			Snapshot.bIsMoving ? TEXT ("True") : TEXT("False"));
-		SnapshotIndex++;
-	}
+	WOLF_LOG(Log, TEXT("[Snapshot: %d] Character %s has Path Destination %s targeting %s. IsMoving = %s."),
+	         SnapshotIndex,
+	         *OwnerCharacter->GetName(),
+	         *Snapshot.Destination.ToCompactString(),
+	         Snapshot.TargetActor.IsValid() ? *Snapshot.TargetActor->GetName() : TEXT("None"),
+	         Snapshot.bIsMoving ? TEXT ("True") : TEXT("False"));
+	SnapshotIndex++;
 }
 
 void UWolfSnapshotComponent::RestorePhysics(const FActorSnapshot& Snapshot)
 {
-	if (Snapshot.TargetActor.IsValid())
-	{
-		WOLF_LOG(Log, TEXT("Character %s has location %s and rotation %s."),
-			*OwnerCharacter.GetName(),
-			*OwnerCharacter->GetActorLocation().ToCompactString(),
-			*OwnerCharacter->GetActorRotation().ToCompactString());
-	}
-	
+	if (IsValid(OwnerCharacter)) return;
+
+	WOLF_LOG(Log, TEXT("Character %s has location %s and rotation %s."),
+	         *OwnerCharacter.GetName(),
+	         *OwnerCharacter->GetActorLocation().ToCompactString(),
+	         *OwnerCharacter->GetActorRotation().ToCompactString());
+
 	OwnerCharacter->SetActorLocationAndRotation
 	(
 		Snapshot.Location,
@@ -125,18 +125,16 @@ void UWolfSnapshotComponent::RestorePhysics(const FActorSnapshot& Snapshot)
 		nullptr,
 		ETeleportType::TeleportPhysics
 	);
-	if (Snapshot.TargetActor.IsValid())
-	{
-		WOLF_LOG(Log, TEXT("Set Character %s to location %s and rotation %s. He now has location %s and rotation %s."),
-			*OwnerCharacter.GetName(),
-			*Snapshot.Location.ToCompactString(),
-			*Snapshot.Rotation.ToCompactString(),
-			*OwnerCharacter->GetActorLocation().ToCompactString(),
-			*OwnerCharacter->GetActorRotation().ToCompactString());
 
-			DrawDebugSphere(GetWorld(), OwnerCharacter->GetActorLocation(), 25.f, 12, FColor::Green, false, 5.f);
-	}
-	
+	WOLF_LOG(Log, TEXT("Set Character %s to location %s and rotation %s. He now has location %s and rotation %s."),
+	         *OwnerCharacter.GetName(),
+	         *Snapshot.Location.ToCompactString(),
+	         *Snapshot.Rotation.ToCompactString(),
+	         *OwnerCharacter->GetActorLocation().ToCompactString(),
+	         *OwnerCharacter->GetActorRotation().ToCompactString());
+
+	DrawDebugSphere(GetWorld(), OwnerCharacter->GetActorLocation(), 25.f, 12, FColor::Green, false, 5.f);
+
 	auto* Capsule = OwnerCharacter->GetCapsuleComponent();
 	if (IsValid(Capsule))
 	{
@@ -153,7 +151,7 @@ void UWolfSnapshotComponent::RestorePhysics(const FActorSnapshot& Snapshot)
 		GetMoveComp()->Velocity = Snapshot.Velocity;
 		GetMoveComp()->UpdateComponentVelocity();
 	}
-	
+
 	auto* PrimitiveComp = Cast<UPrimitiveComponent>(OwnerCharacter->GetRootComponent());
 	if (IsValid(PrimitiveComp))
 	{
@@ -187,7 +185,7 @@ void UWolfSnapshotComponent::SnapshotGAS(FActorSnapshot& Snapshot) const
 	if (!IsValid(CachedASC) || !IsValid(AbilityControl)) return;
 
 	const auto& Attributes = AbilityControl->GetCachedAttributes();
-	
+
 	Snapshot.AttributeValues.Empty(Attributes.Num());
 	for (const auto& Attribute : Attributes)
 	{
@@ -214,7 +212,7 @@ void UWolfSnapshotComponent::SnapshotGAS(FActorSnapshot& Snapshot) const
 			Snapshot.ActiveEffects.Add(StoredEffect);
 		}
 	}
-	
+
 	auto* ActiveAbility = OwnerCharacter->GetActiveCombatAbility();
 	const auto CurrentIndex = ActiveAbility ? ActiveAbility->GetCurrentPeriodIndex() : -1;
 	if (IsValid(ActiveAbility) && ActiveAbility->GetAbilitySequence().IsValidIndex(CurrentIndex))
@@ -274,7 +272,8 @@ void UWolfSnapshotComponent::RestoreGAS(const FActorSnapshot& Snapshot)
 		const auto Montage = Snapshot.CurrentMontage.Get();
 		if (!IsValid(Montage) || !IsValid(GetAnimInst())) return;
 
-		if (GetAnimInst()->Montage_IsPlaying(Montage)) GetAnimInst()->Montage_SetPosition(Montage, Snapshot.MontagePosition);
+		if (GetAnimInst()->Montage_IsPlaying(Montage)) GetAnimInst()->Montage_SetPosition(
+			Montage, Snapshot.MontagePosition);
 		else
 		{
 			AbilityControl->GetWolfASC()->PlayMontage(
@@ -288,9 +287,27 @@ void UWolfSnapshotComponent::RestoreGAS(const FActorSnapshot& Snapshot)
 	}
 }
 
-FVector UWolfSnapshotComponent::GetOwnerLocation() const { return OwnerCharacter ? OwnerCharacter->GetActorLocation() : FVector::ZeroVector; }
-FRotator UWolfSnapshotComponent::GetOwnerRotation() const { return OwnerCharacter ? OwnerCharacter->GetActorRotation() : FRotator::ZeroRotator; }
+FVector UWolfSnapshotComponent::GetOwnerLocation() const
+{
+	return OwnerCharacter ? OwnerCharacter->GetActorLocation() : FVector::ZeroVector;
+}
 
-UAnimInstance* UWolfSnapshotComponent::GetAnimInst() const { return OwnerCharacter ? OwnerCharacter->GetAnimInst() : nullptr; }
-UAnimMontage* UWolfSnapshotComponent::GetCurrentMontage() const { return GetAnimInst() ? GetAnimInst()->GetCurrentActiveMontage() : nullptr; }
-UCombatModeSubsystem* UWolfSnapshotComponent::GetCMS() const { return OwnerCharacter ? OwnerCharacter->GetCMS() : nullptr; }
+FRotator UWolfSnapshotComponent::GetOwnerRotation() const
+{
+	return OwnerCharacter ? OwnerCharacter->GetActorRotation() : FRotator::ZeroRotator;
+}
+
+UAnimInstance* UWolfSnapshotComponent::GetAnimInst() const
+{
+	return OwnerCharacter ? OwnerCharacter->GetAnimInst() : nullptr;
+}
+
+UAnimMontage* UWolfSnapshotComponent::GetCurrentMontage() const
+{
+	return GetAnimInst() ? GetAnimInst()->GetCurrentActiveMontage() : nullptr;
+}
+
+UCombatModeSubsystem* UWolfSnapshotComponent::GetCMS() const
+{
+	return OwnerCharacter ? OwnerCharacter->GetCMS() : nullptr;
+}
