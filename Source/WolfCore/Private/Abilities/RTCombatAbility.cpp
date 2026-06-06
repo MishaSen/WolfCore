@@ -38,7 +38,7 @@ void URTCombatAbility::HandleAttackHitEvent(const FCombatPeriod& ContextPeriod)
 	UKismetSystemLibrary::SphereTraceMulti(
 		this, StartVector, EndVector, AttackRadius,
 		UEngineTypes::ConvertToTraceType(ECC_Pawn), false, {Avatar},
-		EDrawDebugTrace::ForDuration, Hits, true, FLinearColor::Black, FLinearColor::Blue
+		EDrawDebugTrace::None, Hits, false
 	);
 
 	auto* MyASC = GetAbilitySystemComponentFromActorInfo();
@@ -48,18 +48,30 @@ void URTCombatAbility::HandleAttackHitEvent(const FCombatPeriod& ContextPeriod)
 
 	for (const FHitResult& Hit : Hits)
 	{
-		if (!Hit.GetActor() || Hit.GetActor() == Avatar) continue;
+		if (!Hit.GetActor() || Hit.GetActor() == Avatar)
+		{
+			DrawDebugCylinder(this->GetWorld(), StartVector, EndVector, AttackRadius, 12, FColor::Red,
+				false, 3, 1, 1);
+
+			continue;
+		}
 
 		auto* TargetChar = Cast<AWolfCharacterBase>(Hit.GetActor());
 		if (!TargetChar)
 		{
 			WOLF_INFO("Hit actor is not a WolfCharacterBase: %s", *Hit.GetActor()->GetName());
+			DrawDebugCylinder(this->GetWorld(), StartVector, EndVector, AttackRadius, 12, FColor::Red,
+				false, 3, 1, 1);
+			
 			continue;
 		}
 
 		WOLF_INFO("Hit character: %s", *TargetChar->GetName());
 		auto* TargetASC = UAbilitySystemBlueprintLibrary::GetAbilitySystemComponent(TargetChar);
 		if (!TargetASC) continue;
+
+		DrawDebugCylinder(this->GetWorld(), StartVector, EndVector, AttackRadius, 12, FColor::Green,
+			false, 3, 1, 1);
 
 		auto EffectContextHandle = MyASC->MakeEffectContext();
 		EffectContextHandle.AddHitResult(Hit);
