@@ -54,4 +54,8 @@ protected:
 	 * @param ContextPeriod Reference to the FCombatPeriod currently executing its attack phase.
 	 */
 	virtual void HandleAttackHitEvent(const FCombatPeriod& ContextPeriod) override;
+
+protected:
+	/** Draws the attack debug cylinder based on hit evaluation results. */
+	void DrawAttackDebugCylinder(const FVector& StartPos, const FVector& EndPos, float Radius, bool bValidTargetFound) const;
 };

@@ -30,9 +30,9 @@ void URTCombatAbility::HandleAttackHitEvent(const FCombatPeriod& ContextPeriod)
 	auto* Avatar = GetAvatarActorFromActorInfo();
 	if (!Avatar) return;
 
-	const auto StartVector = Avatar->GetActorLocation();
+	const FVector StartVector = Avatar->GetActorLocation();
 	WOLF_INFO(TEXT("Actor location is at %s"), *StartVector.ToString());
-	const auto EndVector = StartVector + Avatar->GetActorForwardVector() * AttackRange;
+	const FVector EndVector = StartVector + Avatar->GetActorForwardVector() * AttackRange;
 
 	TArray<FHitResult> Hits;
 	UKismetSystemLibrary::SphereTraceMulti(
@@ -45,33 +45,21 @@ void URTCombatAbility::HandleAttackHitEvent(const FCombatPeriod& ContextPeriod)
 	if (!MyASC) return;
 
 	const auto AbilityLevel = GetAbilityLevel();
+	bool bValidTargetFound = false;
 
 	for (const FHitResult& Hit : Hits)
 	{
-		if (!Hit.GetActor() || Hit.GetActor() == Avatar)
-		{
-			DrawDebugCylinder(this->GetWorld(), StartVector, EndVector, AttackRadius, 12, FColor::Red,
-				false, 3, 1, 1);
-
-			continue;
-		}
-
 		auto* TargetChar = Cast<AWolfCharacterBase>(Hit.GetActor());
-		if (!TargetChar)
+		if (!TargetChar || TargetChar == Avatar)
 		{
-			WOLF_INFO("Hit actor is not a WolfCharacterBase: %s", *Hit.GetActor()->GetName());
-			DrawDebugCylinder(this->GetWorld(), StartVector, EndVector, AttackRadius, 12, FColor::Red,
-				false, 3, 1, 1);
-			
 			continue;
 		}
 
-		WOLF_INFO("Hit character: %s", *TargetChar->GetName());
 		auto* TargetASC = UAbilitySystemBlueprintLibrary::GetAbilitySystemComponent(TargetChar);
 		if (!TargetASC) continue;
 
-		DrawDebugCylinder(this->GetWorld(), StartVector, EndVector, AttackRadius, 12, FColor::Green,
-			false, 3, 1, 1);
+		bValidTargetFound = true;
+		WOLF_INFO("Hit character: %s", *TargetChar->GetName());
 
 		auto EffectContextHandle = MyASC->MakeEffectContext();
 		EffectContextHandle.AddHitResult(Hit);
@@ -92,4 +80,18 @@ void URTCombatAbility::HandleAttackHitEvent(const FCombatPeriod& ContextPeriod)
 		ApplyEffect(AdrenalineGainEffect, ContextPeriod.AdrenalineGain, false);
 		ApplyEffect(DamageEffect, ContextPeriod.Damage, true);
 	}
+
+	DrawAttackDebugCylinder(StartVector, EndVector, AttackRadius, bValidTargetFound);
+}
+
+void URTCombatAbility::DrawAttackDebugCylinder(const FVector& StartPos, const FVector& EndPos, float Radius, bool bValidTargetFound) const
+{
+	const FColor CylinderColor = bValidTargetFound ? FColor::Green : FColor::Red;
+	constexpr float Duration = 3.0f;
+
+	DrawDebugCylinder(
+		GetAvatarActorFromActorInfo()->GetWorld(),
+		StartPos, EndPos, Radius, 12,
+		CylinderColor, false, Duration, 0, 1.0f
+	);
 }
