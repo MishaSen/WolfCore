@@ -4,6 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "BaseCombatAbility.h"
+#include "Core/WolfGameplayTags.h"
 #include "RTCombatAbility.generated.h"
 
 // ============================================================================================================================
@@ -56,6 +57,15 @@ protected:
 	virtual void HandleAttackHitEvent(const FCombatPeriod& ContextPeriod) override;
 
 protected:
-	/** Draws the attack debug cylinder based on hit evaluation results. */
-	void DrawAttackDebugCylinder(const FVector& StartPos, const FVector& EndPos, float Radius, bool bValidTargetFound) const;
-};
+	/** Performs a sphere trace query from Start to End, storing results in OutHits. */
+	void PerformAttackTrace(AActor* Avatar, const FVector& Start, const FVector& End, TArray<FHitResult>& OutHits);
+
+	/** Processes a single hit result: validates target, resolves ASC, applies combat effects. Returns true if a valid target was processed. */
+	bool ProcessAttackHit(const FHitResult& Hit, const FCombatPeriod& ContextPeriod, const AActor* Avatar, UAbilitySystemComponent* MyASC, float AbilityLevel);
+
+	/** Applies a gameplay effect from SourceASC to TargetASC (or self if bToTarget is false) with the given parameters. */
+	static void ApplyCombatEffect(UAbilitySystemComponent* SourceASC, UAbilitySystemComponent* TargetASC, const FGameplayEffectContextHandle& EffectContext, float AbilityLevel, const TSubclassOf<UGameplayEffect>& EffectClass, const FScalableFloat& Amount, bool bToTarget, FGameplayTag DataAmountTag = FWolfGameplayTags::Get().Data_Amount);
+
+	/** Draws a debug cylinder along the trace path — green if any valid target was hit, red otherwise. */
+	static void DrawAttackDebugCylinder(const AActor* Avatar, const FVector& StartPos, const FVector& EndPos, float Radius, bool bValidTargetFound);
+ };
