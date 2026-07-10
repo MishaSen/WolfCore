@@ -27,6 +27,37 @@ enum class EPeriodType : uint8
 };
 
 /**
+ * Describes a single GameplayEffect application tied to a combat period — the effect class,
+ * its magnitude, and whether it targets the source (self) or the target actor.
+ */
+USTRUCT(BlueprintType)
+struct FCombatHitEffect
+{
+	GENERATED_BODY()
+
+	/** GameplayEffect to apply. If unset, this entry is skipped. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "WolfCore|Hit Effects")
+	TSubclassOf<UGameplayEffect> EffectClass;
+
+	/** Magnitude passed via SetByCaller. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "WolfCore|Hit Effects")
+	FScalableFloat Amount = 0.f;
+
+	/** True = apply to the source (attacking) actor. False = apply to the target actor. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "WolfCore|Hit Effects")
+	bool bSelfTarget = false;
+
+	/**
+	 * SetByCaller tag for the magnitude. Left invalid by default; UBaseCombatAbility::ApplyHitEffects
+	 * falls back to FWolfGameplayTags::Get().Data_Amount when this is unset, matching current
+	 * behavior where every effect used the same tag. Can be overridden per-entry if a future GE
+	 * needs a distinct SetByCaller tag.
+	 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "WolfCore|Hit Effects")
+	FGameplayTag DataAmountTag;
+};
+
+/**
  * Describes a single period within a combat ability sequence (montage, duration, attribute effects).
  */
 USTRUCT(BlueprintType)
@@ -52,17 +83,9 @@ struct FCombatPeriod
 
 	// --- Attribute Data ---
 
-	/** Scalable float defining the Flow gauge gain amount applied during this period. */
+	/** All GameplayEffects applied when this period's hit resolves (damage, resource gain, etc). */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "WolfCore|Attribute Effects")
-	FScalableFloat FlowGain = 0.f;
-
-	/** Scalable float defining the Adrenaline gauge gain amount applied during this period. */
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "WolfCore|Attribute Effects")
-	FScalableFloat AdrenalineGain = 0.f;
-
-	/** Scalable float defining the damage value dealt during this attack period. */
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "WolfCore|Attribute Effects")
-	FScalableFloat Damage = 0.f;
+	TArray<FCombatHitEffect> HitEffects;
 
 	/** Attack range in centimeters for hit detection and collision prediction. */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "WolfCore|Movement")
@@ -245,17 +268,23 @@ protected:
 	 */
 	virtual void HandleAttackHitEvent(const FCombatPeriod& CurrentAttackPeriod);
 
-	// --- Attribute Effects ---
+	// ============================================================================================================================
+	// Hit Effect Application
+	// ============================================================================================================================
 
-	/** Subclass of GameplayEffect used for Flow gauge gain application during combat periods. */
-	UPROPERTY(EditDefaultsOnly, Category = "WolfCore|Combat | Effects")
-	TSubclassOf<UGameplayEffect> FlowGainEffect;
-
-	/** Subclass of GameplayEffect used for Adrenaline gauge gain application during combat periods. */
-	UPROPERTY(EditDefaultsOnly, Category = "WolfCore|Combat | Effects")
-	TSubclassOf<UGameplayEffect> AdrenalineGainEffect;
-
-	/** Subclass of GameplayEffect used for damage application and hit resolution during attacks. */
-	UPROPERTY(EditDefaultsOnly, Category = "WolfCore|Combat | Effects")
-	TSubclassOf<UGameplayEffect> DamageEffect;
+	/**
+	 * Applies every FCombatHitEffect entry in Period between this ability's source actor and
+	 * TargetActor. Central extension point so derived abilities (RT trace-based, TB
+	 * prediction-based) share one application path. Virtual so a derived ability can override
+	 * application semantics if it ever needs to (e.g. different mitigation rules) without touching
+	 * callers.
+	 *
+	 * @param Period      The period whose HitEffects should be applied.
+	 * @param TargetActor The resolved target actor (RT: trace hit actor; TB: blackboard target).
+	 * @param HitResult    Optional trace hit result, added to the effect context if present.
+	 * @return True if at least one effect was applied. Kept as bool since RT's debug draw and
+	 *         potential future callers can use it; if it ends up unused by every caller, this can
+	 *         be simplified to void later.
+	 */
+	virtual bool ApplyHitEffects(const FCombatPeriod& Period, AActor* TargetActor, const FHitResult* HitResult = nullptr);
 };

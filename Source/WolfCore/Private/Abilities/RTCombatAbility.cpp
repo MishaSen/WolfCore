@@ -37,15 +37,11 @@ void URTCombatAbility::HandleAttackHitEvent(const FCombatPeriod& ContextPeriod)
 	TArray<FHitResult> Hits;
 	PerformAttackTrace(Avatar, StartVector, EndVector, Hits);
 
-	auto* MyASC = GetAbilitySystemComponentFromActorInfo();
-	if (!MyASC) return;
-
-	const auto AbilityLevel = GetAbilityLevel();
 	bool bValidTargetFound = false;
 
 	for (const FHitResult& Hit : Hits)
 	{
-		if (ProcessAttackHit(Hit, ContextPeriod, Avatar, MyASC, AbilityLevel))
+		if (ProcessAttackHit(Hit, ContextPeriod, Avatar))
 		{
 			bValidTargetFound = true;
 		}
@@ -64,7 +60,7 @@ void URTCombatAbility::PerformAttackTrace(AActor* Avatar, const FVector& Start, 
 	);
 }
 
-bool URTCombatAbility::ProcessAttackHit(const FHitResult& Hit, const FCombatPeriod& ContextPeriod, const AActor* Avatar, UAbilitySystemComponent* MyASC, float AbilityLevel)
+bool URTCombatAbility::ProcessAttackHit(const FHitResult& Hit, const FCombatPeriod& ContextPeriod, const AActor* Avatar)
 {
 	auto* TargetChar = Cast<AWolfCharacterBase>(Hit.GetActor());
 	if (!TargetChar || TargetChar == Avatar)
@@ -76,26 +72,9 @@ bool URTCombatAbility::ProcessAttackHit(const FHitResult& Hit, const FCombatPeri
 	if (!TargetASC) return false;
 
 	WOLF_INFO("Hit character: %s", *TargetChar->GetName());
-
-	auto EffectContextHandle = MyASC->MakeEffectContext();
-	EffectContextHandle.AddHitResult(Hit);
-
-	ApplyCombatEffect(MyASC, TargetASC, EffectContextHandle, AbilityLevel, FlowGainEffect, ContextPeriod.FlowGain, false);
-	ApplyCombatEffect(MyASC, TargetASC, EffectContextHandle, AbilityLevel, AdrenalineGainEffect, ContextPeriod.AdrenalineGain, false);
-	ApplyCombatEffect(MyASC, TargetASC, EffectContextHandle, AbilityLevel, DamageEffect, ContextPeriod.Damage, true);
+	ApplyHitEffects(ContextPeriod, TargetChar, &Hit);
 
 	return true;
-}
-
-void URTCombatAbility::ApplyCombatEffect(UAbilitySystemComponent* SourceASC, UAbilitySystemComponent* TargetASC, const FGameplayEffectContextHandle& EffectContext, float AbilityLevel, const TSubclassOf<UGameplayEffect>& EffectClass, const FScalableFloat& Amount, bool bToTarget, FGameplayTag DataAmountTag)
-{
-	if (!EffectClass) return;
-
-	const auto EffectSpecHandle = SourceASC->MakeOutgoingSpec(EffectClass, AbilityLevel, EffectContext);
-	EffectSpecHandle.Data->SetSetByCallerMagnitude(DataAmountTag, Amount.GetValueAtLevel(AbilityLevel));
-
-	if (bToTarget) SourceASC->ApplyGameplayEffectSpecToTarget(*EffectSpecHandle.Data.Get(), TargetASC);
-	else SourceASC->ApplyGameplayEffectSpecToSelf(*EffectSpecHandle.Data.Get());
 }
 
 void URTCombatAbility::DrawAttackDebugCylinder(const AActor* Avatar, const FVector& StartPos, const FVector& EndPos, float Radius, bool bValidTargetFound)

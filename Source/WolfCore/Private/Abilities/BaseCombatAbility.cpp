@@ -4,6 +4,7 @@
 #include "WolfCore/Public/Abilities/BaseCombatAbility.h"
 
 #include "AIController.h"
+#include "AbilitySystemBlueprintLibrary.h"
 #include "Abilities/Notifies/AnimNotify_Hit.h"
 #include "Abilities/Tasks/AbilityTask_PlayMontageAndWait.h"
 #include "Abilities/Tasks/AbilityTask_WaitDelay.h"
@@ -232,6 +233,44 @@ void UBaseCombatAbility::OnEventReceived(FGameplayEventData EventData)
 void UBaseCombatAbility::HandleAttackHitEvent(const FCombatPeriod& CurrentAttackPeriod)
 {
 	// Override in children
+}
+
+bool UBaseCombatAbility::ApplyHitEffects(const FCombatPeriod& Period, AActor* TargetActor, const FHitResult* HitResult)
+{
+	if (!TargetActor) return false;
+
+	auto* SourceASC = GetAbilitySystemComponentFromActorInfo();
+	if (!SourceASC) return false;
+
+	auto* TargetASC = UAbilitySystemBlueprintLibrary::GetAbilitySystemComponent(TargetActor);
+	if (!TargetASC) return false;
+
+	auto EffectContext = SourceASC->MakeEffectContext();
+	if (HitResult) EffectContext.AddHitResult(*HitResult);
+
+	const auto AbilityLevel = GetAbilityLevel();
+	bool bAppliedAny = false;
+
+	for (const FCombatHitEffect& Effect : Period.HitEffects)
+	{
+		if (!Effect.EffectClass) continue;
+
+		const auto EffectSpecHandle = SourceASC->MakeOutgoingSpec(Effect.EffectClass, AbilityLevel, EffectContext);
+		if (!EffectSpecHandle.IsValid()) continue;
+
+		const FGameplayTag AmountTag = Effect.DataAmountTag.IsValid()
+			? Effect.DataAmountTag
+			: FWolfGameplayTags::Get().Data_Amount;
+
+		EffectSpecHandle.Data->SetSetByCallerMagnitude(AmountTag, Effect.Amount.GetValueAtLevel(AbilityLevel));
+
+		if (Effect.bSelfTarget) SourceASC->ApplyGameplayEffectSpecToSelf(*EffectSpecHandle.Data.Get());
+		else                    SourceASC->ApplyGameplayEffectSpecToTarget(*EffectSpecHandle.Data.Get(), TargetASC);
+
+		bAppliedAny = true;
+	}
+
+	return bAppliedAny;
 }
 
 float UBaseCombatAbility::GetPeriodDuration(const FCombatPeriod& Period)
