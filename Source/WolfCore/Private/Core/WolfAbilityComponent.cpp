@@ -23,6 +23,7 @@ void UWolfAbilityComponent::InitializeAbilitySystem(AActor* InOwner)
 		CacheASC->RegisterComponent();
 
 		AttributeSet = NewObject<UWolfAttributeSet>(InOwner, TEXT("AttributeSet"));
+		CacheASC->AddAttributeSetSubobject<UWolfAttributeSet>(AttributeSet);
 
 		WOLF_LOG(Log, TEXT("AbilitySystemComponent initialized for %s."), *InOwner->GetName());
 	}
