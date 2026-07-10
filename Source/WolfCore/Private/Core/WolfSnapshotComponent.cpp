@@ -110,7 +110,7 @@ void UWolfSnapshotComponent::SnapshotPhysics(FActorSnapshot& Snapshot) const
 
 void UWolfSnapshotComponent::RestorePhysics(const FActorSnapshot& Snapshot)
 {
-	if (IsValid(OwnerCharacter)) return;
+	if (!IsValid(OwnerCharacter)) return;
 
 	WOLF_LOG(Log, TEXT("Character %s has location %s and rotation %s."),
 	         *OwnerCharacter.GetName(),
