@@ -4,6 +4,7 @@
 #include "WolfCore/Public/Abilities/BaseCombatAbility.h"
 
 #include "AIController.h"
+#include "Engine.h"
 #include "AbilitySystemBlueprintLibrary.h"
 #include "Abilities/Notifies/AnimNotify_Hit.h"
 #include "Abilities/Tasks/AbilityTask_PlayMontageAndWait.h"
