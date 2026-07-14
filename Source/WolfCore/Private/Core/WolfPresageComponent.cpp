@@ -81,7 +81,7 @@ void UWolfPresageComponent::SimulateTick(float Step)
 
 void UWolfPresageComponent::ClearPredictionBuffer(float MaxDuration)
 {
-	const float StepSize = GetCMS() ? GetCMS()->GetBakedStepSize() : WolfSimConfig::Step;
+	const float StepSize = GetCMS() ? GetCMS()->GetBakedStepSize() : 0.1f; // Fallback only; GetCMS() should not normally be null.
 	const int32 ExpectedFrames = FMath::CeilToInt(MaxDuration / StepSize);
 	PredictionBuffer.Empty(ExpectedFrames);
 }
@@ -93,7 +93,7 @@ const FActorSnapshot* UWolfPresageComponent::GetSnapshotAtTime(float RelativeTim
 	// Read the step size from the subsystem that owns the bake-time invariant.
 	// This ensures index math uses the actual step size used during ExecuteFutureBake,
 	// not a compile-time constant that could drift out of sync if the simulator changes.
-	const float StepSize = GetCMS() ? GetCMS()->GetBakedStepSize() : WolfSimConfig::Step;
+	const float StepSize = GetCMS() ? GetCMS()->GetBakedStepSize() : 0.1f; // Fallback only; GetCMS() should not normally be null.
 	const int32 Index = FMath::Clamp(
 		FMath::RoundToInt(RelativeTime / StepSize),
 		0,

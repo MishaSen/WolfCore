@@ -141,12 +141,13 @@ protected:
 	UPROPERTY(EditDefaultsOnly, Category = "WolfCore|Timeline")
 	float MaxTimelineDuration = 5.f;
 
-private:
+	private:
 	/** The fixed step size (seconds) used to produce the current PredictionBuffer contents across
-	  * every combatant in the active bake. Set once at the start of ExecuteFutureBake(); every
-	  * UWolfPresageComponent::GetSnapshotAtTime() call reads this rather than WolfSimConfig::Step
-	  * directly, so a future change to the simulator's step size only needs to update this one path. */
-	float BakedStepSize = WolfSimConfig::Step;
+	  * every combatant in the active bake. Set once at the start of ExecuteFutureBake() from
+	  * UWolfCombatSettings::PresageSimulationStep; every UWolfPresageComponent::GetSnapshotAtTime()
+	  * call reads this via GetBakedStepSize(), so a designer-tuned change to the simulation rate
+	  * only needs to update this one path. */
+	float BakedStepSize = 0.1f; // Fallback only; overwritten from UWolfCombatSettings in SetMode().
 
 	/** Handles completion of presage effect loading, applying the loaded gameplay effect to the player's ability system. */
 	void OnPresageEffectLoaded();

@@ -143,7 +143,10 @@ void UCombatModeSubsystem::SetMode(FGameplayTag NewMode)
 		CurrentTimelineTime = -1.f;
 
 		// Set the step size used for all PredictionBuffer index math during this bake.
-		BakedStepSize = WolfSimConfig::Step;
+		if (const auto* Settings = GetDefault<UWolfCombatSettings>())
+		{
+			BakedStepSize = FMath::Max(Settings->PresageSimulationStep, 0.01f);
+		}
 		FWolfPresageSimulator::ExecuteFutureBake(TrackedCombatants, MaxTimelineDuration, BakedStepSize);
 		ScrubTimeline(0.f);
 	}

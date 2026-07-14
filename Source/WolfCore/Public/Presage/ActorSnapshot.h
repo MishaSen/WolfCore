@@ -14,20 +14,6 @@ class UBTNode;
 class UGameplayEffect;
 
 // ============================================================================================================================
-// Simulation Configuration Constants
-// ============================================================================================================================
-
-/** Namespace containing simulation configuration constants for temporal prediction and presage tick rates. */
-namespace WolfSimConfig
-{
-	/** Simulation frequency in Hz defining the number of ticks per second during presage prediction. */
-	static constexpr float Frequency = 10.f;
-
-	/** Fixed time step in seconds between each simulation tick during temporal prediction. */
-	static constexpr float Step = 0.1f;
-}
-
-// ============================================================================================================================
 // Stored Gameplay Effect
 // ============================================================================================================================
 
