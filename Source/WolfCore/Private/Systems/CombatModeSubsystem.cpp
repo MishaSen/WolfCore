@@ -141,7 +141,10 @@ void UCombatModeSubsystem::SetMode(FGameplayTag NewMode)
 
 		// Reset to a sentinel value so ScrubTimeline(0.f) is not skipped by the IsNearlyEqual check.
 		CurrentTimelineTime = -1.f;
-		FWolfPresageSimulator::ExecuteFutureBake(TrackedCombatants, MaxTimelineDuration);
+
+		// Set the step size used for all PredictionBuffer index math during this bake.
+		BakedStepSize = WolfSimConfig::Step;
+		FWolfPresageSimulator::ExecuteFutureBake(TrackedCombatants, MaxTimelineDuration, BakedStepSize);
 		ScrubTimeline(0.f);
 	}
     else

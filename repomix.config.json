@@ -1,0 +1,26 @@
+{
+  "output": {
+    "filePath": "repomix-output.txt",
+    "style": "xml"
+  },
+  "ignore": {
+    "customPatterns": [
+      "Binaries/**",
+      "DerivedDataCache/**",
+      "Intermediate/**",
+      "Saved/**",
+      ".idea/**",
+      ".vs/**",
+      ".cline/**",
+      ".clinerules",
+      "clineignore",
+      "Content/**",
+      "Plugins/**",
+      "*.uasset",
+      "*.umap",
+      "*.target",
+      "*.modules",
+      "*.DotSettings.user"
+    ]
+  }
+}

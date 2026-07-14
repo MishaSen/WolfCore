@@ -13,7 +13,7 @@
 #include "Navigation/PathFollowingComponent.h"
 #include "Presage/ActorSnapshot.h"
 
-void FWolfPresageSimulator::ExecuteFutureBake(const TArray<TScriptInterface<IWolfCombatant>>& Combatants, float Duration)
+void FWolfPresageSimulator::ExecuteFutureBake(const TArray<TScriptInterface<IWolfCombatant>>& Combatants, float Duration, float StepSize)
 {
 	if (Combatants.Num() == 0 || FMath::IsNearlyEqual(Duration, 0.f)) return;
 
@@ -24,8 +24,7 @@ void FWolfPresageSimulator::ExecuteFutureBake(const TArray<TScriptInterface<IWol
 	}
 
 	// Phase 2: Bake simulation steps.
-	constexpr float Step = WolfSimConfig::Step;
-	const int32 TotalSteps = FMath::CeilToInt(Duration / Step);
+	const int32 TotalSteps = FMath::CeilToInt(Duration / StepSize);
 
 	WOLF_LOG(Log, TEXT("Baking Future: %d steps over %.2fs"), TotalSteps, Duration);
 
@@ -34,7 +33,7 @@ void FWolfPresageSimulator::ExecuteFutureBake(const TArray<TScriptInterface<IWol
 		//WOLF_LOG(Log, TEXT("[SIM] Step %d"), i);
 		for (auto& Combatant : Combatants)
 		{
-			BakeSimulationStep(Combatant, Step);
+			BakeSimulationStep(Combatant, StepSize);
 		}
 	}
 
@@ -68,7 +67,7 @@ void FWolfPresageSimulator::SetupCombatantSimulation(const TScriptInterface<IWol
 
 	if (const auto* Pawn = Cast<APawn>(Actor))
 	{
-		if (auto* AIC = Cast<AAIController>(Pawn->GetController()))
+		if (const auto* AIC = Cast<AAIController>(Pawn->GetController()))
 		{
 			if (auto* PFC = AIC->GetPathFollowingComponent())
 			{

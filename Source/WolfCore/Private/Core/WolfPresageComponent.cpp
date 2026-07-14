@@ -16,6 +16,7 @@
 #include "DrawDebugHelpers.h"
 #include "Misc/TransactionObjectEvent.h"
 #include "Core/WolfSnapshotComponent.h"
+#include "Systems/CombatModeSubsystem.h"
 
 UWolfPresageComponent::UWolfPresageComponent()
 {
@@ -80,7 +81,8 @@ void UWolfPresageComponent::SimulateTick(float Step)
 
 void UWolfPresageComponent::ClearPredictionBuffer(float MaxDuration)
 {
-	const int32 ExpectedFrames = FMath::CeilToInt(MaxDuration * WolfSimConfig::Frequency);
+	const float StepSize = GetCMS() ? GetCMS()->GetBakedStepSize() : WolfSimConfig::Step;
+	const int32 ExpectedFrames = FMath::CeilToInt(MaxDuration / StepSize);
 	PredictionBuffer.Empty(ExpectedFrames);
 }
 
@@ -88,10 +90,14 @@ const FActorSnapshot* UWolfPresageComponent::GetSnapshotAtTime(float RelativeTim
 {
 	if (PredictionBuffer.Num() == 0) return nullptr;
 
-	const int32 Index = FMath::Clamp(FMath::RoundToInt(RelativeTime * WolfSimConfig::Frequency),
-								// Snapshot lookup will drift if the Subsystem uses a variable step or different fixed rate.
-							   0,
-							   PredictionBuffer.Num() - 1);
+	// Read the step size from the subsystem that owns the bake-time invariant.
+	// This ensures index math uses the actual step size used during ExecuteFutureBake,
+	// not a compile-time constant that could drift out of sync if the simulator changes.
+	const float StepSize = GetCMS() ? GetCMS()->GetBakedStepSize() : WolfSimConfig::Step;
+	const int32 Index = FMath::Clamp(
+		FMath::RoundToInt(RelativeTime / StepSize),
+		0,
+		PredictionBuffer.Num() - 1);
 	return &PredictionBuffer[Index];
 }
 

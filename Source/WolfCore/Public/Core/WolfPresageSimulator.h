@@ -30,8 +30,9 @@ struct WOLFCORE_API FWolfPresageSimulator
 	 * 
 	 * @param Combatants Array of combatant interfaces to simulate
 	 * @param Duration Total simulation duration in seconds
+	 * @param StepSize
 	 */
-	static void ExecuteFutureBake(const TArray<TScriptInterface<IWolfCombatant>>& Combatants, float Duration);
+	static void ExecuteFutureBake(const TArray<TScriptInterface<IWolfCombatant>>& Combatants, float Duration, float StepSize);
 
 	/**
 	 * Applies presage drain effect to an actor based on their current combat mode state.

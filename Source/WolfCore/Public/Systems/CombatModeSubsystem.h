@@ -116,6 +116,11 @@ public:
 	/** Returns the array of weak references to tracked combatants currently registered with this subsystem. */
 	const TArray<TScriptInterface<IWolfCombatant>>& GetTrackedCombatants() const { return TrackedCombatants; }
 
+	/** Returns the fixed step size (seconds) used to produce the current PredictionBuffer contents.
+	  * This value is set once at bake-start and read by every UWolfPresageComponent::GetSnapshotAtTime()
+	  * call, ensuring index math uses the actual step size rather than a compile-time constant. */
+	float GetBakedStepSize() const { return BakedStepSize; }
+
 	// ============================================================================================================================
 	// Events
 	// ============================================================================================================================
@@ -137,6 +142,12 @@ protected:
 	float MaxTimelineDuration = 5.f;
 
 private:
+	/** The fixed step size (seconds) used to produce the current PredictionBuffer contents across
+	  * every combatant in the active bake. Set once at the start of ExecuteFutureBake(); every
+	  * UWolfPresageComponent::GetSnapshotAtTime() call reads this rather than WolfSimConfig::Step
+	  * directly, so a future change to the simulator's step size only needs to update this one path. */
+	float BakedStepSize = WolfSimConfig::Step;
+
 	/** Handles completion of presage effect loading, applying the loaded gameplay effect to the player's ability system. */
 	void OnPresageEffectLoaded();
 
