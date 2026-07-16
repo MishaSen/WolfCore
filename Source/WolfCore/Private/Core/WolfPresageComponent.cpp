@@ -236,6 +236,7 @@ void UWolfPresageComponent::EndSimulation()
 	SimulatedAbility = nullptr;
 	bSimulatedAbilityActive = false;
 	LastSimulatedPeriodIndex = -1;
+	ClearInjectedAbilityRequest();
 }
 
 UBaseCombatAbility* UWolfPresageComponent::GetActiveSimulationAbility() const
@@ -244,7 +245,12 @@ UBaseCombatAbility* UWolfPresageComponent::GetActiveSimulationAbility() const
 
 	if (auto* RealAbility = CharacterOwner->GetActiveCombatAbility())
 	{
-		return RealAbility;
+		if (RealAbility->GetAbilitySequence().IsValidIndex(RealAbility->GetCurrentPeriodIndex()))
+		{
+			return RealAbility;
+		}
+		// RealAbility's simulated sequence has run its course for this bake — fall through so an
+		// injected ability (if any) can take over instead of being permanently blocked.
 	}
 
 	if (bSimulatedAbilityActive && SimulatedAbility)
