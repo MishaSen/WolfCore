@@ -5,6 +5,7 @@
 #include "CoreMinimal.h"
 #include "Core/WolfGameplayTags.h"
 #include "Presage/ActorSnapshot.h"
+#include "Presage/PresageOrchestratorTypes.h"
 #include "Subsystems/WorldSubsystem.h"
 #include "Interfaces/IWolfCombatant.h"
 #include "CombatModeSubsystem.generated.h"
@@ -12,6 +13,7 @@
 struct FStreamableHandle;
 class UAbilitySystemComponent;
 class UWolfCombatant;
+class UBaseCombatAbility;
 
 /**
  * Delegate broadcast when the global combat mode changes.
@@ -94,6 +96,9 @@ public:
 	 */
 	void ScrubTimeline(float NewTime);
 
+	/** Re-bakes the prediction timeline from the master snapshot, preserving the current scrub position. */
+	void ReBakeTimeline();
+
 	/** Returns a reference to the master snapshot captured at the start of the current simulation session. */
 	const FTemporalStates& GetMasterSnapshot() const { return MasterStartSnapshot; }
 
@@ -120,6 +125,14 @@ public:
 	  * This value is set once at bake-start and read by every UWolfPresageComponent::GetSnapshotAtTime()
 	  * call, ensuring index math uses the actual step size rather than a compile-time constant. */
 	float GetBakedStepSize() const { return BakedStepSize; }
+
+	/**
+	 * Returns the cached timing profile for the given ability class, computing and caching it on
+	 * first request via UBaseCombatAbility::ComputeAbilityTiming against the class's CDO sequence.
+	 * Returns a default-constructed (all-zero) FAbilityTimingProfile if AbilityClass is null.
+	 * Not called from anywhere yet in this stage.
+	 */
+	const FAbilityTimingProfile& GetOrComputeTimingProfile(TSubclassOf<UBaseCombatAbility> AbilityClass);
 
 	// ============================================================================================================================
 	// Events
@@ -148,6 +161,14 @@ protected:
 	  * call reads this via GetBakedStepSize(), so a designer-tuned change to the simulation rate
 	  * only needs to update this one path. */
 	float BakedStepSize = 0.1f; // Fallback only; overwritten from UWolfCombatSettings in SetMode().
+
+	/** Cache of derived ability timing profiles, keyed by ability class. AbilitySequence is
+	  * authored per-class and doesn't vary per instance, so this is computed once per class on
+	  * first request rather than recomputed for every planning decision. Not populated or read
+	  * anywhere yet — added in this stage as inert storage; stage 3 (planning) is the first
+	  * consumer. */
+	UPROPERTY()
+	TMap<TSubclassOf<UBaseCombatAbility>, FAbilityTimingProfile> TimingProfileCache;
 
 	/** Handles completion of presage effect loading, applying the loaded gameplay effect to the player's ability system. */
 	void OnPresageEffectLoaded();

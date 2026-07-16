@@ -6,11 +6,37 @@
 #include "Abilities/TBCombatAbility.h"
 #include "Character/WolfCharacterBase.h"
 #include "Core/WolfGameplayTags.h"
+#include "Core/WolfPresageComponent.h"
 #include "Debug/WolfDebug.h"
+#include "Systems/CombatModeSubsystem.h"
+
+bool UWolfAbilitySystemComponent::TryInjectPresageAbility(const FGameplayTag& Tag)
+{
+	auto* Avatar = Cast<AWolfCharacterBase>(GetAvatarActor());
+	if (!Avatar) return false;
+
+	auto* CMS = Avatar->GetCMS();
+	if (!CMS || !CMS->bIsInTB) return false;
+
+	const auto Request = BuildInitialPresageRequest(Tag, Avatar->GatherPresageTargets());
+	if (!Request.AbilityClass) return false;
+
+	if (auto* Presage = Avatar->GetPresageComponent())
+	{
+		Presage->SetInjectedAbilityRequest(Request);
+		CMS->ReBakeTimeline();
+		WOLF_LOG(Log, TEXT("Presage injected %s for %s"), *Tag.ToString(), *Avatar->GetName());
+		return true;
+	}
+
+	return false;
+}
 
 void UWolfAbilitySystemComponent::AbilityInputTagPressed(const FGameplayTag& Tag)
 {
 	if (!Tag.IsValid()) return;
+
+	if (TryInjectPresageAbility(Tag)) return;
 
 	FScopedAbilityListLock ActiveScopeLock(*this);
 	for (auto& AbilitySpec : GetActivatableAbilities())
@@ -45,6 +71,8 @@ void UWolfAbilitySystemComponent::AbilityInputTagReleased(const FGameplayTag& Ta
 void UWolfAbilitySystemComponent::AbilityInputTagHeld(const FGameplayTag& Tag)
 {
 	if (!Tag.IsValid()) return;
+
+	if (TryInjectPresageAbility(Tag)) return;
 
 	FScopedAbilityListLock ActiveScopeLock(*this);
 	for (auto& AbilitySpec : GetActivatableAbilities())

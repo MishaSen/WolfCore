@@ -184,6 +184,79 @@ void UBaseCombatAbility::ExecuteMoveTo(FCombatPeriod& Period)
 	}
 }
 
+void UBaseCombatAbility::InitializeForSimulation(const TArray<FCombatPeriod>& InSequence)
+{
+	AbilitySequence = InSequence;
+	CurrentPeriodIndex = 0;
+	CurrentPeriodStartTime = 0.f;
+}
+
+void UBaseCombatAbility::ResolveMoveToDestinations(TArray<FCombatPeriod>& Sequence, const FVector& SourceLocation, AActor* Target)
+{
+	if (!Target) return;
+
+	for (auto& Period : Sequence)
+	{
+		if (Period.Type != EPeriodType::MoveTo) continue;
+
+		const FVector TargetLocation = Target->GetActorLocation();
+		const FVector Direction = (TargetLocation - SourceLocation).GetSafeNormal2D();
+		Period.MoveToDestination = TargetLocation - Direction * Period.Range;
+	}
+}
+
+FAbilityTimingProfile UBaseCombatAbility::ComputeAbilityTiming(const TArray<FCombatPeriod>& Sequence)
+{
+	FAbilityTimingProfile Profile;
+
+	int32 FirstHitPeriod = INDEX_NONE;
+	int32 LastHitPeriod = INDEX_NONE;
+	float TotalDuration = 0.f;
+
+	for (int32 i = 0; i < Sequence.Num(); ++i)
+	{
+		if (Sequence[i].HitEffects.Num() > 0)
+		{
+			if (FirstHitPeriod == INDEX_NONE)
+			{
+				FirstHitPeriod = i;
+			}
+			LastHitPeriod = i;
+		}
+		TotalDuration += Sequence[i].Duration;
+	}
+
+	Profile.TotalDuration = TotalDuration;
+
+	if (FirstHitPeriod == INDEX_NONE)
+	{
+		// No hit-capable periods at all (e.g. a pure movement/buff ability) — treat the entire
+		// sequence as windup, with no active window and no recovery.
+		Profile.WindupDuration = TotalDuration;
+		Profile.ActiveWindowStart = TotalDuration;
+		Profile.ActiveWindowEnd = TotalDuration;
+		Profile.RecoveryDuration = 0.f;
+		return Profile;
+	}
+
+	float RunningTime = 0.f;
+	for (int32 i = 0; i < FirstHitPeriod; ++i)
+	{
+		RunningTime += Sequence[i].Duration;
+	}
+	Profile.WindupDuration = RunningTime;
+	Profile.ActiveWindowStart = RunningTime;
+
+	for (int32 i = FirstHitPeriod; i <= LastHitPeriod; ++i)
+	{
+		RunningTime += Sequence[i].Duration;
+	}
+	Profile.ActiveWindowEnd = RunningTime;
+
+	Profile.RecoveryDuration = Profile.TotalDuration - Profile.ActiveWindowEnd;
+	return Profile;
+}
+
 float UBaseCombatAbility::CalculateMovementDuration(float TotalDistance, float MaxVelocity, float Acceleration, float StartVelocity)
 {
 	if (Acceleration <= 0.f) return StartVelocity > 0.f ? TotalDistance / StartVelocity : 0.f;

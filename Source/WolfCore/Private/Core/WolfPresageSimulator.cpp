@@ -55,7 +55,7 @@ void FWolfPresageSimulator::SetupCombatantSimulation(const TScriptInterface<IWol
 	// Clear prediction buffer. SetSimPeriodTime to 0 so AdvancePeriod computes
 	// remaining duration from the actor's current position, not elapsed time.
 	Presage->ClearPredictionBuffer(Duration);
-	Presage->SetSimPeriodTime(0.f);
+	Presage->BeginSimulation();
 
 	// Freeze movement components so the AI cannot move the actor during the synchronous bake.
 	auto* MoveComp = Actor->FindComponentByClass<UCharacterMovementComponent>();
@@ -92,6 +92,12 @@ void FWolfPresageSimulator::CleanupCombatantSimulation(const TScriptInterface<IW
 {
 	const auto* Actor = Cast<AActor>(Combatant.GetObject());
 	if (!IsValid(Actor)) return;
+
+	auto* Presage = Combatant.GetInterface()->GetPresageComponent();
+	if (IsValid(Presage))
+	{
+		Presage->EndSimulation();
+	}
 
 	// Re-enable movement ticks. The subsequent ScrubTimeline(0.f) in SetMode
 	// will restore the actor to its pre-bake position via MasterStartSnapshot.

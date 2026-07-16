@@ -4,7 +4,9 @@
 
 #include "Abilities/BaseCombatAbility.h"
 #include "AbilitySystem/WolfAttributeSet.h"
+#include "AIController.h"
 #include "Animation/AnimInstance.h"
+#include "BehaviorTree/BlackboardComponent.h"
 #include "Components/CapsuleComponent.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "Core/WolfAbilityComponent.h"
@@ -291,6 +293,41 @@ UBaseCombatAbility* AWolfCharacterBase::GetActiveCombatAbility() const
 		}
 	}
 	return nullptr;
+}
+
+TArray<TWeakObjectPtr<AActor>> AWolfCharacterBase::GatherPresageTargets() const
+{
+	TArray<TWeakObjectPtr<AActor>> Targets;
+
+	if (const auto* CharacterController = GetController())
+	{
+		if (const auto* AIC = Cast<AAIController>(CharacterController))
+		{
+			if (const auto* BB = AIC->GetBlackboardComponent())
+			{
+				if (auto* Target = Cast<AActor>(BB->GetValueAsObject(TEXT("TargetActor"))))
+				{
+					Targets.Add(Target);
+					return Targets;
+				}
+			}
+		}
+	}
+
+	if (const auto* CMS = GetCMS())
+	{
+		for (const auto& Combatant : CMS->GetTrackedCombatants())
+		{
+			if (Combatant.GetObject() == this) continue;
+			if (auto* Other = Cast<AActor>(Combatant.GetObject()))
+			{
+				Targets.Add(Other);
+				return Targets;
+			}
+		}
+	}
+
+	return Targets;
 }
 
 void AWolfCharacterBase::OnAbilityActivated(UBaseCombatAbility* Ability)

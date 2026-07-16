@@ -4,11 +4,13 @@
 
 #include "Components/ActorComponent.h"
 #include "Presage/ActorSnapshot.h"
+#include "Presage/PresageAbilityRequest.h"
 #include "Presage/Snapshot.h"
 #include "WolfPresageComponent.generated.h"
 
 class AWolfCharacterBase;
 class UAnimInstance;
+class UBaseCombatAbility;
 class UCombatModeSubsystem;
 class UCharacterMovementComponent;
 class UWolfAbilityComponent;
@@ -47,6 +49,25 @@ public:
 	 * @return Pointer to the FActorSnapshot at the specified time, or nullptr if not found.
 	 */
 	const FActorSnapshot* GetSnapshotAtTime(float RelativeTime) const;
+
+	// ============================================================================================================================
+	// Public API - Ability Injection
+	// ============================================================================================================================
+
+	/** Stores a presage ability request to be simulated during the next bake. */
+	void SetInjectedAbilityRequest(const FPresageAbilityRequest& Request);
+
+	/** Clears any pending injected ability request. */
+	void ClearInjectedAbilityRequest();
+
+	/** Returns whether a presage ability request is queued for simulation. */
+	bool HasInjectedAbilityRequest() const { return InjectedAbilityRequest.AbilityClass != nullptr; }
+
+	/** Called at the start of a bake to reset per-simulation state. */
+	void BeginSimulation();
+
+	/** Called at the end of a bake to tear down transient simulation objects. */
+	void EndSimulation();
 
 	// ============================================================================================================================
 	// Public API - Simulation Control
@@ -134,12 +155,38 @@ private:
 	/** Provides fast access to the Snapshot component for state capture during simulation. */
 	class UWolfSnapshotComponent* GetSnapshotControl() const;
 
+	/** Returns the ability driving the current simulation step (real or injected). */
+	UBaseCombatAbility* GetActiveSimulationAbility() const;
+
+	/** Activates the injected ability once the scheduled time is reached. */
+	void TryActivateInjectedAbility();
+
+	/** Syncs the animation montage to the current simulated ability period. */
+	void SyncSimulationMontage(UBaseCombatAbility* Ability);
+
 	// ============================================================================================================================
 	// Internal State
 	// ============================================================================================================================
 
 	/** Time delta accumulated during the current simulation period. */
 	float SimPeriodTime = 0.f;
+
+	/** Total elapsed simulation time since the current bake began. */
+	float SimElapsedTime = 0.f;
+
+	/** Whether the injected ability has been activated during this bake. */
+	bool bSimulatedAbilityActive = false;
+
+	/** Transient ability instance created for injected presage simulation. */
+	UPROPERTY(Transient)
+	TObjectPtr<UBaseCombatAbility> SimulatedAbility = nullptr;
+
+	/** Ability request queued for injection during the next bake. */
+	UPROPERTY(Transient)
+	FPresageAbilityRequest InjectedAbilityRequest;
+
+	/** Period index from the previous simulation step, used to detect period transitions. */
+	int32 LastSimulatedPeriodIndex = -1;
 
 	/** Array of snapshots capturing the prediction buffer for temporal state queries and visualization. */
 	UPROPERTY(Transient, VisibleInstanceOnly, Category = "WolfCore|Internal")

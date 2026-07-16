@@ -4,6 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "Abilities/GameplayAbility.h"
+#include "Presage/PresageOrchestratorTypes.h"
 #include "BaseCombatAbility.generated.h"
 
 // ============================================================================================================================
@@ -204,6 +205,22 @@ public:
 	 * @return Float representing the estimated movement duration in seconds.
 	 */
 	static float CalculateMovementDuration(float TotalDistance, float MaxVelocity, float Acceleration, float StartVelocity);
+
+	/** Initializes a transient ability instance for presage simulation with a copied sequence. */
+	void InitializeForSimulation(const TArray<FCombatPeriod>& InSequence);
+
+	/** Resolves MoveTo destinations in a sequence using a source location and target actor. */
+	static void ResolveMoveToDestinations(TArray<FCombatPeriod>& Sequence, const FVector& SourceLocation, AActor* Target);
+
+	/**
+	 * Computes a derived timing breakdown (windup / active window / recovery) for the given
+	 * ability sequence. The active window is defined as the span from the first period containing
+	 * at least one FCombatHitEffect through the last such period. Sequences with no hit-capable
+	 * periods are treated as pure windup with no active window and no recovery.
+	 * This is a pure function of the sequence data — it does not read any instance state and does
+	 * not require a valid ability instance to call.
+	 */
+	static FAbilityTimingProfile ComputeAbilityTiming(const TArray<FCombatPeriod>& Sequence);
 
 	// ============================================================================================================================
 	// Execution State (Protected)

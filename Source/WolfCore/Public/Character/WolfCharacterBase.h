@@ -148,6 +148,9 @@ public:
 	 */
 	UBaseCombatAbility* GetActiveCombatAbility() const;
 
+	/** Gathers target actors for presage ability injection. */
+	TArray<TWeakObjectPtr<AActor>> GatherPresageTargets() const;
+
 	// ============================================================================================================================
 	// Public API - Combat Queries
 	// ============================================================================================================================

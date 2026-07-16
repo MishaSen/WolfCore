@@ -4,6 +4,7 @@
 #include "Core/WolfPresageComponent.h"
 
 #include "Abilities/AbilityPeriodAdvancer.h"
+#include "Abilities/BaseCombatAbility.h"
 #include "AIController.h"
 #include "BehaviorTree/BlackboardComponent.h"
 #include "Character/WolfCharacterBase.h"
@@ -39,14 +40,19 @@ void UWolfPresageComponent::SimulateTick(float Step)
 {
 	if (!CharacterOwner) return;
 
+	SimElapsedTime += Step;
+	TryActivateInjectedAbility();
+
 	SimulatePhysicsStep(Step);
 	SimulateAnimationStep(Step);
 
 	// Advance period BEFORE snapshot capture so that both CreateSnapshot and
 	// CurrentPeriodIndex assignment reflect the same post-advancement state.
 	SimPeriodTime += Step;
-	if (auto* ActiveAbility = CharacterOwner->GetActiveCombatAbility())
+	if (auto* ActiveAbility = GetActiveSimulationAbility())
 	{
+		const int32 PeriodBeforeAdvance = ActiveAbility->GetCurrentPeriodIndex();
+
 		SimPeriodTime = FAbilityPeriodAdvancer::AdvancePeriod(
 			ActiveAbility,
 			SimPeriodTime,
@@ -63,7 +69,7 @@ void UWolfPresageComponent::SimulateTick(float Step)
 		ISnapshot::Execute_CreateSnapshot(SnapshotControl, FutureFrame);
 	}
 
-	FutureFrame.ActiveAbility = CharacterOwner->GetActiveCombatAbility();
+	FutureFrame.ActiveAbility = GetActiveSimulationAbility();
 	FutureFrame.CurrentPeriodIndex = FutureFrame.ActiveAbility.IsValid()
 		? FutureFrame.ActiveAbility->GetCurrentPeriodIndex()
 		: -1;
@@ -127,7 +133,7 @@ FVector UWolfPresageComponent::GetSimulatedVelocity(FVector& Destination) const
 {
 	const FVector Velocity = GetMoveComp()->Velocity;
 	
-	if (const auto* Ability = CharacterOwner->GetActiveCombatAbility())
+	if (const auto* Ability = GetActiveSimulationAbility())
 	{
 		const auto& Sequence = Ability->GetAbilitySequence();
 		const auto Index = Ability->GetCurrentPeriodIndex();
@@ -204,4 +210,104 @@ UCombatModeSubsystem* UWolfPresageComponent::GetCMS() const { return CharacterOw
 UWolfSnapshotComponent* UWolfPresageComponent::GetSnapshotControl() const
 {
 	return CharacterOwner ? CharacterOwner->GetSnapshotComponent() : nullptr;
+}
+
+void UWolfPresageComponent::SetInjectedAbilityRequest(const FPresageAbilityRequest& Request)
+{
+	InjectedAbilityRequest = Request;
+}
+
+void UWolfPresageComponent::ClearInjectedAbilityRequest()
+{
+	InjectedAbilityRequest = FPresageAbilityRequest();
+}
+
+void UWolfPresageComponent::BeginSimulation()
+{
+	SimElapsedTime = 0.f;
+	SimPeriodTime = 0.f;
+	bSimulatedAbilityActive = false;
+	LastSimulatedPeriodIndex = -1;
+	SimulatedAbility = nullptr;
+}
+
+void UWolfPresageComponent::EndSimulation()
+{
+	SimulatedAbility = nullptr;
+	bSimulatedAbilityActive = false;
+	LastSimulatedPeriodIndex = -1;
+}
+
+UBaseCombatAbility* UWolfPresageComponent::GetActiveSimulationAbility() const
+{
+	if (!CharacterOwner) return nullptr;
+
+	if (auto* RealAbility = CharacterOwner->GetActiveCombatAbility())
+	{
+		return RealAbility;
+	}
+
+	if (bSimulatedAbilityActive && SimulatedAbility)
+	{
+		return SimulatedAbility;
+	}
+
+	return nullptr;
+}
+
+void UWolfPresageComponent::TryActivateInjectedAbility()
+{
+	if (bSimulatedAbilityActive || !HasInjectedAbilityRequest()) return;
+	if (SimElapsedTime < InjectedAbilityRequest.GetScheduledTime()) return;
+
+	SimulatedAbility = NewObject<UBaseCombatAbility>(
+		this,
+		InjectedAbilityRequest.AbilityClass,
+		NAME_None,
+		RF_Transient);
+
+	TArray<FCombatPeriod> Sequence = InjectedAbilityRequest.GetAbilitySequence();
+
+	AActor* Target = nullptr;
+	for (const auto& WeakTarget : InjectedAbilityRequest.GetTargets())
+	{
+		if (WeakTarget.IsValid())
+		{
+			Target = WeakTarget.Get();
+			break;
+		}
+	}
+
+	UBaseCombatAbility::ResolveMoveToDestinations(
+		Sequence,
+		CharacterOwner->GetActorLocation(),
+		Target);
+
+	SimulatedAbility->InitializeForSimulation(Sequence);
+	bSimulatedAbilityActive = true;
+	LastSimulatedPeriodIndex = 0;
+	SyncSimulationMontage(SimulatedAbility);
+
+	WOLF_LOG(Log, TEXT("[PRESAGE] Injected %s at t=%.2fs for %s"),
+		*InjectedAbilityRequest.AbilityClass->GetName(),
+		SimElapsedTime,
+		*CharacterOwner->GetName());
+}
+
+void UWolfPresageComponent::SyncSimulationMontage(UBaseCombatAbility* Ability)
+{
+	if (!Ability) return;
+
+	const auto& Sequence = Ability->GetAbilitySequence();
+	const int32 Index = Ability->GetCurrentPeriodIndex();
+	if (!Sequence.IsValidIndex(Index)) return;
+
+	const auto& Period = Sequence[Index];
+	if (!IsValid(Period.Montage)) return;
+
+	if (auto* AnimInst = GetAnimInst())
+	{
+		AnimInst->Montage_Play(Period.Montage);
+		AnimInst->Montage_SetPosition(Period.Montage, 0.f);
+	}
 }

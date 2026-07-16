@@ -12,6 +12,7 @@
 #include "Core/WolfGameplayTags.h"
 #include "Core/WolfPresageComponent.h"
 #include "Core/WolfPlayerController.h"
+#include "Abilities/BaseCombatAbility.h"
 #include "Debug/WolfDebug.h"
 #include "Engine/AssetManager.h"
 #include "GameFramework/Pawn.h"
@@ -200,6 +201,34 @@ void UCombatModeSubsystem::ScrubTimeline(float NewTime)
 	WOLF_LOG(Log, TEXT("Timeline Scrubbed to : %.2fs /  %.2fs"), CurrentTimelineTime, MaxTimelineDuration);
 }
 
+void UCombatModeSubsystem::ReBakeTimeline()
+{
+	if (!bIsInTB) return;
+
+	const auto* World = GetWorld();
+	if (!IsValid(World)) return;
+
+	for (auto& Combatant : TrackedCombatants)
+	{
+		auto* Obj = Combatant.GetObject();
+		if (!IsValid(Obj)) continue;
+
+		const auto* AnchorState = MasterStartSnapshot.ActorStates.Find(Cast<AActor>(Obj));
+		if (AnchorState)
+		{
+			ISnapshot::Execute_RestoreSnapshot(Obj, *AnchorState);
+		}
+	}
+
+	const float ScrubTime = CurrentTimelineTime;
+	FWolfPresageSimulator::ExecuteFutureBake(TrackedCombatants, MaxTimelineDuration, BakedStepSize);
+
+	CurrentTimelineTime = -1.f;
+	ScrubTimeline(ScrubTime);
+
+	WOLF_LOG(Log, TEXT("Timeline re-baked with injected abilities. Scrub position: %.2fs"), ScrubTime);
+}
+
 void UCombatModeSubsystem::HandlePresageDrainEffect(UAbilitySystemComponent* ASC, FGameplayTag CurrentActorMode)
 {
 	FWolfPresageSimulator::ApplyPresageDrainEffect(ASC, CurrentActorMode, PresageEffectClass);
@@ -293,4 +322,25 @@ float UCombatModeSubsystem::GetDilationForMode(const FGameplayTag& Mode)
 
 	WOLF_WARN(TEXT("Dilation Map missing tag: %s. Defaulting to 1.f"), *Mode.ToString());
 	return 1.f;
+}
+
+const FAbilityTimingProfile& UCombatModeSubsystem::GetOrComputeTimingProfile(TSubclassOf<UBaseCombatAbility> AbilityClass)
+{
+	static const FAbilityTimingProfile DefaultProfile;
+	if (!AbilityClass)
+	{
+		return DefaultProfile;
+	}
+
+	if (const FAbilityTimingProfile* Existing = TimingProfileCache.Find(AbilityClass))
+	{
+		return *Existing;
+	}
+
+	const auto* CDO = AbilityClass->GetDefaultObject<UBaseCombatAbility>();
+	const FAbilityTimingProfile Computed = CDO
+		? UBaseCombatAbility::ComputeAbilityTiming(CDO->GetAbilitySequence())
+		: FAbilityTimingProfile();
+
+	return TimingProfileCache.Add(AbilityClass, Computed);
 }

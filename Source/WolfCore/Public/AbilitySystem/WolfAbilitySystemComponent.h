@@ -60,4 +60,8 @@ public:
 	 * @return FPresageAbilityRequest containing the request data for temporal prediction queries.
 	 */
 	FPresageAbilityRequest BuildInitialPresageRequest(const FGameplayTag& Tag, const TArray<TWeakObjectPtr<AActor>>& Targets);
+
+private:
+	/** In TB mode, queues a presage ability request and re-bakes the timeline instead of activating GAS. */
+	bool TryInjectPresageAbility(const FGameplayTag& Tag);
 };
