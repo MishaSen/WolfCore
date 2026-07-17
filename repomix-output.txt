@@ -93,6 +93,7 @@ Source/
       Presage/
         ActorSnapshot.cpp
         PresageAbilityRequest.cpp
+        PresageOrchestrator.cpp
         Snapshot.cpp
       Systems/
         CombatModeSubsystem.cpp
@@ -146,6 +147,7 @@ Source/
       Presage/
         ActorSnapshot.h
         PresageAbilityRequest.h
+        PresageOrchestrator.h
         PresageOrchestratorTypes.h
         Snapshot.h
       Systems/
@@ -754,6 +756,112 @@ const UInputAction* UWolfInputConfig::FindAbilityInputActionForTag(const FGamepl
 #include "WolfCore/Public/Presage/PresageAbilityRequest.h"
 </file>
 
+<file path="Source/WolfCore/Private/Presage/PresageOrchestrator.cpp">
+#include "Presage/PresageOrchestrator.h"
+
+#include "Systems/CombatModeSubsystem.h"
+#include "Abilities/BaseCombatAbility.h"
+#include "Core/WolfCombatSettings.h"
+#include "Core/WolfPresageComponent.h"
+#include "GameFramework/Pawn.h"
+
+TSubclassOf<UBaseCombatAbility> FPresageOrchestrator::DecideIntent_Stub()
+{
+	const auto* Settings = GetDefault<UWolfCombatSettings>();
+	return Settings ? Settings->DefaultPresageStubAbility : nullptr;
+}
+
+TArray<FIntentEntry> FPresageOrchestrator::RunPlanning(
+	UCombatModeSubsystem* CMS,
+	const TArray<TScriptInterface<IWolfCombatant>>& Combatants,
+	float Duration)
+{
+	TArray<FIntentEntry> Ledger;
+	if (!CMS) return Ledger;
+
+	for (const auto& Combatant : Combatants)
+	{
+		const auto* Actor = Cast<AActor>(Combatant.GetObject());
+		if (!IsValid(Actor)) continue;
+
+		auto* Presage = Combatant.GetInterface() ? Combatant.GetInterface()->GetPresageComponent() : nullptr;
+		if (!IsValid(Presage)) continue;
+
+		const auto* Pawn = Cast<APawn>(Actor);
+		const bool bIsPlayer = Pawn && Pawn->IsPlayerControlled();
+
+		if (bIsPlayer)
+		{
+			// Player's own intent comes from the existing injection mechanism, not the orchestrator.
+			// At most one entry — Execution does not auto-continue the player past it (stage 3 scope).
+			if (Presage->HasInjectedAbilityRequest())
+			{
+				const auto& Request = Presage->GetInjectedAbilityRequest();
+
+				FIntentEntry Entry;
+				Entry.Combatant = Combatant;
+				Entry.AbilityClass = Request.AbilityClass;
+				Entry.Timing = CMS->GetOrComputeTimingProfile(Request.AbilityClass);
+				Entry.StartTime = Request.GetScheduledTime();
+				Entry.Status = EIntentStatus::Confirmed;
+
+				for (const auto& WeakTarget : Request.GetTargets())
+				{
+					if (WeakTarget.IsValid())
+					{
+						Entry.Target = WeakTarget;
+						break;
+					}
+				}
+
+				Ledger.Add(Entry);
+			}
+			continue;
+		}
+
+		// AI combatant: chain the stub ability back-to-back until it covers the full duration.
+		// Real disposition/negotiation/interrupts are not implemented yet (stage 4/5).
+		float TimeCursor = 0.f;
+		while (TimeCursor < Duration)
+		{
+			const auto AbilityClass = DecideIntent_Stub();
+			if (!AbilityClass) break; // nothing configured — leave this combatant with no plan.
+
+			FIntentEntry Entry;
+			Entry.Combatant = Combatant;
+			Entry.AbilityClass = AbilityClass;
+			Entry.Timing = CMS->GetOrComputeTimingProfile(AbilityClass);
+			Entry.StartTime = TimeCursor;
+			Entry.Status = EIntentStatus::Confirmed;
+			Ledger.Add(Entry);
+
+			// Guard against a zero-duration stub ability looping forever.
+			TimeCursor += FMath::Max(Entry.Timing.TotalDuration, KINDA_SMALL_NUMBER);
+		}
+	}
+
+	return Ledger;
+}
+
+void FPresageOrchestrator::DistributePlan(
+	const TArray<TScriptInterface<IWolfCombatant>>& Combatants,
+	const TArray<FIntentEntry>& Plan)
+{
+	for (const auto& Combatant : Combatants)
+	{
+		auto* Presage = Combatant.GetInterface() ? Combatant.GetInterface()->GetPresageComponent() : nullptr;
+		if (!IsValid(Presage)) continue;
+
+		TArray<FIntentEntry> ForThisCombatant = Plan.FilterByPredicate(
+			[&Combatant](const FIntentEntry& Entry) { return Entry.Combatant == Combatant; });
+
+		ForThisCombatant.Sort([](const FIntentEntry& A, const FIntentEntry& B) { return A.StartTime < B.StartTime; });
+
+		Presage->SetPlannedIntents(ForThisCombatant);
+	}
+}
+</file>
+
 <file path="Source/WolfCore/Private/Presage/Snapshot.cpp">
 // Fill out your copyright notice in the Description page of Project Settings.
 
@@ -933,6 +1041,54 @@ protected:
 
 	UFUNCTION()
 	void OnPerceptionUpdated(AActor* Actor, FAIStimulus Stimulus);
+};
+</file>
+
+<file path="Source/WolfCore/Public/Presage/PresageOrchestrator.h">
+// Fill out your copyright notice in the Description page of Project Settings.
+
+#pragma once
+
+#include "CoreMinimal.h"
+#include "Presage/PresageOrchestratorTypes.h"
+#include "Interfaces/IWolfCombatant.h"
+
+class UCombatModeSubsystem;
+class UBaseCombatAbility;
+
+/**
+ * Presage planning phase. Produces a finalized per-combatant Action Plan (as a flat list of
+ * FIntentEntry, grouped by combatant when distributed) before FWolfPresageSimulator::ExecuteFutureBake
+ * runs. Stage 3: negotiation, interrupts, and real AI decision-making are not implemented yet — see
+ * PresageOrchestratorStage3Spec.md for what this stage deliberately stubs.
+ */
+class WOLFCORE_API FPresageOrchestrator
+{
+	GENERATED_BODY()
+
+public:
+	/** Runs planning for the given combatants over the given duration, returning a flat intent
+	  * ledger (not yet grouped per-combatant — see DistributePlan). */
+	static TArray<FIntentEntry> RunPlanning(
+		UCombatModeSubsystem* CMS,
+		const TArray<TScriptInterface<IWolfCombatant>>& Combatants,
+		float Duration);
+
+	/** Groups the flat ledger by combatant, sorts each group by StartTime, and pushes each
+	  * combatant's slice into its own UWolfPresageComponent via SetPlannedIntents(). Must be called
+	  * before FWolfPresageSimulator::ExecuteFutureBake for the same bake. */
+	static void DistributePlan(
+		const TArray<TScriptInterface<IWolfCombatant>>& Combatants,
+		const TArray<FIntentEntry>& Plan);
+
+private:
+	/**
+	 * STAGE 3 STUB — returns UWolfCombatSettings::DefaultPresageStubAbility unconditionally. Real
+	 * AI decision-making (constraint-gated ability selection, disposition-weighted negotiation) is
+	 * stage 5. This function's only job right now is giving Execution something non-trivial to
+	 * chain through, to validate the plumbing.
+	 */
+	static TSubclassOf<UBaseCombatAbility> DecideIntent_Stub();
 };
 </file>
 
@@ -4136,6 +4292,13 @@ public:
 	UPROPERTY(Config, EditAnywhere, Category = "WolfCore|Presage")
 	TArray<FInterruptResponseOption> DefaultInterruptResponses;
 
+	/** STAGE 3 STUB ONLY. Placeholder ability every AI-controlled combatant repeatedly "chooses"
+	  * for the full bake duration, used to validate the planning/execution plumbing end-to-end.
+	  * Replaced by real AI decision-making in stage 5 — do not build gameplay content against this
+	  * being the permanent mechanism. */
+	UPROPERTY(Config, EditAnywhere, Category = "WolfCore|Presage")
+	TSubclassOf<UBaseCombatAbility> DefaultPresageStubAbility;
+
 	// ============================================================================================================================
 	// Combat Mode Configuration
 	// ============================================================================================================================
@@ -4835,6 +4998,7 @@ struct FTemporalStates
 #include "Components/ActorComponent.h"
 #include "Presage/ActorSnapshot.h"
 #include "Presage/PresageAbilityRequest.h"
+#include "Presage/PresageOrchestratorTypes.h"
 #include "Presage/Snapshot.h"
 #include "WolfPresageComponent.generated.h"
 
@@ -4892,6 +5056,16 @@ public:
 
 	/** Returns whether a presage ability request is queued for simulation. */
 	bool HasInjectedAbilityRequest() const { return InjectedAbilityRequest.AbilityClass != nullptr; }
+
+	/** Returns the currently queued presage ability request. Only meaningful if
+	  * HasInjectedAbilityRequest() is true. Read by FPresageOrchestrator::RunPlanning to fold the
+	  * player's own intent into the same ledger AI combatants use. */
+	const FPresageAbilityRequest& GetInjectedAbilityRequest() const { return InjectedAbilityRequest; }
+
+	/** Sets this combatant's slice of the current bake's finalized Action Plan, replacing anything
+	  * previously set, and resets playback to the first entry. Called once per bake by
+	  * FPresageOrchestrator::DistributePlan, before ExecuteFutureBake runs. */
+	void SetPlannedIntents(const TArray<FIntentEntry>& Intents);
 
 	/** Called at the start of a bake to reset per-simulation state. */
 	void BeginSimulation();
@@ -4988,8 +5162,8 @@ private:
 	/** Returns the ability driving the current simulation step (real or injected). */
 	UBaseCombatAbility* GetActiveSimulationAbility() const;
 
-	/** Activates the injected ability once the scheduled time is reached. */
-	void TryActivateInjectedAbility();
+	/** Activates this combatant's next planned intent once its scheduled StartTime is reached. */
+	void TryActivateNextPlannedIntent();
 
 	/** Syncs the animation montage to the current simulated ability period. */
 	void SyncSimulationMontage(UBaseCombatAbility* Ability);
@@ -5010,6 +5184,15 @@ private:
 	/** Transient ability instance created for injected presage simulation. */
 	UPROPERTY(Transient)
 	TObjectPtr<UBaseCombatAbility> SimulatedAbility = nullptr;
+
+	/** This combatant's slice of the current bake's Action Plan, set once per bake by
+	  * FPresageOrchestrator::DistributePlan. Ordered by StartTime. */
+	UPROPERTY(Transient)
+	TArray<FIntentEntry> PlannedIntents;
+
+	/** Index into PlannedIntents of the next entry to activate. Advanced by SimulateTick() once
+	  * the current planned entry's simulated ability sequence is exhausted. */
+	int32 NextPlannedIntentIndex = 0;
 
 	/** Ability request queued for injection during the next bake. */
 	UPROPERTY(Transient)
@@ -5033,6 +5216,230 @@ private:
 	/** Cached reference to the Ability System Component (ASC) for performance optimization during simulation ticks. */
 	UPROPERTY(Transient, VisibleInstanceOnly, Category = "WolfCore|Internal")
 	TObjectPtr<UWolfAbilitySystemComponent> CachedASC;
+};
+</file>
+
+<file path="Source/WolfCore/Public/Systems/CombatModeSubsystem.h">
+// Fill out your copyright notice in the Description page of Project Settings.
+
+#pragma once
+
+#include "CoreMinimal.h"
+#include "Core/WolfGameplayTags.h"
+#include "Presage/ActorSnapshot.h"
+#include "Presage/PresageOrchestratorTypes.h"
+#include "Subsystems/WorldSubsystem.h"
+#include "Interfaces/IWolfCombatant.h"
+#include "CombatModeSubsystem.generated.h"
+
+struct FStreamableHandle;
+class UAbilitySystemComponent;
+class UWolfCombatant;
+class UBaseCombatAbility;
+
+/**
+ * Delegate broadcast when the global combat mode changes.
+ */
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnCombatModeChanged, FGameplayTag, NewMode);
+
+/**
+ * World subsystem managing combat mode state (Real-Time / Turn-Based).
+ * Handles mode transitions, time dilation, temporal snapshots, and presage simulation coordination.
+ */
+UCLASS()
+class WOLFCORE_API UCombatModeSubsystem : public UWorldSubsystem
+{
+	GENERATED_BODY()
+
+	// ============================================================================================================================
+	// Lifecycle
+	// ============================================================================================================================
+
+	/** Initializes the subsystem when it is registered with the world, setting up internal state and tag references. */
+	/**
+	 * @param Collection Reference to the FSubsystemCollectionBase containing all initialized subsystems.
+	 */
+	virtual void Initialize(FSubsystemCollectionBase& Collection) override;
+
+	/** Called when the world begins play, initializing combat mode state and loading default configuration. */
+	/**
+	 * @param InWorld Pointer to the UWorld being loaded for subsystem initialization.
+	 */
+	virtual void OnWorldBeginPlay(UWorld& InWorld) override;
+
+	// ============================================================================================================================
+	// Public API - Mode Management
+	// ============================================================================================================================
+
+public:
+	/** Sets the global combat mode to a new value, triggering mode transitions and updating all registered combatants. */
+	/**
+	 * @param NewMode The FGameplayTag representing the new combat mode (e.g., RT, TB).
+	 */
+	void SetMode(FGameplayTag NewMode);
+
+	/** Switches between combat modes using the player's current selection from the game instance configuration. */
+	void SwitchCombatMode();
+
+	/** Applies a specific combat mode to an individual actor, updating their ability system and state accordingly. */
+	/**
+	 * @param Combatant Pointer to the AActor whose combat mode is being updated (can be any actor type).
+	 * @param NewMode The FGameplayTag representing the new combat mode to apply.
+	 */
+	void ApplyModeToActor(const TScriptInterface<IWolfCombatant>& Combatant, FGameplayTag NewMode);
+
+	/** Returns the current global combat mode as a GameplayTag for Blueprint queries and runtime checks. */
+	UFUNCTION(BlueprintPure, Meta = (DisplayName = "Get Current Mode"), Category = "WolfCore|Combat")
+	FGameplayTag GetCurrentMode() const { return CurrentMode; }
+
+	/** Returns the current timeline position in seconds representing elapsed time within the active combat mode. */
+	UFUNCTION(BlueprintPure, Meta = (DisplayName = "Get Timeline Time"), Category = "WolfCore|Combat")
+	float GetCurrentTimelineTime() const { return CurrentTimelineTime; }
+
+	/** Boolean flag indicating whether the current combat mode is set to turn-based (TB) rather than real-time (RT). */
+	bool bIsInTB;
+
+	// ============================================================================================================================
+	// Public API - Snapshots & Timeline
+	// ============================================================================================================================
+
+	/** Captures the current world state into a FTemporalStates container at the specified timestamp for timeline scrubbing. */
+	UFUNCTION(BlueprintCallable, Meta = (DisplayName = "Capture World State"), Category = "WolfCore|Combat|Snapshots")
+	/**
+	 * @param Timestamp The time anchor in seconds at which to capture the world state snapshot.
+	 * @return FTemporalStates containing the captured world state mapped to the specified timestamp.
+	 */
+	FTemporalStates CaptureCurrentWorldState(float Timestamp);
+
+	/** Advances or rewinds the prediction timeline to a specific timestamp for scrubbing and visualization. */
+	UFUNCTION(BlueprintCallable, Meta = (DisplayName = "Scrub Timeline"), Category = "WolfCore|Combat")
+	/**
+	 * @param NewTime The target timeline position in seconds to scrub the prediction state to.
+	 */
+	void ScrubTimeline(float NewTime);
+
+	/** Re-bakes the prediction timeline from the master snapshot, preserving the current scrub position. */
+	void ReBakeTimeline();
+
+	/** Returns a reference to the master snapshot captured at the start of the current simulation session. */
+	const FTemporalStates& GetMasterSnapshot() const { return MasterStartSnapshot; }
+
+	// ============================================================================================================================
+	// Public API - Combatant Tracking
+	// ============================================================================================================================
+
+	/** Registers a combatant as an active participant, enabling it to receive mode updates and prediction data. */
+	/**
+	 * @param Combatant TScriptInterface<IWolfCombatant> representing the combatant being registered.
+	 */
+	void RegisterCombatant(const TScriptInterface<IWolfCombatant>& Combatant);
+
+	/** Unregisters a combatant from active participation, removing it from mode updates and prediction processing. */
+	/**
+	 * @param Combatant TScriptInterface<IWolfCombatant> representing the combatant being removed.
+	 */
+	void UnregisterCombatant(const TScriptInterface<IWolfCombatant>& Combatant);
+
+	/** Returns the array of weak references to tracked combatants currently registered with this subsystem. */
+	const TArray<TScriptInterface<IWolfCombatant>>& GetTrackedCombatants() const { return TrackedCombatants; }
+
+	/** Returns the fixed step size (seconds) used to produce the current PredictionBuffer contents.
+	  * This value is set once at bake-start and read by every UWolfPresageComponent::GetSnapshotAtTime()
+	  * call, ensuring index math uses the actual step size rather than a compile-time constant. */
+	float GetBakedStepSize() const { return BakedStepSize; }
+
+	/**
+	 * Returns the cached timing profile for the given ability class, computing and caching it on
+	 * first request via UBaseCombatAbility::ComputeAbilityTiming against the class's CDO sequence.
+	 * Returns a default-constructed (all-zero) FAbilityTimingProfile if AbilityClass is null.
+	 * Not called from anywhere yet in this stage.
+	 */
+	const FAbilityTimingProfile& GetOrComputeTimingProfile(TSubclassOf<UBaseCombatAbility> AbilityClass);
+
+	// ============================================================================================================================
+	// Events
+	// ============================================================================================================================
+
+	/** Multicast delegate broadcast whenever the global combat mode changes, notifying all registered listeners. */
+	UPROPERTY(BlueprintAssignable, Category = "WolfCore|Combat")
+	FOnCombatModeChanged OnCombatModeChanged;
+
+protected:
+	/** Temporal states container holding the master snapshot captured at simulation start for state restoration. */
+	FTemporalStates MasterStartSnapshot;
+
+	/** Current timeline position in seconds representing elapsed time within the active combat mode session. */
+	UPROPERTY(BlueprintReadOnly, Category = "WolfCore|Timeline")
+	float CurrentTimelineTime = 0.f;
+
+	/** Maximum allowed duration in seconds for the prediction timeline before requiring regeneration or reset. */
+	UPROPERTY(EditDefaultsOnly, Category = "WolfCore|Timeline")
+	float MaxTimelineDuration = 5.f;
+
+	private:
+	/** The fixed step size (seconds) used to produce the current PredictionBuffer contents across
+	  * every combatant in the active bake. Set once at the start of ExecuteFutureBake() from
+	  * UWolfCombatSettings::PresageSimulationStep; every UWolfPresageComponent::GetSnapshotAtTime()
+	  * call reads this via GetBakedStepSize(), so a designer-tuned change to the simulation rate
+	  * only needs to update this one path. */
+	float BakedStepSize = 0.1f; // Fallback only; overwritten from UWolfCombatSettings in SetMode().
+
+	/** Cache of derived ability timing profiles, keyed by ability class. AbilitySequence is
+	  * authored per-class and doesn't vary per instance, so this is computed once per class on
+	  * first request rather than recomputed for every planning decision. Not populated or read
+	  * anywhere yet — added in this stage as inert storage; stage 3 (planning) is the first
+	  * consumer. */
+	UPROPERTY()
+	TMap<TSubclassOf<UBaseCombatAbility>, FAbilityTimingProfile> TimingProfileCache;
+
+	/** Handles completion of presage effect loading, applying the loaded gameplay effect to the player's ability system. */
+	void OnPresageEffectLoaded();
+
+	/** Initializes subsystem defaults by setting up internal state, tag references, and configuration values at startup. */
+	void InitializeSubsystemDefaults();
+
+	/** Attempts to load the player-selected combat mode from game instance configuration for initial mode setup. */
+	/**
+	 * @return True if a valid player-selected mode was loaded; false otherwise (default level mode will be applied).
+	 */
+	bool TryLoadPlayerSelectedMode();
+
+	/** Applies the default combat mode from level settings when no player selection is available or valid. */
+	void ApplyDefaultLevelMode();
+
+	/** Handles presage drain effect application to an actor's ability system based on their current combat mode state. */
+	/**
+	 * @param ASC Pointer to the UAbilitySystemComponent receiving the drain effect modification.
+	 * @param CurrentActorMode The FGameplayTag representing the actor's current combat mode being evaluated.
+	 */
+	void HandlePresageDrainEffect(UAbilitySystemComponent* ASC, FGameplayTag CurrentActorMode);
+
+	/** Retrieves the player controller's Ability System Component (ASC) for gameplay effect application and state management. */
+	UAbilitySystemComponent* GetPlayerASC() const;
+
+	/** Returns the time dilation multiplier configured for a specific combat mode to control temporal prediction scaling. */
+	/**
+	 * @param Mode The FGameplayTag representing the combat mode whose dilation value is being queried.
+	 * @return Float representing the time dilation factor (e.g., 1.0 for RT, 0.5 for TB).
+	 */
+	static float GetDilationForMode(const FGameplayTag& Mode);
+
+	/** GameplayTag representing the current global combat mode (Real-Time or Turn-Based) active in this session. */
+	FGameplayTag CurrentMode;
+
+	/** Singleton gameplay tags structure providing framework-wide tag access for combat mode identification and filtering. */
+	FWolfGameplayTags WolfTag;
+
+	/** Shared pointer to a streamable handle managing asynchronous loading of the presage effect class asset. */
+	TSharedPtr<FStreamableHandle> PresageClassLoadHandle;
+
+	/** Subclass of GameplayEffect applied during presage simulation for drain effects and temporal state management. */
+	UPROPERTY()
+	TSubclassOf<UGameplayEffect> PresageEffectClass;
+
+	/** Array of weak script interfaces to combatants currently tracked by this subsystem for mode updates and prediction processing. */
+	UPROPERTY()
+	TArray<TScriptInterface<IWolfCombatant>> TrackedCombatants;
 };
 </file>
 
@@ -5343,230 +5750,6 @@ protected:
 	 *         be simplified to void later.
 	 */
 	virtual bool ApplyHitEffects(const FCombatPeriod& Period, AActor* TargetActor, const FHitResult* HitResult = nullptr);
-};
-</file>
-
-<file path="Source/WolfCore/Public/Systems/CombatModeSubsystem.h">
-// Fill out your copyright notice in the Description page of Project Settings.
-
-#pragma once
-
-#include "CoreMinimal.h"
-#include "Core/WolfGameplayTags.h"
-#include "Presage/ActorSnapshot.h"
-#include "Presage/PresageOrchestratorTypes.h"
-#include "Subsystems/WorldSubsystem.h"
-#include "Interfaces/IWolfCombatant.h"
-#include "CombatModeSubsystem.generated.h"
-
-struct FStreamableHandle;
-class UAbilitySystemComponent;
-class UWolfCombatant;
-class UBaseCombatAbility;
-
-/**
- * Delegate broadcast when the global combat mode changes.
- */
-DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnCombatModeChanged, FGameplayTag, NewMode);
-
-/**
- * World subsystem managing combat mode state (Real-Time / Turn-Based).
- * Handles mode transitions, time dilation, temporal snapshots, and presage simulation coordination.
- */
-UCLASS()
-class WOLFCORE_API UCombatModeSubsystem : public UWorldSubsystem
-{
-	GENERATED_BODY()
-
-	// ============================================================================================================================
-	// Lifecycle
-	// ============================================================================================================================
-
-	/** Initializes the subsystem when it is registered with the world, setting up internal state and tag references. */
-	/**
-	 * @param Collection Reference to the FSubsystemCollectionBase containing all initialized subsystems.
-	 */
-	virtual void Initialize(FSubsystemCollectionBase& Collection) override;
-
-	/** Called when the world begins play, initializing combat mode state and loading default configuration. */
-	/**
-	 * @param InWorld Pointer to the UWorld being loaded for subsystem initialization.
-	 */
-	virtual void OnWorldBeginPlay(UWorld& InWorld) override;
-
-	// ============================================================================================================================
-	// Public API - Mode Management
-	// ============================================================================================================================
-
-public:
-	/** Sets the global combat mode to a new value, triggering mode transitions and updating all registered combatants. */
-	/**
-	 * @param NewMode The FGameplayTag representing the new combat mode (e.g., RT, TB).
-	 */
-	void SetMode(FGameplayTag NewMode);
-
-	/** Switches between combat modes using the player's current selection from the game instance configuration. */
-	void SwitchCombatMode();
-
-	/** Applies a specific combat mode to an individual actor, updating their ability system and state accordingly. */
-	/**
-	 * @param Combatant Pointer to the AActor whose combat mode is being updated (can be any actor type).
-	 * @param NewMode The FGameplayTag representing the new combat mode to apply.
-	 */
-	void ApplyModeToActor(const TScriptInterface<IWolfCombatant>& Combatant, FGameplayTag NewMode);
-
-	/** Returns the current global combat mode as a GameplayTag for Blueprint queries and runtime checks. */
-	UFUNCTION(BlueprintPure, Meta = (DisplayName = "Get Current Mode"), Category = "WolfCore|Combat")
-	FGameplayTag GetCurrentMode() const { return CurrentMode; }
-
-	/** Returns the current timeline position in seconds representing elapsed time within the active combat mode. */
-	UFUNCTION(BlueprintPure, Meta = (DisplayName = "Get Timeline Time"), Category = "WolfCore|Combat")
-	float GetCurrentTimelineTime() const { return CurrentTimelineTime; }
-
-	/** Boolean flag indicating whether the current combat mode is set to turn-based (TB) rather than real-time (RT). */
-	bool bIsInTB;
-
-	// ============================================================================================================================
-	// Public API - Snapshots & Timeline
-	// ============================================================================================================================
-
-	/** Captures the current world state into a FTemporalStates container at the specified timestamp for timeline scrubbing. */
-	UFUNCTION(BlueprintCallable, Meta = (DisplayName = "Capture World State"), Category = "WolfCore|Combat|Snapshots")
-	/**
-	 * @param Timestamp The time anchor in seconds at which to capture the world state snapshot.
-	 * @return FTemporalStates containing the captured world state mapped to the specified timestamp.
-	 */
-	FTemporalStates CaptureCurrentWorldState(float Timestamp);
-
-	/** Advances or rewinds the prediction timeline to a specific timestamp for scrubbing and visualization. */
-	UFUNCTION(BlueprintCallable, Meta = (DisplayName = "Scrub Timeline"), Category = "WolfCore|Combat")
-	/**
-	 * @param NewTime The target timeline position in seconds to scrub the prediction state to.
-	 */
-	void ScrubTimeline(float NewTime);
-
-	/** Re-bakes the prediction timeline from the master snapshot, preserving the current scrub position. */
-	void ReBakeTimeline();
-
-	/** Returns a reference to the master snapshot captured at the start of the current simulation session. */
-	const FTemporalStates& GetMasterSnapshot() const { return MasterStartSnapshot; }
-
-	// ============================================================================================================================
-	// Public API - Combatant Tracking
-	// ============================================================================================================================
-
-	/** Registers a combatant as an active participant, enabling it to receive mode updates and prediction data. */
-	/**
-	 * @param Combatant TScriptInterface<IWolfCombatant> representing the combatant being registered.
-	 */
-	void RegisterCombatant(const TScriptInterface<IWolfCombatant>& Combatant);
-
-	/** Unregisters a combatant from active participation, removing it from mode updates and prediction processing. */
-	/**
-	 * @param Combatant TScriptInterface<IWolfCombatant> representing the combatant being removed.
-	 */
-	void UnregisterCombatant(const TScriptInterface<IWolfCombatant>& Combatant);
-
-	/** Returns the array of weak references to tracked combatants currently registered with this subsystem. */
-	const TArray<TScriptInterface<IWolfCombatant>>& GetTrackedCombatants() const { return TrackedCombatants; }
-
-	/** Returns the fixed step size (seconds) used to produce the current PredictionBuffer contents.
-	  * This value is set once at bake-start and read by every UWolfPresageComponent::GetSnapshotAtTime()
-	  * call, ensuring index math uses the actual step size rather than a compile-time constant. */
-	float GetBakedStepSize() const { return BakedStepSize; }
-
-	/**
-	 * Returns the cached timing profile for the given ability class, computing and caching it on
-	 * first request via UBaseCombatAbility::ComputeAbilityTiming against the class's CDO sequence.
-	 * Returns a default-constructed (all-zero) FAbilityTimingProfile if AbilityClass is null.
-	 * Not called from anywhere yet in this stage.
-	 */
-	const FAbilityTimingProfile& GetOrComputeTimingProfile(TSubclassOf<UBaseCombatAbility> AbilityClass);
-
-	// ============================================================================================================================
-	// Events
-	// ============================================================================================================================
-
-	/** Multicast delegate broadcast whenever the global combat mode changes, notifying all registered listeners. */
-	UPROPERTY(BlueprintAssignable, Category = "WolfCore|Combat")
-	FOnCombatModeChanged OnCombatModeChanged;
-
-protected:
-	/** Temporal states container holding the master snapshot captured at simulation start for state restoration. */
-	FTemporalStates MasterStartSnapshot;
-
-	/** Current timeline position in seconds representing elapsed time within the active combat mode session. */
-	UPROPERTY(BlueprintReadOnly, Category = "WolfCore|Timeline")
-	float CurrentTimelineTime = 0.f;
-
-	/** Maximum allowed duration in seconds for the prediction timeline before requiring regeneration or reset. */
-	UPROPERTY(EditDefaultsOnly, Category = "WolfCore|Timeline")
-	float MaxTimelineDuration = 5.f;
-
-	private:
-	/** The fixed step size (seconds) used to produce the current PredictionBuffer contents across
-	  * every combatant in the active bake. Set once at the start of ExecuteFutureBake() from
-	  * UWolfCombatSettings::PresageSimulationStep; every UWolfPresageComponent::GetSnapshotAtTime()
-	  * call reads this via GetBakedStepSize(), so a designer-tuned change to the simulation rate
-	  * only needs to update this one path. */
-	float BakedStepSize = 0.1f; // Fallback only; overwritten from UWolfCombatSettings in SetMode().
-
-	/** Cache of derived ability timing profiles, keyed by ability class. AbilitySequence is
-	  * authored per-class and doesn't vary per instance, so this is computed once per class on
-	  * first request rather than recomputed for every planning decision. Not populated or read
-	  * anywhere yet — added in this stage as inert storage; stage 3 (planning) is the first
-	  * consumer. */
-	UPROPERTY()
-	TMap<TSubclassOf<UBaseCombatAbility>, FAbilityTimingProfile> TimingProfileCache;
-
-	/** Handles completion of presage effect loading, applying the loaded gameplay effect to the player's ability system. */
-	void OnPresageEffectLoaded();
-
-	/** Initializes subsystem defaults by setting up internal state, tag references, and configuration values at startup. */
-	void InitializeSubsystemDefaults();
-
-	/** Attempts to load the player-selected combat mode from game instance configuration for initial mode setup. */
-	/**
-	 * @return True if a valid player-selected mode was loaded; false otherwise (default level mode will be applied).
-	 */
-	bool TryLoadPlayerSelectedMode();
-
-	/** Applies the default combat mode from level settings when no player selection is available or valid. */
-	void ApplyDefaultLevelMode();
-
-	/** Handles presage drain effect application to an actor's ability system based on their current combat mode state. */
-	/**
-	 * @param ASC Pointer to the UAbilitySystemComponent receiving the drain effect modification.
-	 * @param CurrentActorMode The FGameplayTag representing the actor's current combat mode being evaluated.
-	 */
-	void HandlePresageDrainEffect(UAbilitySystemComponent* ASC, FGameplayTag CurrentActorMode);
-
-	/** Retrieves the player controller's Ability System Component (ASC) for gameplay effect application and state management. */
-	UAbilitySystemComponent* GetPlayerASC() const;
-
-	/** Returns the time dilation multiplier configured for a specific combat mode to control temporal prediction scaling. */
-	/**
-	 * @param Mode The FGameplayTag representing the combat mode whose dilation value is being queried.
-	 * @return Float representing the time dilation factor (e.g., 1.0 for RT, 0.5 for TB).
-	 */
-	static float GetDilationForMode(const FGameplayTag& Mode);
-
-	/** GameplayTag representing the current global combat mode (Real-Time or Turn-Based) active in this session. */
-	FGameplayTag CurrentMode;
-
-	/** Singleton gameplay tags structure providing framework-wide tag access for combat mode identification and filtering. */
-	FWolfGameplayTags WolfTag;
-
-	/** Shared pointer to a streamable handle managing asynchronous loading of the presage effect class asset. */
-	TSharedPtr<FStreamableHandle> PresageClassLoadHandle;
-
-	/** Subclass of GameplayEffect applied during presage simulation for drain effects and temporal state management. */
-	UPROPERTY()
-	TSubclassOf<UGameplayEffect> PresageEffectClass;
-
-	/** Array of weak script interfaces to combatants currently tracked by this subsystem for mode updates and prediction processing. */
-	UPROPERTY()
-	TArray<TScriptInterface<IWolfCombatant>> TrackedCombatants;
 };
 </file>
 
@@ -5970,328 +6153,6 @@ bool UBaseCombatAbility::IsInvulnerableAt(float RelativeTime) const
 }
 </file>
 
-<file path="Source/WolfCore/Private/Core/WolfPresageComponent.cpp">
-// Fill out your copyright notice in the Description page of Project Settings.
-
-
-#include "Core/WolfPresageComponent.h"
-
-#include "Abilities/AbilityPeriodAdvancer.h"
-#include "Abilities/BaseCombatAbility.h"
-#include "AIController.h"
-#include "BehaviorTree/BlackboardComponent.h"
-#include "Character/WolfCharacterBase.h"
-#include "Components/CapsuleComponent.h"
-#include "Core/WolfAbilityComponent.h"
-#include "Core/WolfGameplayTags.h"
-#include "Debug/WolfDebug.h"
-#include "GameFramework/CharacterMovementComponent.h"
-#include "Navigation/PathFollowingComponent.h"
-#include "DrawDebugHelpers.h"
-#include "Misc/TransactionObjectEvent.h"
-#include "Core/WolfSnapshotComponent.h"
-#include "Systems/CombatModeSubsystem.h"
-
-UWolfPresageComponent::UWolfPresageComponent()
-{
-	PrimaryComponentTick.bCanEverTick = false;
-}
-
-void UWolfPresageComponent::BeginPlay()
-{
-	Super::BeginPlay();
-
-	CharacterOwner = Cast<AWolfCharacterBase>(GetOwner());
-	if (CharacterOwner)
-	{
-		CachedASC = Cast<UWolfAbilitySystemComponent>(CharacterOwner->GetAbilitySystemComponent());
-		AbilityControl = CharacterOwner->FindComponentByClass<UWolfAbilityComponent>();
-	}
-}
-
-void UWolfPresageComponent::SimulateTick(float Step)
-{
-	if (!CharacterOwner) return;
-
-	SimElapsedTime += Step;
-	TryActivateInjectedAbility();
-
-	SimulatePhysicsStep(Step);
-	SimulateAnimationStep(Step);
-
-	// Advance period BEFORE snapshot capture so that both CreateSnapshot and
-	// CurrentPeriodIndex assignment reflect the same post-advancement state.
-	SimPeriodTime += Step;
-	if (auto* ActiveAbility = GetActiveSimulationAbility())
-	{
-		const int32 PeriodBeforeAdvance = ActiveAbility->GetCurrentPeriodIndex();
-
-		SimPeriodTime = FAbilityPeriodAdvancer::AdvancePeriod(
-			ActiveAbility,
-			SimPeriodTime,
-			GetMoveComp()->MaxWalkSpeed,
-			GetMoveComp()->MaxAcceleration,
-			GetMoveComp()->Velocity.Size(),
-			CharacterOwner->GetActorLocation()
-		);
-	}
-
-	FActorSnapshot FutureFrame;
-	if (auto* SnapshotControl = GetSnapshotControl())
-	{
-		ISnapshot::Execute_CreateSnapshot(SnapshotControl, FutureFrame);
-	}
-
-	FutureFrame.ActiveAbility = GetActiveSimulationAbility();
-	FutureFrame.CurrentPeriodIndex = FutureFrame.ActiveAbility.IsValid()
-		? FutureFrame.ActiveAbility->GetCurrentPeriodIndex()
-		: -1;
-
-	/*WOLF_LOG(Log, TEXT("[STEP %d] Character: %s | Location: %s| Ability: %s | Period: %d | Montage: %s (Pos: %.2f)"),
-		PredictionBuffer.Num(),
-		*CharacterOwner.GetName(),
-		*FutureFrame.Location.ToCompactString(),
-		FutureFrame.ActiveAbility.IsValid() ? *FutureFrame.ActiveAbility->GetName() : TEXT("None"),
-		FutureFrame.CurrentPeriodIndex,
-		FutureFrame.CurrentMontage.IsValid() ? *FutureFrame.CurrentMontage->GetName() : TEXT("None"),
-		FutureFrame.MontagePosition);*/
-	PredictionBuffer.Add(FutureFrame); // Remember to clear PredictionBuffer in CombatModeSubsystem
-}
-
-void UWolfPresageComponent::ClearPredictionBuffer(float MaxDuration)
-{
-	const float StepSize = GetCMS() ? GetCMS()->GetBakedStepSize() : 0.1f; // Fallback only; GetCMS() should not normally be null.
-	const int32 ExpectedFrames = FMath::CeilToInt(MaxDuration / StepSize);
-	PredictionBuffer.Empty(ExpectedFrames);
-}
-
-const FActorSnapshot* UWolfPresageComponent::GetSnapshotAtTime(float RelativeTime) const
-{
-	if (PredictionBuffer.Num() == 0) return nullptr;
-
-	// Read the step size from the subsystem that owns the bake-time invariant.
-	// This ensures index math uses the actual step size used during ExecuteFutureBake,
-	// not a compile-time constant that could drift out of sync if the simulator changes.
-	const float StepSize = GetCMS() ? GetCMS()->GetBakedStepSize() : 0.1f; // Fallback only; GetCMS() should not normally be null.
-	const int32 Index = FMath::Clamp(
-		FMath::RoundToInt(RelativeTime / StepSize),
-		0,
-		PredictionBuffer.Num() - 1);
-	return &PredictionBuffer[Index];
-}
-
-void UWolfPresageComponent::SimulatePhysicsStep(float Step)
-{
-	if (!GetCMS() || !GetMoveComp()) return;
-
-	FVector Destination;
-	const auto SimVelocity = GetSimulatedVelocity(Destination);
-	
-	if (SimVelocity.IsNearlyZero()) return; // Return early if simulated velocity is negligible.
-
-	const FVector Start = CharacterOwner->GetActorLocation();
-	FVector Delta = SimVelocity * Step;
-	// Not considering starting acceleration, but might not make a difference. Look out for bugs.
-	
-	if (!Destination.IsZero())
-	{
-		const float DistanceToTarget = FVector::Dist(Start, Destination);
-		if (Delta.Size() > DistanceToTarget) Delta = Delta.GetSafeNormal() * DistanceToTarget;
-	}
-	const FVector End = Start + Delta;
-	ResolveMovementWithCollision(Start, End, Delta);
-}
-
-FVector UWolfPresageComponent::GetSimulatedVelocity(FVector& Destination) const
-{
-	const FVector Velocity = GetMoveComp()->Velocity;
-	
-	if (const auto* Ability = GetActiveSimulationAbility())
-	{
-		const auto& Sequence = Ability->GetAbilitySequence();
-		const auto Index = Ability->GetCurrentPeriodIndex();
-		if (Sequence.IsValidIndex(Index) && Sequence[Index].Type == EPeriodType::MoveTo)
-		{
-			Destination = Sequence[Index].MoveToDestination;
-			const FVector ToDestination = Destination - CharacterOwner->GetActorLocation();
-			return ToDestination.GetSafeNormal() * GetMoveComp()->MaxWalkSpeed;
-		}
-	}
-	return Velocity;
-}
-
-void UWolfPresageComponent::ResolveMovementWithCollision(const FVector& Start, const FVector& End, FVector& Delta)
-{
-	FCollisionQueryParams Params;
-	Params.AddIgnoredActor(CharacterOwner);
-	
-	const FQuat Rotation = CharacterOwner->GetActorQuat();
-	const FCollisionShape Shape = CharacterOwner->GetCapsuleComponent()->GetCollisionShape();
-	
-	FHitResult Hit(1.f);
-	const bool bHit = GetWorld()->SweepSingleByChannel(Hit, Start, End, Rotation,ECC_Pawn, Shape, Params);
-	if (!bHit) { CharacterOwner->SetActorLocation(End, false, nullptr, ETeleportType::TeleportPhysics); return; }
-
-	const FVector RemainingDelta = Delta * (1.f - Hit.Time);
-	const FVector SlideDelta = FVector::VectorPlaneProject(RemainingDelta, Hit.Normal);
-	if (SlideDelta.IsNearlyZero()) { CharacterOwner->SetActorLocation(Hit.Location, false, nullptr, ETeleportType::TeleportPhysics); return; }
-
-	FHitResult SlideHit;
-	const FVector SlideEnd = Hit.Location + SlideDelta;
-	const bool bSlideHit = GetWorld()->
-		SweepSingleByChannel(SlideHit,Hit.Location, SlideEnd, Rotation,ECC_Pawn, Shape, Params);
-	
-	CharacterOwner->SetActorLocation(bSlideHit ? SlideHit.Location : SlideEnd, false, nullptr, ETeleportType::TeleportPhysics);
-}
-
-void UWolfPresageComponent::SimulateAnimationStep(float DeltaTime)
-{
-	auto* AnimInst = GetAnimInst();
-	if (!IsValid(AnimInst)) return;
-	
-	const auto* CurrentMontage = GetCurrentMontage();
-	if (!IsValid(CurrentMontage)) return;
-
-	const auto CurrentPos = AnimInst->Montage_GetPosition(CurrentMontage);
-	const auto NewPos = CurrentPos + DeltaTime;
-
-	AnimInst->Montage_SetPosition(CurrentMontage, NewPos);
-
-	if (CurrentMontage->HasRootMotion())
-	{
-		const auto RootMotionDelta = CurrentMontage->ExtractRootMotionFromRange(CurrentPos,NewPos, FAnimExtractContext());
-		const auto WorldDelta = GetOwnerRotation().RotateVector(RootMotionDelta.GetLocation());
-
-		CharacterOwner->AddActorWorldOffset(WorldDelta, false, nullptr, ETeleportType::TeleportPhysics);
-	}
-
-	if (NewPos >= CurrentMontage->GetPlayLength())
-	{
-		AnimInst->Montage_Stop(0.1f, CurrentMontage); // If seeing t-poses, set to idle state
-	}
-}
-
-FVector UWolfPresageComponent::GetOwnerLocation() const { return CharacterOwner ? CharacterOwner->GetActorLocation() : FVector::ZeroVector; }
-FRotator UWolfPresageComponent::GetOwnerRotation() const { return CharacterOwner ? CharacterOwner->GetActorRotation() : FRotator::ZeroRotator; }
-
-UCharacterMovementComponent* UWolfPresageComponent::GetMoveComp() const { return CharacterOwner ? CharacterOwner->GetCharacterMovement() : nullptr; }
-UWolfAbilitySystemComponent* UWolfPresageComponent::GetASC() const { return CachedASC; }
-UAnimInstance* UWolfPresageComponent::GetAnimInst() const { return CharacterOwner ? CharacterOwner->GetAnimInst() : nullptr; }
-UAnimMontage* UWolfPresageComponent::GetCurrentMontage() const { return GetAnimInst() ? GetAnimInst()->GetCurrentActiveMontage() : nullptr; }
-UCombatModeSubsystem* UWolfPresageComponent::GetCMS() const { return CharacterOwner ? CharacterOwner->GetCMS() : nullptr; }
-
-UWolfSnapshotComponent* UWolfPresageComponent::GetSnapshotControl() const
-{
-	return CharacterOwner ? CharacterOwner->GetSnapshotComponent() : nullptr;
-}
-
-void UWolfPresageComponent::SetInjectedAbilityRequest(const FPresageAbilityRequest& Request)
-{
-	InjectedAbilityRequest = Request;
-}
-
-void UWolfPresageComponent::ClearInjectedAbilityRequest()
-{
-	InjectedAbilityRequest = FPresageAbilityRequest();
-}
-
-void UWolfPresageComponent::BeginSimulation()
-{
-	SimElapsedTime = 0.f;
-	SimPeriodTime = 0.f;
-	bSimulatedAbilityActive = false;
-	LastSimulatedPeriodIndex = -1;
-	SimulatedAbility = nullptr;
-}
-
-void UWolfPresageComponent::EndSimulation()
-{
-	SimulatedAbility = nullptr;
-	bSimulatedAbilityActive = false;
-	LastSimulatedPeriodIndex = -1;
-	ClearInjectedAbilityRequest();
-}
-
-UBaseCombatAbility* UWolfPresageComponent::GetActiveSimulationAbility() const
-{
-	if (!CharacterOwner) return nullptr;
-
-	if (auto* RealAbility = CharacterOwner->GetActiveCombatAbility())
-	{
-		if (RealAbility->GetAbilitySequence().IsValidIndex(RealAbility->GetCurrentPeriodIndex()))
-		{
-			return RealAbility;
-		}
-		// RealAbility's simulated sequence has run its course for this bake — fall through so an
-		// injected ability (if any) can take over instead of being permanently blocked.
-	}
-
-	if (bSimulatedAbilityActive && SimulatedAbility)
-	{
-		return SimulatedAbility;
-	}
-
-	return nullptr;
-}
-
-void UWolfPresageComponent::TryActivateInjectedAbility()
-{
-	if (bSimulatedAbilityActive || !HasInjectedAbilityRequest()) return;
-	if (SimElapsedTime < InjectedAbilityRequest.GetScheduledTime()) return;
-
-	SimulatedAbility = NewObject<UBaseCombatAbility>(
-		this,
-		InjectedAbilityRequest.AbilityClass,
-		NAME_None,
-		RF_Transient);
-
-	TArray<FCombatPeriod> Sequence = InjectedAbilityRequest.GetAbilitySequence();
-
-	AActor* Target = nullptr;
-	for (const auto& WeakTarget : InjectedAbilityRequest.GetTargets())
-	{
-		if (WeakTarget.IsValid())
-		{
-			Target = WeakTarget.Get();
-			break;
-		}
-	}
-
-	UBaseCombatAbility::ResolveMoveToDestinations(
-		Sequence,
-		CharacterOwner->GetActorLocation(),
-		Target);
-
-	SimulatedAbility->InitializeForSimulation(Sequence);
-	bSimulatedAbilityActive = true;
-	LastSimulatedPeriodIndex = 0;
-	SyncSimulationMontage(SimulatedAbility);
-
-	WOLF_LOG(Log, TEXT("[PRESAGE] Injected %s at t=%.2fs for %s"),
-		*InjectedAbilityRequest.AbilityClass->GetName(),
-		SimElapsedTime,
-		*CharacterOwner->GetName());
-}
-
-void UWolfPresageComponent::SyncSimulationMontage(UBaseCombatAbility* Ability)
-{
-	if (!Ability) return;
-
-	const auto& Sequence = Ability->GetAbilitySequence();
-	const int32 Index = Ability->GetCurrentPeriodIndex();
-	if (!Sequence.IsValidIndex(Index)) return;
-
-	const auto& Period = Sequence[Index];
-	if (!IsValid(Period.Montage)) return;
-
-	if (auto* AnimInst = GetAnimInst())
-	{
-		AnimInst->Montage_Play(Period.Montage);
-		AnimInst->Montage_SetPosition(Period.Montage, 0.f);
-	}
-}
-</file>
-
 <file path="Source/WolfCore/Private/Character/WolfCharacterBase.cpp">
 // Fill out your copyright notice in the Description page of Project Settings.
 
@@ -6646,6 +6507,338 @@ void AWolfCharacterBase::RestoreSnapshot_Implementation(const FActorSnapshot& Sn
 }
 </file>
 
+<file path="Source/WolfCore/Private/Core/WolfPresageComponent.cpp">
+// Fill out your copyright notice in the Description page of Project Settings.
+
+
+#include "Core/WolfPresageComponent.h"
+
+#include "Abilities/AbilityPeriodAdvancer.h"
+#include "Abilities/BaseCombatAbility.h"
+#include "AIController.h"
+#include "BehaviorTree/BlackboardComponent.h"
+#include "Character/WolfCharacterBase.h"
+#include "Components/CapsuleComponent.h"
+#include "Core/WolfAbilityComponent.h"
+#include "Core/WolfGameplayTags.h"
+#include "Debug/WolfDebug.h"
+#include "GameFramework/CharacterMovementComponent.h"
+#include "Navigation/PathFollowingComponent.h"
+#include "DrawDebugHelpers.h"
+#include "Misc/TransactionObjectEvent.h"
+#include "Core/WolfSnapshotComponent.h"
+#include "Systems/CombatModeSubsystem.h"
+
+UWolfPresageComponent::UWolfPresageComponent()
+{
+	PrimaryComponentTick.bCanEverTick = false;
+}
+
+void UWolfPresageComponent::BeginPlay()
+{
+	Super::BeginPlay();
+
+	CharacterOwner = Cast<AWolfCharacterBase>(GetOwner());
+	if (CharacterOwner)
+	{
+		CachedASC = Cast<UWolfAbilitySystemComponent>(CharacterOwner->GetAbilitySystemComponent());
+		AbilityControl = CharacterOwner->FindComponentByClass<UWolfAbilityComponent>();
+	}
+}
+
+void UWolfPresageComponent::SimulateTick(float Step)
+{
+	if (!CharacterOwner) return;
+
+	SimElapsedTime += Step;
+	TryActivateNextPlannedIntent();
+
+	SimulatePhysicsStep(Step);
+	SimulateAnimationStep(Step);
+
+	// Advance period BEFORE snapshot capture so that both CreateSnapshot and
+	// CurrentPeriodIndex assignment reflect the same post-advancement state.
+	SimPeriodTime += Step;
+	if (auto* ActiveAbility = GetActiveSimulationAbility())
+	{
+		const int32 PeriodBeforeAdvance = ActiveAbility->GetCurrentPeriodIndex();
+
+		SimPeriodTime = FAbilityPeriodAdvancer::AdvancePeriod(
+			ActiveAbility,
+			SimPeriodTime,
+			GetMoveComp()->MaxWalkSpeed,
+			GetMoveComp()->MaxAcceleration,
+			GetMoveComp()->Velocity.Size(),
+			CharacterOwner->GetActorLocation()
+		);
+
+		// If this was our own planned/simulated ability (not a real one carried over from RT) and
+		// its sequence just ran out, free it up so the next planned intent can take over. Mirrors
+		// the stage 2 fix for the real-ability case, applied here to the simulated side.
+		if (ActiveAbility == SimulatedAbility
+			&& !ActiveAbility->GetAbilitySequence().IsValidIndex(ActiveAbility->GetCurrentPeriodIndex()))
+		{
+			bSimulatedAbilityActive = false;
+			++NextPlannedIntentIndex;
+		}
+	}
+
+	FActorSnapshot FutureFrame;
+	if (auto* SnapshotControl = GetSnapshotControl())
+	{
+		ISnapshot::Execute_CreateSnapshot(SnapshotControl, FutureFrame);
+	}
+
+	FutureFrame.ActiveAbility = GetActiveSimulationAbility();
+	FutureFrame.CurrentPeriodIndex = FutureFrame.ActiveAbility.IsValid()
+		? FutureFrame.ActiveAbility->GetCurrentPeriodIndex()
+		: -1;
+
+	/*WOLF_LOG(Log, TEXT("[STEP %d] Character: %s | Location: %s| Ability: %s | Period: %d | Montage: %s (Pos: %.2f)"),
+		PredictionBuffer.Num(),
+		*CharacterOwner.GetName(),
+		*FutureFrame.Location.ToCompactString(),
+		FutureFrame.ActiveAbility.IsValid() ? *FutureFrame.ActiveAbility->GetName() : TEXT("None"),
+		FutureFrame.CurrentPeriodIndex,
+		FutureFrame.CurrentMontage.IsValid() ? *FutureFrame.CurrentMontage->GetName() : TEXT("None"),
+		FutureFrame.MontagePosition);*/
+	PredictionBuffer.Add(FutureFrame); // Remember to clear PredictionBuffer in CombatModeSubsystem
+}
+
+void UWolfPresageComponent::ClearPredictionBuffer(float MaxDuration)
+{
+	const float StepSize = GetCMS() ? GetCMS()->GetBakedStepSize() : 0.1f; // Fallback only; GetCMS() should not normally be null.
+	const int32 ExpectedFrames = FMath::CeilToInt(MaxDuration / StepSize);
+	PredictionBuffer.Empty(ExpectedFrames);
+}
+
+const FActorSnapshot* UWolfPresageComponent::GetSnapshotAtTime(float RelativeTime) const
+{
+	if (PredictionBuffer.Num() == 0) return nullptr;
+
+	// Read the step size from the subsystem that owns the bake-time invariant.
+	// This ensures index math uses the actual step size used during ExecuteFutureBake,
+	// not a compile-time constant that could drift out of sync if the simulator changes.
+	const float StepSize = GetCMS() ? GetCMS()->GetBakedStepSize() : 0.1f; // Fallback only; GetCMS() should not normally be null.
+	const int32 Index = FMath::Clamp(
+		FMath::RoundToInt(RelativeTime / StepSize),
+		0,
+		PredictionBuffer.Num() - 1);
+	return &PredictionBuffer[Index];
+}
+
+void UWolfPresageComponent::SimulatePhysicsStep(float Step)
+{
+	if (!GetCMS() || !GetMoveComp()) return;
+
+	FVector Destination;
+	const auto SimVelocity = GetSimulatedVelocity(Destination);
+	
+	if (SimVelocity.IsNearlyZero()) return; // Return early if simulated velocity is negligible.
+
+	const FVector Start = CharacterOwner->GetActorLocation();
+	FVector Delta = SimVelocity * Step;
+	// Not considering starting acceleration, but might not make a difference. Look out for bugs.
+	
+	if (!Destination.IsZero())
+	{
+		const float DistanceToTarget = FVector::Dist(Start, Destination);
+		if (Delta.Size() > DistanceToTarget) Delta = Delta.GetSafeNormal() * DistanceToTarget;
+	}
+	const FVector End = Start + Delta;
+	ResolveMovementWithCollision(Start, End, Delta);
+}
+
+FVector UWolfPresageComponent::GetSimulatedVelocity(FVector& Destination) const
+{
+	const FVector Velocity = GetMoveComp()->Velocity;
+	
+	if (const auto* Ability = GetActiveSimulationAbility())
+	{
+		const auto& Sequence = Ability->GetAbilitySequence();
+		const auto Index = Ability->GetCurrentPeriodIndex();
+		if (Sequence.IsValidIndex(Index) && Sequence[Index].Type == EPeriodType::MoveTo)
+		{
+			Destination = Sequence[Index].MoveToDestination;
+			const FVector ToDestination = Destination - CharacterOwner->GetActorLocation();
+			return ToDestination.GetSafeNormal() * GetMoveComp()->MaxWalkSpeed;
+		}
+	}
+	return Velocity;
+}
+
+void UWolfPresageComponent::ResolveMovementWithCollision(const FVector& Start, const FVector& End, FVector& Delta)
+{
+	FCollisionQueryParams Params;
+	Params.AddIgnoredActor(CharacterOwner);
+	
+	const FQuat Rotation = CharacterOwner->GetActorQuat();
+	const FCollisionShape Shape = CharacterOwner->GetCapsuleComponent()->GetCollisionShape();
+	
+	FHitResult Hit(1.f);
+	const bool bHit = GetWorld()->SweepSingleByChannel(Hit, Start, End, Rotation,ECC_Pawn, Shape, Params);
+	if (!bHit) { CharacterOwner->SetActorLocation(End, false, nullptr, ETeleportType::TeleportPhysics); return; }
+
+	const FVector RemainingDelta = Delta * (1.f - Hit.Time);
+	const FVector SlideDelta = FVector::VectorPlaneProject(RemainingDelta, Hit.Normal);
+	if (SlideDelta.IsNearlyZero()) { CharacterOwner->SetActorLocation(Hit.Location, false, nullptr, ETeleportType::TeleportPhysics); return; }
+
+	FHitResult SlideHit;
+	const FVector SlideEnd = Hit.Location + SlideDelta;
+	const bool bSlideHit = GetWorld()->
+		SweepSingleByChannel(SlideHit,Hit.Location, SlideEnd, Rotation,ECC_Pawn, Shape, Params);
+	
+	CharacterOwner->SetActorLocation(bSlideHit ? SlideHit.Location : SlideEnd, false, nullptr, ETeleportType::TeleportPhysics);
+}
+
+void UWolfPresageComponent::SimulateAnimationStep(float DeltaTime)
+{
+	auto* AnimInst = GetAnimInst();
+	if (!IsValid(AnimInst)) return;
+	
+	const auto* CurrentMontage = GetCurrentMontage();
+	if (!IsValid(CurrentMontage)) return;
+
+	const auto CurrentPos = AnimInst->Montage_GetPosition(CurrentMontage);
+	const auto NewPos = CurrentPos + DeltaTime;
+
+	AnimInst->Montage_SetPosition(CurrentMontage, NewPos);
+
+	if (CurrentMontage->HasRootMotion())
+	{
+		const auto RootMotionDelta = CurrentMontage->ExtractRootMotionFromRange(CurrentPos,NewPos, FAnimExtractContext());
+		const auto WorldDelta = GetOwnerRotation().RotateVector(RootMotionDelta.GetLocation());
+
+		CharacterOwner->AddActorWorldOffset(WorldDelta, false, nullptr, ETeleportType::TeleportPhysics);
+	}
+
+	if (NewPos >= CurrentMontage->GetPlayLength())
+	{
+		AnimInst->Montage_Stop(0.1f, CurrentMontage); // If seeing t-poses, set to idle state
+	}
+}
+
+FVector UWolfPresageComponent::GetOwnerLocation() const { return CharacterOwner ? CharacterOwner->GetActorLocation() : FVector::ZeroVector; }
+FRotator UWolfPresageComponent::GetOwnerRotation() const { return CharacterOwner ? CharacterOwner->GetActorRotation() : FRotator::ZeroRotator; }
+
+UCharacterMovementComponent* UWolfPresageComponent::GetMoveComp() const { return CharacterOwner ? CharacterOwner->GetCharacterMovement() : nullptr; }
+UWolfAbilitySystemComponent* UWolfPresageComponent::GetASC() const { return CachedASC; }
+UAnimInstance* UWolfPresageComponent::GetAnimInst() const { return CharacterOwner ? CharacterOwner->GetAnimInst() : nullptr; }
+UAnimMontage* UWolfPresageComponent::GetCurrentMontage() const { return GetAnimInst() ? GetAnimInst()->GetCurrentActiveMontage() : nullptr; }
+UCombatModeSubsystem* UWolfPresageComponent::GetCMS() const { return CharacterOwner ? CharacterOwner->GetCMS() : nullptr; }
+
+UWolfSnapshotComponent* UWolfPresageComponent::GetSnapshotControl() const
+{
+	return CharacterOwner ? CharacterOwner->GetSnapshotComponent() : nullptr;
+}
+
+void UWolfPresageComponent::SetInjectedAbilityRequest(const FPresageAbilityRequest& Request)
+{
+	InjectedAbilityRequest = Request;
+}
+
+void UWolfPresageComponent::ClearInjectedAbilityRequest()
+{
+	InjectedAbilityRequest = FPresageAbilityRequest();
+}
+
+void UWolfPresageComponent::SetPlannedIntents(const TArray<FIntentEntry>& Intents)
+{
+	PlannedIntents = Intents;
+	NextPlannedIntentIndex = 0;
+}
+
+void UWolfPresageComponent::BeginSimulation()
+{
+	SimElapsedTime = 0.f;
+	SimPeriodTime = 0.f;
+	bSimulatedAbilityActive = false;
+	LastSimulatedPeriodIndex = -1;
+	SimulatedAbility = nullptr;
+}
+
+void UWolfPresageComponent::EndSimulation()
+{
+	SimulatedAbility = nullptr;
+	bSimulatedAbilityActive = false;
+	LastSimulatedPeriodIndex = -1;
+	ClearInjectedAbilityRequest();
+}
+
+UBaseCombatAbility* UWolfPresageComponent::GetActiveSimulationAbility() const
+{
+	if (!CharacterOwner) return nullptr;
+
+	if (auto* RealAbility = CharacterOwner->GetActiveCombatAbility())
+	{
+		if (RealAbility->GetAbilitySequence().IsValidIndex(RealAbility->GetCurrentPeriodIndex()))
+		{
+			return RealAbility;
+		}
+		// RealAbility's simulated sequence has run its course for this bake — fall through so an
+		// injected ability (if any) can take over instead of being permanently blocked.
+	}
+
+	if (bSimulatedAbilityActive && SimulatedAbility)
+	{
+		return SimulatedAbility;
+	}
+
+	return nullptr;
+}
+
+void UWolfPresageComponent::TryActivateNextPlannedIntent()
+{
+	if (bSimulatedAbilityActive) return;
+	if (!PlannedIntents.IsValidIndex(NextPlannedIntentIndex)) return;
+
+	const FIntentEntry& Entry = PlannedIntents[NextPlannedIntentIndex];
+	if (SimElapsedTime < Entry.StartTime) return;
+	if (!Entry.AbilityClass) return;
+
+	SimulatedAbility = NewObject<UBaseCombatAbility>(
+		this,
+		Entry.AbilityClass,
+		NAME_None,
+		RF_Transient);
+
+	const auto* AbilityCDO = Entry.AbilityClass->GetDefaultObject<UBaseCombatAbility>();
+	TArray<FCombatPeriod> Sequence = AbilityCDO ? AbilityCDO->GetAbilitySequence() : TArray<FCombatPeriod>();
+
+	UBaseCombatAbility::ResolveMoveToDestinations(
+		Sequence,
+		CharacterOwner->GetActorLocation(),
+		Entry.Target.Get());
+
+	SimulatedAbility->InitializeForSimulation(Sequence);
+	bSimulatedAbilityActive = true;
+	LastSimulatedPeriodIndex = 0;
+	SyncSimulationMontage(SimulatedAbility);
+
+	WOLF_LOG(Log, TEXT("[PRESAGE] Activated planned intent %d/%d: %s at t=%.2fs for %s"),
+		NextPlannedIntentIndex + 1, PlannedIntents.Num(),
+		*Entry.AbilityClass->GetName(), SimElapsedTime, *CharacterOwner->GetName());
+}
+
+void UWolfPresageComponent::SyncSimulationMontage(UBaseCombatAbility* Ability)
+{
+	if (!Ability) return;
+
+	const auto& Sequence = Ability->GetAbilitySequence();
+	const int32 Index = Ability->GetCurrentPeriodIndex();
+	if (!Sequence.IsValidIndex(Index)) return;
+
+	const auto& Period = Sequence[Index];
+	if (!IsValid(Period.Montage)) return;
+
+	if (auto* AnimInst = GetAnimInst())
+	{
+		AnimInst->Montage_Play(Period.Montage);
+		AnimInst->Montage_SetPosition(Period.Montage, 0.f);
+	}
+}
+</file>
+
 <file path="Source/WolfCore/Public/Character/WolfCharacterBase.h">
 // Fill out your copyright notice in the Description page of Project Settings.
 
@@ -6953,6 +7146,7 @@ private:
 #include "Core/WolfGameplayTags.h"
 #include "Core/WolfPresageComponent.h"
 #include "Core/WolfPlayerController.h"
+#include "Presage/PresageOrchestrator.h"
 #include "Abilities/BaseCombatAbility.h"
 #include "Debug/WolfDebug.h"
 #include "Engine/AssetManager.h"
@@ -7089,6 +7283,10 @@ void UCombatModeSubsystem::SetMode(FGameplayTag NewMode)
 		{
 			BakedStepSize = FMath::Max(Settings->PresageSimulationStep, 0.01f);
 		}
+
+		const auto Plan = FPresageOrchestrator::RunPlanning(this, TrackedCombatants, MaxTimelineDuration);
+		FPresageOrchestrator::DistributePlan(TrackedCombatants, Plan);
+
 		FWolfPresageSimulator::ExecuteFutureBake(TrackedCombatants, MaxTimelineDuration, BakedStepSize);
 		ScrubTimeline(0.f);
 	}
@@ -7162,6 +7360,10 @@ void UCombatModeSubsystem::ReBakeTimeline()
 	}
 
 	const float ScrubTime = CurrentTimelineTime;
+
+	const auto Plan = FPresageOrchestrator::RunPlanning(this, TrackedCombatants, MaxTimelineDuration);
+	FPresageOrchestrator::DistributePlan(TrackedCombatants, Plan);
+
 	FWolfPresageSimulator::ExecuteFutureBake(TrackedCombatants, MaxTimelineDuration, BakedStepSize);
 
 	CurrentTimelineTime = -1.f;

@@ -41,7 +41,7 @@ void UWolfPresageComponent::SimulateTick(float Step)
 	if (!CharacterOwner) return;
 
 	SimElapsedTime += Step;
-	TryActivateInjectedAbility();
+	TryActivateNextPlannedIntent();
 
 	SimulatePhysicsStep(Step);
 	SimulateAnimationStep(Step);
@@ -61,6 +61,16 @@ void UWolfPresageComponent::SimulateTick(float Step)
 			GetMoveComp()->Velocity.Size(),
 			CharacterOwner->GetActorLocation()
 		);
+
+		// If this was our own planned/simulated ability (not a real one carried over from RT) and
+		// its sequence just ran out, free it up so the next planned intent can take over. Mirrors
+		// the stage 2 fix for the real-ability case, applied here to the simulated side.
+		if (ActiveAbility == SimulatedAbility
+			&& !ActiveAbility->GetAbilitySequence().IsValidIndex(ActiveAbility->GetCurrentPeriodIndex()))
+		{
+			bSimulatedAbilityActive = false;
+			++NextPlannedIntentIndex;
+		}
 	}
 
 	FActorSnapshot FutureFrame;
@@ -222,6 +232,12 @@ void UWolfPresageComponent::ClearInjectedAbilityRequest()
 	InjectedAbilityRequest = FPresageAbilityRequest();
 }
 
+void UWolfPresageComponent::SetPlannedIntents(const TArray<FIntentEntry>& Intents)
+{
+	PlannedIntents = Intents;
+	NextPlannedIntentIndex = 0;
+}
+
 void UWolfPresageComponent::BeginSimulation()
 {
 	SimElapsedTime = 0.f;
@@ -261,43 +277,37 @@ UBaseCombatAbility* UWolfPresageComponent::GetActiveSimulationAbility() const
 	return nullptr;
 }
 
-void UWolfPresageComponent::TryActivateInjectedAbility()
+void UWolfPresageComponent::TryActivateNextPlannedIntent()
 {
-	if (bSimulatedAbilityActive || !HasInjectedAbilityRequest()) return;
-	if (SimElapsedTime < InjectedAbilityRequest.GetScheduledTime()) return;
+	if (bSimulatedAbilityActive) return;
+	if (!PlannedIntents.IsValidIndex(NextPlannedIntentIndex)) return;
+
+	const FIntentEntry& Entry = PlannedIntents[NextPlannedIntentIndex];
+	if (SimElapsedTime < Entry.StartTime) return;
+	if (!Entry.AbilityClass) return;
 
 	SimulatedAbility = NewObject<UBaseCombatAbility>(
 		this,
-		InjectedAbilityRequest.AbilityClass,
+		Entry.AbilityClass,
 		NAME_None,
 		RF_Transient);
 
-	TArray<FCombatPeriod> Sequence = InjectedAbilityRequest.GetAbilitySequence();
-
-	AActor* Target = nullptr;
-	for (const auto& WeakTarget : InjectedAbilityRequest.GetTargets())
-	{
-		if (WeakTarget.IsValid())
-		{
-			Target = WeakTarget.Get();
-			break;
-		}
-	}
+	const auto* AbilityCDO = Entry.AbilityClass->GetDefaultObject<UBaseCombatAbility>();
+	TArray<FCombatPeriod> Sequence = AbilityCDO ? AbilityCDO->GetAbilitySequence() : TArray<FCombatPeriod>();
 
 	UBaseCombatAbility::ResolveMoveToDestinations(
 		Sequence,
 		CharacterOwner->GetActorLocation(),
-		Target);
+		Entry.Target.Get());
 
 	SimulatedAbility->InitializeForSimulation(Sequence);
 	bSimulatedAbilityActive = true;
 	LastSimulatedPeriodIndex = 0;
 	SyncSimulationMontage(SimulatedAbility);
 
-	WOLF_LOG(Log, TEXT("[PRESAGE] Injected %s at t=%.2fs for %s"),
-		*InjectedAbilityRequest.AbilityClass->GetName(),
-		SimElapsedTime,
-		*CharacterOwner->GetName());
+	WOLF_LOG(Log, TEXT("[PRESAGE] Activated planned intent %d/%d: %s at t=%.2fs for %s"),
+		NextPlannedIntentIndex + 1, PlannedIntents.Num(),
+		*Entry.AbilityClass->GetName(), SimElapsedTime, *CharacterOwner->GetName());
 }
 
 void UWolfPresageComponent::SyncSimulationMontage(UBaseCombatAbility* Ability)

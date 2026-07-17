@@ -12,6 +12,7 @@
 #include "Core/WolfGameplayTags.h"
 #include "Core/WolfPresageComponent.h"
 #include "Core/WolfPlayerController.h"
+#include "Presage/PresageOrchestrator.h"
 #include "Abilities/BaseCombatAbility.h"
 #include "Debug/WolfDebug.h"
 #include "Engine/AssetManager.h"
@@ -148,6 +149,10 @@ void UCombatModeSubsystem::SetMode(FGameplayTag NewMode)
 		{
 			BakedStepSize = FMath::Max(Settings->PresageSimulationStep, 0.01f);
 		}
+
+		const auto Plan = FPresageOrchestrator::RunPlanning(this, TrackedCombatants, MaxTimelineDuration);
+		FPresageOrchestrator::DistributePlan(TrackedCombatants, Plan);
+
 		FWolfPresageSimulator::ExecuteFutureBake(TrackedCombatants, MaxTimelineDuration, BakedStepSize);
 		ScrubTimeline(0.f);
 	}
@@ -221,6 +226,10 @@ void UCombatModeSubsystem::ReBakeTimeline()
 	}
 
 	const float ScrubTime = CurrentTimelineTime;
+
+	const auto Plan = FPresageOrchestrator::RunPlanning(this, TrackedCombatants, MaxTimelineDuration);
+	FPresageOrchestrator::DistributePlan(TrackedCombatants, Plan);
+
 	FWolfPresageSimulator::ExecuteFutureBake(TrackedCombatants, MaxTimelineDuration, BakedStepSize);
 
 	CurrentTimelineTime = -1.f;

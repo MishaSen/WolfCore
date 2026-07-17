@@ -38,6 +38,13 @@ public:
 	UPROPERTY(Config, EditAnywhere, Category = "WolfCore|Presage")
 	TArray<FInterruptResponseOption> DefaultInterruptResponses;
 
+	/** STAGE 3 STUB ONLY. Placeholder ability every AI-controlled combatant repeatedly "chooses"
+	  * for the full bake duration, used to validate the planning/execution plumbing end-to-end.
+	  * Replaced by real AI decision-making in stage 5 — do not build gameplay content against this
+	  * being the permanent mechanism. */
+	UPROPERTY(Config, EditAnywhere, Category = "WolfCore|Presage")
+	TSubclassOf<UBaseCombatAbility> DefaultPresageStubAbility;
+
 	// ============================================================================================================================
 	// Combat Mode Configuration
 	// ============================================================================================================================

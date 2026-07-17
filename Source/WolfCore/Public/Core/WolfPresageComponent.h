@@ -5,6 +5,7 @@
 #include "Components/ActorComponent.h"
 #include "Presage/ActorSnapshot.h"
 #include "Presage/PresageAbilityRequest.h"
+#include "Presage/PresageOrchestratorTypes.h"
 #include "Presage/Snapshot.h"
 #include "WolfPresageComponent.generated.h"
 
@@ -62,6 +63,16 @@ public:
 
 	/** Returns whether a presage ability request is queued for simulation. */
 	bool HasInjectedAbilityRequest() const { return InjectedAbilityRequest.AbilityClass != nullptr; }
+
+	/** Returns the currently queued presage ability request. Only meaningful if
+	  * HasInjectedAbilityRequest() is true. Read by FPresageOrchestrator::RunPlanning to fold the
+	  * player's own intent into the same ledger AI combatants use. */
+	const FPresageAbilityRequest& GetInjectedAbilityRequest() const { return InjectedAbilityRequest; }
+
+	/** Sets this combatant's slice of the current bake's finalized Action Plan, replacing anything
+	  * previously set, and resets playback to the first entry. Called once per bake by
+	  * FPresageOrchestrator::DistributePlan, before ExecuteFutureBake runs. */
+	void SetPlannedIntents(const TArray<FIntentEntry>& Intents);
 
 	/** Called at the start of a bake to reset per-simulation state. */
 	void BeginSimulation();
@@ -158,8 +169,8 @@ private:
 	/** Returns the ability driving the current simulation step (real or injected). */
 	UBaseCombatAbility* GetActiveSimulationAbility() const;
 
-	/** Activates the injected ability once the scheduled time is reached. */
-	void TryActivateInjectedAbility();
+	/** Activates this combatant's next planned intent once its scheduled StartTime is reached. */
+	void TryActivateNextPlannedIntent();
 
 	/** Syncs the animation montage to the current simulated ability period. */
 	void SyncSimulationMontage(UBaseCombatAbility* Ability);
@@ -180,6 +191,15 @@ private:
 	/** Transient ability instance created for injected presage simulation. */
 	UPROPERTY(Transient)
 	TObjectPtr<UBaseCombatAbility> SimulatedAbility = nullptr;
+
+	/** This combatant's slice of the current bake's Action Plan, set once per bake by
+	  * FPresageOrchestrator::DistributePlan. Ordered by StartTime. */
+	UPROPERTY(Transient)
+	TArray<FIntentEntry> PlannedIntents;
+
+	/** Index into PlannedIntents of the next entry to activate. Advanced by SimulateTick() once
+	  * the current planned entry's simulated ability sequence is exhausted. */
+	int32 NextPlannedIntentIndex = 0;
 
 	/** Ability request queued for injection during the next bake. */
 	UPROPERTY(Transient)
