@@ -962,6 +962,32 @@ public:
 };
 </file>
 
+<file path="Source/WolfCore/WolfCore.Build.cs">
+// Copyright Epic Games, Inc. All Rights Reserved.
+
+using UnrealBuildTool;
+
+public class WolfCore : ModuleRules
+{
+	public WolfCore(ReadOnlyTargetRules Target) : base(Target)
+	{
+		PCHUsage = PCHUsageMode.UseExplicitOrSharedPCHs;
+	
+		PublicDependencyModuleNames.AddRange(new string[] { "Core", "CoreUObject", "Engine", "InputCore", "EnhancedInput", "GameplayAbilities", "GameplayTasks", "GameplayTags", "DeveloperSettings" });
+
+		PrivateDependencyModuleNames.AddRange(new string[] {  });
+
+		// Uncomment if you are using Slate UI
+		// PrivateDependencyModuleNames.AddRange(new string[] { "Slate", "SlateCore" });
+		
+		// Uncomment if you are using online features
+		// PrivateDependencyModuleNames.Add("OnlineSubsystem");
+
+		// To include OnlineSubsystemSteam, add it to the plugins section in your uproject file with the Enabled attribute set to true
+	}
+}
+</file>
+
 <file path="Source/WolfCore/WolfCore.cpp">
 // Copyright Epic Games, Inc. All Rights Reserved.
 
@@ -1105,6 +1131,22 @@ Source/**/*.gen.h
 
 [/Script/OutputLog.OutputLogSettings]
 CategoryColorizationNames=(CategoryName="LogWolf",Color=(R=0.25,G=1,B=0.4))
+</file>
+
+<file path="Config/DefaultGame.ini">
+[/Script/CommonUI.CommonUISettings]
+CommonButtonAcceptKeyHandling=TriggerClick
+
+[/Script/EngineSettings.GeneralProjectSettings]
+ProjectID=542589A84C679662118B0392AE86C14A
+
+[/Script/GameplayAbilities.AbilitySystemGlobals]
+GameplayCueNotifyPaths=/Game/WolfCore
+bUseDebugtargetFromHud=true
+
+[/Script/WolfCore.WolfCombatSettings]
+PresageEffectClass=/Game/WolfCore/Abilities/Effects/GE_PresageMode.GE_PresageMode_C
+ModeTimeDilationMap=(((TagName="InputState.OOC"), 1.000000),((TagName="InputState.RT"), 1.000000),((TagName="InputState.TB"), 0.000000))
 </file>
 
 <file path="Source/WolfCore/Private/Abilities/AbilityPeriodAdvancer.cpp">
@@ -1309,247 +1351,6 @@ FTransform UWolfFunctionLibrary::ExtractRootMotionAtTime(const UAnimMontage* Mon
 {
 	if (!Montage) return FTransform::Identity;
 	return Montage->ExtractRootMotionFromRange(0.f, TimePosition, FAnimExtractContext());
-}
-</file>
-
-<file path="Source/WolfCore/Private/Presage/PresageOrchestrator.cpp">
-#include "Presage/PresageOrchestrator.h"
-
-#include "Systems/CombatModeSubsystem.h"
-#include "Abilities/BaseCombatAbility.h"
-#include "Core/WolfCombatSettings.h"
-#include "Core/WolfPresageComponent.h"
-#include "GameFramework/Pawn.h"
-
-TSubclassOf<UBaseCombatAbility> FPresageOrchestrator::DecideIntent_Stub()
-{
-	const auto* Settings = GetDefault<UWolfCombatSettings>();
-	return Settings ? Settings->DefaultPresageStubAbility : nullptr;
-}
-
-TArray<FIntentEntry> FPresageOrchestrator::RunPlanning(
-	UCombatModeSubsystem* CMS,
-	const TArray<TScriptInterface<IWolfCombatant>>& Combatants,
-	float Duration)
-{
-	TArray<FIntentEntry> Ledger;
-	if (!CMS) return Ledger;
-
-	for (const auto& Combatant : Combatants)
-	{
-		const auto* Actor = Cast<AActor>(Combatant.GetObject());
-		if (!IsValid(Actor)) continue;
-
-		auto* Presage = Combatant.GetInterface() ? Combatant.GetInterface()->GetPresageComponent() : nullptr;
-		if (!IsValid(Presage)) continue;
-
-		const auto* Pawn = Cast<APawn>(Actor);
-		const bool bIsPlayer = Pawn && Pawn->IsPlayerControlled();
-
-		if (bIsPlayer)
-		{
-			// Player's own intent comes from the existing injection mechanism, not the orchestrator.
-			// At most one entry — Execution does not auto-continue the player past it (stage 3 scope).
-			if (Presage->HasInjectedAbilityRequest())
-			{
-				const auto& Request = Presage->GetInjectedAbilityRequest();
-
-				FIntentEntry Entry;
-				Entry.Combatant = Combatant;
-				Entry.AbilityClass = Request.AbilityClass;
-				Entry.Timing = CMS->GetOrComputeTimingProfile(Request.AbilityClass);
-				Entry.StartTime = Request.GetScheduledTime();
-				Entry.Status = EIntentStatus::Confirmed;
-
-				for (const auto& WeakTarget : Request.GetTargets())
-				{
-					if (WeakTarget.IsValid())
-					{
-						Entry.Target = WeakTarget;
-						break;
-					}
-				}
-
-				Ledger.Add(Entry);
-			}
-			continue;
-		}
-
-		// AI combatant: chain the stub ability back-to-back until it covers the full duration.
-		// Real disposition/negotiation/interrupts are not implemented yet (stage 5 for negotiation;
-		// interrupts as of this stage are detected but only "take the hit" is functional).
-		AActor* StubTarget = nullptr;
-		for (const auto& Other : Combatants)
-		{
-			const auto* OtherActor = Cast<AActor>(Other.GetObject());
-			if (IsValid(OtherActor) && OtherActor != Actor)
-			{
-				StubTarget = const_cast<AActor*>(OtherActor);
-				break;
-			}
-		}
-
-		float TimeCursor = 0.f;
-		while (TimeCursor < Duration)
-		{
-			const auto AbilityClass = DecideIntent_Stub();
-			if (!AbilityClass) break; // nothing configured — leave this combatant with no plan.
-
-			FIntentEntry Entry;
-			Entry.Combatant = Combatant;
-			Entry.AbilityClass = AbilityClass;
-			Entry.Timing = CMS->GetOrComputeTimingProfile(AbilityClass);
-			Entry.StartTime = TimeCursor;
-			Entry.Status = EIntentStatus::Confirmed;
-			Entry.Target = StubTarget; // STAGE 4 STUB — first other tracked combatant, not real targeting.
-			Ledger.Add(Entry);
-
-			// Guard against a zero-duration stub ability looping forever.
-			TimeCursor += FMath::Max(Entry.Timing.TotalDuration, KINDA_SMALL_NUMBER);
-		}
-	}
-
-	return Ledger;
-}
-
-void FPresageOrchestrator::DistributePlan(
-	const TArray<TScriptInterface<IWolfCombatant>>& Combatants,
-	const TArray<FIntentEntry>& Plan)
-{
-	for (const auto& Combatant : Combatants)
-	{
-		auto* Presage = Combatant.GetInterface() ? Combatant.GetInterface()->GetPresageComponent() : nullptr;
-		if (!IsValid(Presage)) continue;
-
-		TArray<FIntentEntry> ForThisCombatant = Plan.FilterByPredicate(
-			[&Combatant](const FIntentEntry& Entry) { return Entry.Combatant == Combatant; });
-
-		ForThisCombatant.Sort([](const FIntentEntry& A, const FIntentEntry& B) { return A.StartTime < B.StartTime; });
-
-		Presage->SetPlannedIntents(ForThisCombatant);
-	}
-}
-
-void FPresageOrchestrator::ResolveInterrupts(TArray<FIntentEntry>& Ledger)
-{
-	// Map from victim index -> earliest attacker's AttackWindowStart that hits them. A victim can
-	// overlap with more than one attacker; only the earliest one actually lands first and
-	// interrupts them — later ones are moot for this entry (stacking further damage/hitstun
-	// beyond the first hit is a separate, out-of-scope concern). No iteration cap is needed here:
-	// that only becomes relevant once a *response* (e.g. a future dodge/parry) has its own active
-	// window that could itself be interrupted by a second attacker — "take the hit" has no such
-	// window, so there's nothing to recurse into yet.
-	TMap<int32, float> EarliestAttackTime;
-
-	for (int32 i = 0; i < Ledger.Num(); ++i)
-	{
-		const FIntentEntry& Attacker = Ledger[i];
-		if (!Attacker.Target.IsValid()) continue;
-
-		const float AttackWindowStart = Attacker.StartTime + Attacker.Timing.ActiveWindowStart;
-		const float AttackWindowEnd = Attacker.StartTime + Attacker.Timing.ActiveWindowEnd;
-
-		for (int32 j = 0; j < Ledger.Num(); ++j)
-		{
-			if (i == j) continue;
-
-			const FIntentEntry& Victim = Ledger[j];
-			const auto* VictimActor = Cast<AActor>(Victim.Combatant.GetObject());
-			if (!IsValid(VictimActor) || VictimActor != Attacker.Target.Get()) continue;
-
-			const float VictimWindupEnd = Victim.StartTime + Victim.Timing.WindupDuration;
-
-			// Interval overlap: attacker's active window intersects victim's windup.
-			if (AttackWindowStart < VictimWindupEnd && AttackWindowEnd > Victim.StartTime)
-			{
-				if (const float* Existing = EarliestAttackTime.Find(j))
-				{
-					if (AttackWindowStart < *Existing)
-					{
-						EarliestAttackTime[j] = AttackWindowStart;
-					}
-				}
-				else
-				{
-					EarliestAttackTime.Add(j, AttackWindowStart);
-				}
-			}
-		}
-	}
-
-	// Resolve each interrupted victim exactly once, using the earliest incoming attack.
-	for (const auto& Pair : EarliestAttackTime)
-	{
-		const int32 VictimIndex = Pair.Key;
-		const float EarliestAttackWindowStart = Pair.Value;
-
-		FIntentEntry& Entry = Ledger[VictimIndex];
-
-		const TArray<FInterruptResponseOption> Options = GetAvailableResponses(Entry);
-		const FInterruptResponseOption* Chosen = PickWeightedResponse(Options);
-
-		if (Chosen)
-		{
-			WOLF_LOG(Log, TEXT("[PRESAGE] Interrupt response chosen: %s (only take-hit is mechanically implemented this stage)"),
-				*Chosen->ResponseTag.ToString());
-		}
-
-		// Only "take the hit" is functional — regardless of which option (if any) was chosen,
-		// the mechanical effect this stage implements is: cut the interrupted ability short at
-		// the moment the earliest interrupting attack actually lands.
-		Entry.bHasInterruptedAtTime = true;
-		Entry.InterruptedAtTime = FMath::Max(Entry.StartTime, EarliestAttackWindowStart);
-		Entry.Status = EIntentStatus::Confirmed;
-	}
-}
-
-TArray<FInterruptResponseOption> FPresageOrchestrator::GetAvailableResponses(const FIntentEntry& InterruptedEntry)
-{
-	TArray<FInterruptResponseOption> Result;
-
-	const auto* AbilityCDO = InterruptedEntry.AbilityClass
-		? InterruptedEntry.AbilityClass->GetDefaultObject<UBaseCombatAbility>()
-		: nullptr;
-
-	const TArray<FInterruptResponseOption>* Source = nullptr;
-	if (AbilityCDO && AbilityCDO->InterruptResponses.Num() > 0)
-	{
-		Source = &AbilityCDO->InterruptResponses;
-	}
-	else if (const auto* Settings = GetDefault<UWolfCombatSettings>())
-	{
-		Source = &Settings->DefaultInterruptResponses;
-	}
-
-	if (Source)
-	{
-		for (const auto& Option : *Source)
-		{
-			if (Option.RequiredTags.IsEmpty()) // stage 4 simplification — see header comment
-			{
-				Result.Add(Option);
-			}
-		}
-	}
-
-	return Result;
-}
-
-const FInterruptResponseOption* FPresageOrchestrator::PickWeightedResponse(const TArray<FInterruptResponseOption>& Options)
-{
-	if (Options.Num() == 0) return nullptr;
-
-	float TotalWeight = 0.f;
-	for (const auto& Option : Options) TotalWeight += FMath::Max(Option.Weight, 0.f);
-	if (TotalWeight <= 0.f) return &Options[0];
-
-	float Roll = FMath::FRandRange(0.f, TotalWeight);
-	for (const auto& Option : Options)
-	{
-		Roll -= FMath::Max(Option.Weight, 0.f);
-		if (Roll <= 0.f) return &Option;
-	}
-	return &Options.Last();
 }
 </file>
 
@@ -1821,229 +1622,6 @@ private:
 };
 </file>
 
-<file path="Source/WolfCore/Public/Presage/PresageOrchestrator.h">
-// Fill out your copyright notice in the Description page of Project Settings.
-
-#pragma once
-
-#include "CoreMinimal.h"
-#include "Presage/PresageOrchestratorTypes.h"
-#include "Interfaces/IWolfCombatant.h"
-
-class UCombatModeSubsystem;
-class UBaseCombatAbility;
-
-/**
- * Presage planning phase. Produces a finalized per-combatant Action Plan (as a flat list of
- * FIntentEntry, grouped by combatant when distributed) before FWolfPresageSimulator::ExecuteFutureBake
- * runs. Stage 3: negotiation, interrupts, and real AI decision-making are not implemented yet — see
- * PresageOrchestratorStage3Spec.md for what this stage deliberately stubs.
- */
-class WOLFCORE_API FPresageOrchestrator
-{
-public:
-	/** Runs planning for the given combatants over the given duration, returning a flat intent
-	  * ledger (not yet grouped per-combatant — see DistributePlan). */
-	static TArray<FIntentEntry> RunPlanning(
-		UCombatModeSubsystem* CMS,
-		const TArray<TScriptInterface<IWolfCombatant>>& Combatants,
-		float Duration);
-
-	/** Groups the flat ledger by combatant, sorts each group by StartTime, and pushes each
-	  * combatant's slice into its own UWolfPresageComponent via SetPlannedIntents(). Must be called
-	  * before FWolfPresageSimulator::ExecuteFutureBake for the same bake. */
-	static void DistributePlan(
-		const TArray<TScriptInterface<IWolfCombatant>>& Combatants,
-		const TArray<FIntentEntry>& Plan);
-
-	/** Detects interrupts (one combatant's planned attack landing during another's windup) and
-	  * resolves them. Only "take the hit" is mechanically functional this stage — any other
-	  * authored FInterruptResponseOption is logged and falls back to the same behavior. Mutates
-	  * Ledger in place; call after RunPlanning and before DistributePlan. */
-	static void ResolveInterrupts(TArray<FIntentEntry>& Ledger);
-
-private:
-	/** Returns the interrupt response table to use for the given entry: its ability's own
-	  * InterruptResponses if non-empty, else UWolfCombatSettings::DefaultInterruptResponses.
-	  * STAGE 4 SIMPLIFICATION: RequiredTags gating is not evaluated yet (no live tag-state model
-	  * to check against) — only options with an empty RequiredTags container are considered
-	  * available. This is safe today because only the always-available take-hit fallback is
-	  * mechanically implemented regardless of which option gets picked; RequiredTags gating
-	  * becomes meaningful once stage 5 or later work adds real response types that need it. */
-	static TArray<FInterruptResponseOption> GetAvailableResponses(const FIntentEntry& InterruptedEntry);
-
-	/** Weighted random pick among Options. Returns nullptr if Options is empty. */
-	static const FInterruptResponseOption* PickWeightedResponse(const TArray<FInterruptResponseOption>& Options);
-	/**
-	 * STAGE 3 STUB — returns UWolfCombatSettings::DefaultPresageStubAbility unconditionally. Real
-	 * AI decision-making (constraint-gated ability selection, disposition-weighted negotiation) is
-	 * stage 5. This function's only job right now is giving Execution something non-trivial to
-	 * chain through, to validate the plumbing.
-	 */
-	static TSubclassOf<UBaseCombatAbility> DecideIntent_Stub();
-};
-</file>
-
-<file path="Source/WolfCore/Public/Presage/PresageOrchestratorTypes.h">
-// Fill out your copyright notice in the Description page of Project Settings.
-
-#pragma once
-
-#include "CoreMinimal.h"
-#include "GameplayTagContainer.h"
-#include "Interfaces/IWolfCombatant.h"
-#include "PresageOrchestratorTypes.generated.h"
-
-class UBaseCombatAbility;
-class UGameplayAbility;
-
-/**
- * Derived timing breakdown of a combat ability's sequence, computed from its AbilitySequence
- * rather than separately authored (see UBaseCombatAbility::ComputeAbilityTiming). Used by the
- * Presage orchestrator's planning phase to reason about ability timing without running physics.
- */
-USTRUCT(BlueprintType)
-struct WOLFCORE_API FAbilityTimingProfile
-{
-	GENERATED_BODY()
-
-	/** Time from ability start until the first hit-capable period begins. */
-	UPROPERTY(BlueprintReadOnly, Category = "WolfCore|Presage")
-	float WindupDuration = 0.f;
-
-	/** Time from ability start until the first hit-capable period begins (same value as WindupDuration; kept as a separate field for readability at call sites reasoning about window bounds rather than windup length). */
-	UPROPERTY(BlueprintReadOnly, Category = "WolfCore|Presage")
-	float ActiveWindowStart = 0.f;
-
-	/** Time from ability start until the last hit-capable period ends. */
-	UPROPERTY(BlueprintReadOnly, Category = "WolfCore|Presage")
-	float ActiveWindowEnd = 0.f;
-
-	/** Time from the end of the active window until the ability's sequence fully completes. */
-	UPROPERTY(BlueprintReadOnly, Category = "WolfCore|Presage")
-	float RecoveryDuration = 0.f;
-
-	/** Total duration of the ability's full sequence. */
-	UPROPERTY(BlueprintReadOnly, Category = "WolfCore|Presage")
-	float TotalDuration = 0.f;
-};
-
-/** Status of a single combatant's intent within a planning pass. See PresageOrchestratorSpec.md section 2.2. */
-UENUM(BlueprintType)
-enum class EIntentStatus : uint8
-{
-	Declared,
-	Interrupted,
-	Confirmed
-};
-
-/**
- * A single combatant's planned action for a portion of the baked timeline, produced by the
- * Presage orchestrator's planning phase. Not used or populated until stage 3 of the orchestrator
- * rollout — this stage only defines the type.
- */
-USTRUCT(BlueprintType)
-struct WOLFCORE_API FIntentEntry
-{
-	GENERATED_BODY()
-
-	/** The combatant this intent belongs to. */
-	UPROPERTY(BlueprintReadOnly, Category = "WolfCore|Presage")
-	TScriptInterface<IWolfCombatant> Combatant;
-
-	/** The ability class this intent commits to using. */
-	UPROPERTY(BlueprintReadOnly, Category = "WolfCore|Presage")
-	TSubclassOf<UBaseCombatAbility> AbilityClass;
-
-	/** This ability's derived timing profile, cached here so planning doesn't recompute it. */
-	UPROPERTY(BlueprintReadOnly, Category = "WolfCore|Presage")
-	FAbilityTimingProfile Timing;
-
-	/** The intended target of this ability, if any. */
-	UPROPERTY(BlueprintReadOnly, Category = "WolfCore|Presage")
-	TWeakObjectPtr<AActor> Target;
-
-	/** Approximate start time of this intent on the baked timeline, in seconds from bake start. */
-	UPROPERTY(BlueprintReadOnly, Category = "WolfCore|Presage")
-	float StartTime = 0.f;
-
-	/** Current resolution status of this intent. */
-	UPROPERTY(BlueprintReadOnly, Category = "WolfCore|Presage")
-	EIntentStatus Status = EIntentStatus::Declared;
-
-	/** True if UnavailableUntil holds a meaningful value (e.g. this intent puts the combatant in
-	  * hitstun until a known time). False means no such restriction is known for this entry. */
-	UPROPERTY(BlueprintReadOnly, Category = "WolfCore|Presage")
-	bool bHasUnavailableUntil = false;
-
-	/** Only meaningful if bHasUnavailableUntil is true. Timeline time before which this combatant
-	  * cannot be offered a new decision. */
-	UPROPERTY(BlueprintReadOnly, Category = "WolfCore|Presage")
-	float UnavailableUntil = 0.f;
-
-	/** True if this intent was interrupted during temporal resolution and InterruptedAtTime holds
-	  * a meaningful value. Set by FPresageOrchestrator::ResolveInterrupts. */
-	UPROPERTY(BlueprintReadOnly, Category = "WolfCore|Presage")
-	bool bHasInterruptedAtTime = false;
-
-	/** Only meaningful if bHasInterruptedAtTime is true. Timeline time at which the interrupting
-	  * attack actually lands — Execution cuts this entry's ability short at this time instead of
-	  * letting it run to its natural completion. */
-	UPROPERTY(BlueprintReadOnly, Category = "WolfCore|Presage")
-	float InterruptedAtTime = 0.f;
-};
-
-/**
- * A single weighted, tag-gated option for how a combatant can respond to having its planned
- * ability interrupted during the Presage orchestrator's planning phase. Authored per-ability
- * and/or as a project-wide default list (see UWolfCombatSettings::DefaultInterruptResponses).
- * Not read by any logic yet — this stage only defines the authoring surface.
- */
-USTRUCT(BlueprintType)
-struct WOLFCORE_API FInterruptResponseOption
-{
-	GENERATED_BODY()
-
-	/** Identifies which response this is, e.g. Presage.Interrupt.Feint, .Dodge, .Parry, .TakeHit. */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "WolfCore|Presage")
-	FGameplayTag ResponseTag;
-
-	/** Relative probability weight when multiple options are available and gated-in. */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "WolfCore|Presage", meta = (ClampMin = "0.0"))
-	float Weight = 1.f;
-
-	/** This option is only available if the interrupted combatant/period currently has all of these tags. Leave empty for an always-available option. */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "WolfCore|Presage")
-	FGameplayTagContainer RequiredTags;
-};
-</file>
-
-<file path="Source/WolfCore/WolfCore.Build.cs">
-// Copyright Epic Games, Inc. All Rights Reserved.
-
-using UnrealBuildTool;
-
-public class WolfCore : ModuleRules
-{
-	public WolfCore(ReadOnlyTargetRules Target) : base(Target)
-	{
-		PCHUsage = PCHUsageMode.UseExplicitOrSharedPCHs;
-	
-		PublicDependencyModuleNames.AddRange(new string[] { "Core", "CoreUObject", "Engine", "InputCore", "EnhancedInput", "GameplayAbilities", "GameplayTasks", "GameplayTags", "DeveloperSettings" });
-
-		PrivateDependencyModuleNames.AddRange(new string[] {  });
-
-		// Uncomment if you are using Slate UI
-		// PrivateDependencyModuleNames.AddRange(new string[] { "Slate", "SlateCore" });
-		
-		// Uncomment if you are using online features
-		// PrivateDependencyModuleNames.Add("OnlineSubsystem");
-
-		// To include OnlineSubsystemSteam, add it to the plugins section in your uproject file with the Enabled attribute set to true
-	}
-}
-</file>
-
 <file path="repomix.config.json">
 {
   "output": {
@@ -2071,22 +1649,6 @@ public class WolfCore : ModuleRules
     ]
   }
 }
-</file>
-
-<file path="Config/DefaultGame.ini">
-[/Script/CommonUI.CommonUISettings]
-CommonButtonAcceptKeyHandling=TriggerClick
-
-[/Script/EngineSettings.GeneralProjectSettings]
-ProjectID=542589A84C679662118B0392AE86C14A
-
-[/Script/GameplayAbilities.AbilitySystemGlobals]
-GameplayCueNotifyPaths=/Game/WolfCore
-bUseDebugtargetFromHud=true
-
-[/Script/WolfCore.WolfCombatSettings]
-PresageEffectClass=/Game/WolfCore/Abilities/Effects/GE_PresageMode.GE_PresageMode_C
-ModeTimeDilationMap=(((TagName="InputState.OOC"), 1.000000),((TagName="InputState.RT"), 1.000000),((TagName="InputState.TB"), 0.000000))
 </file>
 
 <file path="Source/WolfCore/Private/Core/WolfGameplayTags.cpp">
@@ -2146,6 +1708,275 @@ void FWolfGameplayTags::InitializeNativeGameplayTags()
 
 	// --- Status ---
 	AddNativeTag(GameplayTags.Status_Link, FName("Status.Link"), TEXT("Status tag for link."));
+}
+</file>
+
+<file path="Source/WolfCore/Private/Presage/PresageOrchestrator.cpp">
+#include "Presage/PresageOrchestrator.h"
+
+#include "Systems/CombatModeSubsystem.h"
+#include "Abilities/BaseCombatAbility.h"
+#include "Core/WolfCombatSettings.h"
+#include "Core/WolfPresageComponent.h"
+#include "Debug/WolfDebug.h"
+#include "GameFramework/Pawn.h"
+#include "AbilitySystemComponent.h"
+#include "AbilitySystemInterface.h"
+
+TArray<FIntentEntry> FPresageOrchestrator::RunPlanning(
+	UCombatModeSubsystem* CMS,
+	const TArray<TScriptInterface<IWolfCombatant>>& Combatants,
+	float Duration)
+{
+	TArray<FIntentEntry> Ledger;
+	if (!CMS) return Ledger;
+
+	for (const auto& Combatant : Combatants)
+	{
+		const auto* Actor = Cast<AActor>(Combatant.GetObject());
+		if (!IsValid(Actor)) continue;
+
+		auto* Presage = Combatant.GetInterface() ? Combatant.GetInterface()->GetPresageComponent() : nullptr;
+		if (!IsValid(Presage)) continue;
+
+		const auto* Pawn = Cast<APawn>(Actor);
+		const bool bIsPlayer = Pawn && Pawn->IsPlayerControlled();
+
+		if (bIsPlayer)
+		{
+			// Player's own intent comes from the existing injection mechanism, not the orchestrator.
+			// At most one entry — Execution does not auto-continue the player past it (stage 3 scope).
+			if (Presage->HasInjectedAbilityRequest())
+			{
+				const auto& Request = Presage->GetInjectedAbilityRequest();
+
+				FIntentEntry Entry;
+				Entry.Combatant = Combatant;
+				Entry.AbilityClass = Request.AbilityClass;
+				Entry.Timing = CMS->GetOrComputeTimingProfile(Request.AbilityClass);
+				Entry.StartTime = Request.GetScheduledTime();
+				Entry.Status = EIntentStatus::Confirmed;
+
+				for (const auto& WeakTarget : Request.GetTargets())
+				{
+					if (WeakTarget.IsValid())
+					{
+						Entry.Target = WeakTarget;
+						break;
+					}
+				}
+
+				Ledger.Add(Entry);
+			}
+			continue;
+		}
+
+		// AI combatant: chain valid abilities back-to-back until it covers the full duration.
+		// Real disposition/negotiation/interrupts are not implemented yet (stage 5 for negotiation;
+		// interrupts as of this stage are detected but only "take the hit" is functional).
+		AActor* StubTarget = nullptr;
+		for (const auto& Other : Combatants)
+		{
+			const auto* OtherActor = Cast<AActor>(Other.GetObject());
+			if (IsValid(OtherActor) && OtherActor != Actor)
+			{
+				StubTarget = const_cast<AActor*>(OtherActor);
+				break;
+			}
+		}
+
+		float TimeCursor = 0.f;
+		while (TimeCursor < Duration)
+		{
+			const auto AbilityClass = DecideIntent(Combatant);
+			if (!AbilityClass) break; // nothing configured — leave this combatant with no plan.
+
+			FIntentEntry Entry;
+			Entry.Combatant = Combatant;
+			Entry.AbilityClass = AbilityClass;
+			Entry.Timing = CMS->GetOrComputeTimingProfile(AbilityClass);
+			Entry.StartTime = TimeCursor;
+			Entry.Status = EIntentStatus::Confirmed;
+			Entry.Target = StubTarget; // STAGE 4 STUB — first other tracked combatant, not real targeting.
+			Ledger.Add(Entry);
+
+			// Guard against a zero-duration ability looping forever.
+			TimeCursor += FMath::Max(Entry.Timing.TotalDuration, KINDA_SMALL_NUMBER);
+		}
+	}
+
+	return Ledger;
+}
+
+void FPresageOrchestrator::DistributePlan(
+	const TArray<TScriptInterface<IWolfCombatant>>& Combatants,
+	const TArray<FIntentEntry>& Plan)
+{
+	for (const auto& Combatant : Combatants)
+	{
+		auto* Presage = Combatant.GetInterface() ? Combatant.GetInterface()->GetPresageComponent() : nullptr;
+		if (!IsValid(Presage)) continue;
+
+		TArray<FIntentEntry> ForThisCombatant = Plan.FilterByPredicate(
+			[&Combatant](const FIntentEntry& Entry) { return Entry.Combatant == Combatant; });
+
+		ForThisCombatant.Sort([](const FIntentEntry& A, const FIntentEntry& B) { return A.StartTime < B.StartTime; });
+
+		Presage->SetPlannedIntents(ForThisCombatant);
+	}
+}
+
+void FPresageOrchestrator::ResolveInterrupts(TArray<FIntentEntry>& Ledger)
+{
+	// Map from victim index -> earliest attacker's AttackWindowStart that hits them. A victim can
+	// overlap with more than one attacker; only the earliest one actually lands first and
+	// interrupts them — later ones are moot for this entry (stacking further damage/hitstun
+	// beyond the first hit is a separate, out-of-scope concern). No iteration cap is needed here:
+	// that only becomes relevant once a *response* (e.g. a future dodge/parry) has its own active
+	// window that could itself be interrupted by a second attacker — "take the hit" has no such
+	// window, so there's nothing to recurse into yet.
+	TMap<int32, float> EarliestAttackTime;
+
+	for (int32 i = 0; i < Ledger.Num(); ++i)
+	{
+		const FIntentEntry& Attacker = Ledger[i];
+		if (!Attacker.Target.IsValid()) continue;
+
+		const float AttackWindowStart = Attacker.StartTime + Attacker.Timing.ActiveWindowStart;
+		const float AttackWindowEnd = Attacker.StartTime + Attacker.Timing.ActiveWindowEnd;
+
+		for (int32 j = 0; j < Ledger.Num(); ++j)
+		{
+			if (i == j) continue;
+
+			const FIntentEntry& Victim = Ledger[j];
+			const auto* VictimActor = Cast<AActor>(Victim.Combatant.GetObject());
+			if (!IsValid(VictimActor) || VictimActor != Attacker.Target.Get()) continue;
+
+			const float VictimWindupEnd = Victim.StartTime + Victim.Timing.WindupDuration;
+
+			// Interval overlap: attacker's active window intersects victim's windup.
+			if (AttackWindowStart < VictimWindupEnd && AttackWindowEnd > Victim.StartTime)
+			{
+				if (const float* Existing = EarliestAttackTime.Find(j))
+				{
+					if (AttackWindowStart < *Existing)
+					{
+						EarliestAttackTime[j] = AttackWindowStart;
+					}
+				}
+				else
+				{
+					EarliestAttackTime.Add(j, AttackWindowStart);
+				}
+			}
+		}
+	}
+
+	// Resolve each interrupted victim exactly once, using the earliest incoming attack.
+	for (const auto& Pair : EarliestAttackTime)
+	{
+		const int32 VictimIndex = Pair.Key;
+		const float EarliestAttackWindowStart = Pair.Value;
+
+		FIntentEntry& Entry = Ledger[VictimIndex];
+
+		const TArray<FInterruptResponseOption> Options = GetAvailableResponses(Entry);
+		const FInterruptResponseOption* Chosen = PickWeightedResponse(Options);
+
+		if (Chosen)
+		{
+			WOLF_LOG(Log, TEXT("[PRESAGE] Interrupt response chosen: %s (only take-hit is mechanically implemented this stage)"),
+				*Chosen->ResponseTag.ToString());
+		}
+
+		// Only "take the hit" is functional — regardless of which option (if any) was chosen,
+		// the mechanical effect this stage implements is: cut the interrupted ability short at
+		// the moment the earliest interrupting attack actually lands.
+		Entry.bHasInterruptedAtTime = true;
+		Entry.InterruptedAtTime = FMath::Max(Entry.StartTime, EarliestAttackWindowStart);
+		Entry.Status = EIntentStatus::Confirmed;
+	}
+}
+
+TArray<FInterruptResponseOption> FPresageOrchestrator::GetAvailableResponses(const FIntentEntry& InterruptedEntry)
+{
+	TArray<FInterruptResponseOption> Result;
+
+	const auto* AbilityCDO = InterruptedEntry.AbilityClass
+		? InterruptedEntry.AbilityClass->GetDefaultObject<UBaseCombatAbility>()
+		: nullptr;
+
+	const TArray<FInterruptResponseOption>* Source = nullptr;
+	if (AbilityCDO && AbilityCDO->InterruptResponses.Num() > 0)
+	{
+		Source = &AbilityCDO->InterruptResponses;
+	}
+	else if (const auto* Settings = GetDefault<UWolfCombatSettings>())
+	{
+		Source = &Settings->DefaultInterruptResponses;
+	}
+
+	if (Source)
+	{
+		for (const auto& Option : *Source)
+		{
+			if (Option.RequiredTags.IsEmpty()) // stage 4 simplification — see header comment
+			{
+				Result.Add(Option);
+			}
+		}
+	}
+
+	return Result;
+}
+
+const FInterruptResponseOption* FPresageOrchestrator::PickWeightedResponse(const TArray<FInterruptResponseOption>& Options)
+{
+	if (Options.Num() == 0) return nullptr;
+
+	float TotalWeight = 0.f;
+	for (const auto& Option : Options) TotalWeight += FMath::Max(Option.Weight, 0.f);
+	if (TotalWeight <= 0.f) return &Options[0];
+
+	float Roll = FMath::FRandRange(0.f, TotalWeight);
+	for (const auto& Option : Options)
+	{
+		Roll -= FMath::Max(Option.Weight, 0.f);
+		if (Roll <= 0.f) return &Option;
+	}
+	return &Options.Last();
+}
+
+TSubclassOf<UBaseCombatAbility> FPresageOrchestrator::DecideIntent(const TScriptInterface<IWolfCombatant>& Combatant)
+{
+	const auto* Actor = Cast<AActor>(Combatant.GetObject());
+	if (!IsValid(Actor)) return nullptr;
+
+	const auto* ASI = Cast<IAbilitySystemInterface>(Actor);
+	UAbilitySystemComponent* ASC = ASI ? ASI->GetAbilitySystemComponent() : nullptr;
+	if (!ASC) return nullptr;
+
+	TArray<TSubclassOf<UBaseCombatAbility>> ValidCandidates;
+
+	FScopedAbilityListLock ActiveScopeLock(*ASC);
+	for (const auto& Spec : ASC->GetActivatableAbilities())
+	{
+		UBaseCombatAbility* CombatAbility = Cast<UBaseCombatAbility>(Spec.Ability);
+		if (!CombatAbility) continue; // not a combat ability (e.g. a passive/buff-only ability)
+
+		if (!CombatAbility->CanActivateAbility(Spec.Handle, ASC->AbilityActorInfo.Get()))
+		{
+			continue; // blocked by tags, on cooldown, insufficient cost — same real gating, no
+			          // special-cased orchestrator rule.
+		}
+
+		ValidCandidates.Add(CombatAbility->GetClass());
+	}
+
+	if (ValidCandidates.Num() == 0) return nullptr;
+
+	return ValidCandidates[FMath::RandRange(0, ValidCandidates.Num() - 1)];
 }
 </file>
 
@@ -2894,6 +2725,211 @@ public:
 	/// @brief Retrieves the current ability progress (period time) for simulation sync.
 	/// @return Float representing the active ability's period progress in seconds.
 	virtual float GetActiveAbilityProgress() const = 0;
+};
+</file>
+
+<file path="Source/WolfCore/Public/Presage/PresageOrchestrator.h">
+// Fill out your copyright notice in the Description page of Project Settings.
+
+#pragma once
+
+#include "CoreMinimal.h"
+#include "Presage/PresageOrchestratorTypes.h"
+#include "Interfaces/IWolfCombatant.h"
+
+class UCombatModeSubsystem;
+class UBaseCombatAbility;
+class UAbilitySystemComponent;
+
+/**
+ * Presage planning phase. Produces a finalized per-combatant Action Plan (as a flat list of
+ * FIntentEntry, grouped by combatant when distributed) before FWolfPresageSimulator::ExecuteFutureBake
+ * runs. Stage 3: negotiation, interrupts, and real AI decision-making are not implemented yet — see
+ * PresageOrchestratorStage3Spec.md for what this stage deliberately stubs.
+ */
+class WOLFCORE_API FPresageOrchestrator
+{
+public:
+	/** Runs planning for the given combatants over the given duration, returning a flat intent
+	  * ledger (not yet grouped per-combatant — see DistributePlan). */
+	static TArray<FIntentEntry> RunPlanning(
+		UCombatModeSubsystem* CMS,
+		const TArray<TScriptInterface<IWolfCombatant>>& Combatants,
+		float Duration);
+
+	/** Groups the flat ledger by combatant, sorts each group by StartTime, and pushes each
+	  * combatant's slice into its own UWolfPresageComponent via SetPlannedIntents(). Must be called
+	  * before FWolfPresageSimulator::ExecuteFutureBake for the same bake. */
+	static void DistributePlan(
+		const TArray<TScriptInterface<IWolfCombatant>>& Combatants,
+		const TArray<FIntentEntry>& Plan);
+
+	/** Detects interrupts (one combatant's planned attack landing during another's windup) and
+	  * resolves them. Only "take the hit" is mechanically functional this stage — any other
+	  * authored FInterruptResponseOption is logged and falls back to the same behavior. Mutates
+	  * Ledger in place; call after RunPlanning and before DistributePlan. */
+	static void ResolveInterrupts(TArray<FIntentEntry>& Ledger);
+
+	private:
+	/** Returns the interrupt response table to use for the given entry: its ability's own
+	  * InterruptResponses if non-empty, else UWolfCombatSettings::DefaultInterruptResponses.
+	  * STAGE 4 SIMPLIFICATION: RequiredTags gating is not evaluated yet (no live tag-state model
+	  * to check against) — only options with an empty RequiredTags container are considered
+	  * available. This is safe today because only the always-available take-hit fallback is
+	  * mechanically implemented regardless of which option gets picked; RequiredTags gating
+	  * becomes meaningful once stage 5 or later work adds real response types that need it. */
+	static TArray<FInterruptResponseOption> GetAvailableResponses(const FIntentEntry& InterruptedEntry);
+
+	/** Weighted random pick among Options. Returns nullptr if Options is empty. */
+	static const FInterruptResponseOption* PickWeightedResponse(const TArray<FInterruptResponseOption>& Options);
+
+	/**
+	 * Selects an ability for the given AI-controlled combatant from its actual granted kit,
+	 * filtered to UBaseCombatAbility subclasses that report CanActivateAbility() true right now
+	 * (respecting real ActivationBlockedTags/ActivationRequiredTags, cooldown, and cost — the same
+	 * gating real-time activation already uses). Picks uniformly at random among valid candidates.
+	 * Returns nullptr if the combatant has no ASC, or no currently-valid UBaseCombatAbility.
+	 *
+	 * Deliberately simple: "smarter" selection (favoring a follow-up on an ally's attack, avoiding
+	 * a redundant repeat, weighting by target distance) needs to know what else is being planned
+	 * in this bake, which requires the round-based negotiation this stage does not implement —
+	 * see stage 6.
+	 */
+	static TSubclassOf<UBaseCombatAbility> DecideIntent(const TScriptInterface<IWolfCombatant>& Combatant);
+};
+</file>
+
+<file path="Source/WolfCore/Public/Presage/PresageOrchestratorTypes.h">
+// Fill out your copyright notice in the Description page of Project Settings.
+
+#pragma once
+
+#include "CoreMinimal.h"
+#include "GameplayTagContainer.h"
+#include "Interfaces/IWolfCombatant.h"
+#include "PresageOrchestratorTypes.generated.h"
+
+class UBaseCombatAbility;
+class UGameplayAbility;
+
+/**
+ * Derived timing breakdown of a combat ability's sequence, computed from its AbilitySequence
+ * rather than separately authored (see UBaseCombatAbility::ComputeAbilityTiming). Used by the
+ * Presage orchestrator's planning phase to reason about ability timing without running physics.
+ */
+USTRUCT(BlueprintType)
+struct WOLFCORE_API FAbilityTimingProfile
+{
+	GENERATED_BODY()
+
+	/** Time from ability start until the first hit-capable period begins. */
+	UPROPERTY(BlueprintReadOnly, Category = "WolfCore|Presage")
+	float WindupDuration = 0.f;
+
+	/** Time from ability start until the first hit-capable period begins (same value as WindupDuration; kept as a separate field for readability at call sites reasoning about window bounds rather than windup length). */
+	UPROPERTY(BlueprintReadOnly, Category = "WolfCore|Presage")
+	float ActiveWindowStart = 0.f;
+
+	/** Time from ability start until the last hit-capable period ends. */
+	UPROPERTY(BlueprintReadOnly, Category = "WolfCore|Presage")
+	float ActiveWindowEnd = 0.f;
+
+	/** Time from the end of the active window until the ability's sequence fully completes. */
+	UPROPERTY(BlueprintReadOnly, Category = "WolfCore|Presage")
+	float RecoveryDuration = 0.f;
+
+	/** Total duration of the ability's full sequence. */
+	UPROPERTY(BlueprintReadOnly, Category = "WolfCore|Presage")
+	float TotalDuration = 0.f;
+};
+
+/** Status of a single combatant's intent within a planning pass. See PresageOrchestratorSpec.md section 2.2. */
+UENUM(BlueprintType)
+enum class EIntentStatus : uint8
+{
+	Declared,
+	Interrupted,
+	Confirmed
+};
+
+/**
+ * A single combatant's planned action for a portion of the baked timeline, produced by the
+ * Presage orchestrator's planning phase. Not used or populated until stage 3 of the orchestrator
+ * rollout — this stage only defines the type.
+ */
+USTRUCT(BlueprintType)
+struct WOLFCORE_API FIntentEntry
+{
+	GENERATED_BODY()
+
+	/** The combatant this intent belongs to. */
+	UPROPERTY(BlueprintReadOnly, Category = "WolfCore|Presage")
+	TScriptInterface<IWolfCombatant> Combatant;
+
+	/** The ability class this intent commits to using. */
+	UPROPERTY(BlueprintReadOnly, Category = "WolfCore|Presage")
+	TSubclassOf<UBaseCombatAbility> AbilityClass;
+
+	/** This ability's derived timing profile, cached here so planning doesn't recompute it. */
+	UPROPERTY(BlueprintReadOnly, Category = "WolfCore|Presage")
+	FAbilityTimingProfile Timing;
+
+	/** The intended target of this ability, if any. */
+	UPROPERTY(BlueprintReadOnly, Category = "WolfCore|Presage")
+	TWeakObjectPtr<AActor> Target;
+
+	/** Approximate start time of this intent on the baked timeline, in seconds from bake start. */
+	UPROPERTY(BlueprintReadOnly, Category = "WolfCore|Presage")
+	float StartTime = 0.f;
+
+	/** Current resolution status of this intent. */
+	UPROPERTY(BlueprintReadOnly, Category = "WolfCore|Presage")
+	EIntentStatus Status = EIntentStatus::Declared;
+
+	/** True if UnavailableUntil holds a meaningful value (e.g. this intent puts the combatant in
+	  * hitstun until a known time). False means no such restriction is known for this entry. */
+	UPROPERTY(BlueprintReadOnly, Category = "WolfCore|Presage")
+	bool bHasUnavailableUntil = false;
+
+	/** Only meaningful if bHasUnavailableUntil is true. Timeline time before which this combatant
+	  * cannot be offered a new decision. */
+	UPROPERTY(BlueprintReadOnly, Category = "WolfCore|Presage")
+	float UnavailableUntil = 0.f;
+
+	/** True if this intent was interrupted during temporal resolution and InterruptedAtTime holds
+	  * a meaningful value. Set by FPresageOrchestrator::ResolveInterrupts. */
+	UPROPERTY(BlueprintReadOnly, Category = "WolfCore|Presage")
+	bool bHasInterruptedAtTime = false;
+
+	/** Only meaningful if bHasInterruptedAtTime is true. Timeline time at which the interrupting
+	  * attack actually lands — Execution cuts this entry's ability short at this time instead of
+	  * letting it run to its natural completion. */
+	UPROPERTY(BlueprintReadOnly, Category = "WolfCore|Presage")
+	float InterruptedAtTime = 0.f;
+};
+
+/**
+ * A single weighted, tag-gated option for how a combatant can respond to having its planned
+ * ability interrupted during the Presage orchestrator's planning phase. Authored per-ability
+ * and/or as a project-wide default list (see UWolfCombatSettings::DefaultInterruptResponses).
+ * Not read by any logic yet — this stage only defines the authoring surface.
+ */
+USTRUCT(BlueprintType)
+struct WOLFCORE_API FInterruptResponseOption
+{
+	GENERATED_BODY()
+
+	/** Identifies which response this is, e.g. Presage.Interrupt.Feint, .Dodge, .Parry, .TakeHit. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "WolfCore|Presage")
+	FGameplayTag ResponseTag;
+
+	/** Relative probability weight when multiple options are available and gated-in. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "WolfCore|Presage", meta = (ClampMin = "0.0"))
+	float Weight = 1.f;
+
+	/** This option is only available if the interrupted combatant/period currently has all of these tags. Leave empty for an always-available option. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "WolfCore|Presage")
+	FGameplayTagContainer RequiredTags;
 };
 </file>
 
@@ -3743,6 +3779,213 @@ TMap<TSubclassOf<UGameplayAbility>, FGameplayAbilitySpecHandle> UWolfAbilityComp
 }
 </file>
 
+<file path="Source/WolfCore/Private/Core/WolfPlayerController.cpp">
+// Fill out your copyright notice in the Description page of Project Settings.
+
+
+#include "WolfCore/Public/Core/WolfPlayerController.h"
+
+#include "AbilitySystemBlueprintLibrary.h"
+#include "Core/WolfFunctionLibrary.h"
+#include "Core/WolfGameplayTags.h"
+#include "Debug/WolfDebug.h"
+#include "Engine/LocalPlayer.h"
+#include "Engine/Engine.h"
+#include "EnhancedInputSubsystems.h"
+#include "GameFramework/Character.h"
+#include "Systems/CombatModeSubsystem.h"
+#include "WolfCore/Public/AbilitySystem/WolfAbilitySystemComponent.h"
+#include "WolfCore/Public/Input/WolfInputComponent.h"
+
+AWolfPlayerController::AWolfPlayerController()
+{
+}
+
+void AWolfPlayerController::PlayerTick(float DeltaTime)
+{
+	Super::PlayerTick(DeltaTime);
+}
+
+void AWolfPlayerController::BeginPlay()
+{
+	Super::BeginPlay();
+
+	if (!EnhancedInputSubsystem) EnhancedInputSubsystem = GetEnhancedInputSubsystem();
+	if (!WolfASC) WolfASC = GetASC();
+
+	const FWolfGameplayTags& WolfTags = FWolfGameplayTags::Get();
+
+	for (const auto InputStateTags = {WolfTags.InputState_RT, WolfTags.InputState_TB, WolfTags.InputState_OOC};
+	     const auto& Tag : InputStateTags)
+	{
+		WolfASC->RegisterGameplayTagEvent(Tag, EGameplayTagEventType::NewOrRemoved).AddUObject(
+			this, &ThisClass::OnCombatTagChanged);
+	}
+
+	WolfASC->AddLooseGameplayTag(WolfTags.Event_ModeSwitchReady);
+	WOLF_LOG(Log, TEXT("Player Controller ready to switch modes"));
+
+	if (const auto* CombatModeSubsystem = GetWorld()->GetSubsystem<UCombatModeSubsystem>())
+	{
+		const auto CurrentModeTag = CombatModeSubsystem->GetCurrentMode();
+		OnCombatTagChanged(CurrentModeTag, 1);
+	}
+}
+
+void AWolfPlayerController::SetupInputComponent()
+{
+	Super::SetupInputComponent();
+
+	auto* WolfInputComponent = CastChecked<UWolfInputComponent>(InputComponent);
+	if (!WolfInputComponent) return;
+
+	auto BindInputAction = [&](UInputAction* Action, auto Method)
+	{
+		if (Action) WolfInputComponent->BindAction(Action, ETriggerEvent::Triggered, this, Method);
+		else WOLF_WARN(TEXT("Tried to bind an input action to a null action"));
+	};
+
+	BindInputAction(ScrubAction, &ThisClass::HandleScrubInput);
+	BindInputAction(MoveAction, &ThisClass::Move);
+	BindInputAction(LookAction, &ThisClass::Look);
+
+	if (InputConfig)
+	{
+		WolfInputComponent->BindAbilityActions(
+			InputConfig,
+			this,
+			&ThisClass::AbilityInputTagPressed,
+			&ThisClass::AbilityInputTagReleased,
+			&ThisClass::AbilityInputTagHeld
+		);
+	}
+}
+
+void AWolfPlayerController::PostInitializeComponents()
+{
+	Super::PostInitializeComponents();
+}
+
+void AWolfPlayerController::OnCombatTagChanged(const FGameplayTag Tag, int32 NewCount)
+{
+	if (NewCount <= 0) return;
+
+	const auto TagName = Tag.ToString();
+
+	if (const auto* IMC = CombatModeMappings.Find(Tag))
+	{
+		EnhancedInputSubsystem->ClearAllMappings();
+		EnhancedInputSubsystem->AddMappingContext(*IMC, 0);
+		WOLF_INFO(TEXT("Switched to %s mode"), *TagName);
+	}
+	else
+	{
+		WOLF_WARN(TEXT("No InputMapping set for CombatModeTag %s"), *TagName);
+	}
+}
+
+void AWolfPlayerController::AbilityInputTagPressed(const FGameplayTag InputTag)
+{
+	WolfASC->AbilityInputTagPressed(InputTag);
+	WOLF_LOG(Log, TEXT( "Ability [%s] activated." ), *InputTag.ToString());
+}
+
+void AWolfPlayerController::AbilityInputTagReleased(const FGameplayTag InputTag)
+{
+	WolfASC->AbilityInputTagReleased(InputTag);
+}
+
+void AWolfPlayerController::AbilityInputTagHeld(const FGameplayTag InputTag)
+{
+	WolfASC->AbilityInputTagHeld(InputTag);
+}
+
+void AWolfPlayerController::HandleScrubInput(const FInputActionValue& Value)
+{
+	const auto AxisValue = Value.Get<float>();
+	if (FMath::IsNearlyZero(AxisValue)) return;
+
+	if (auto* CMS = UWolfFunctionLibrary::GetWorldSubsystem<UCombatModeSubsystem>(this))
+	{
+		if (!CMS->bIsInTB) return;
+
+		const auto NewTime = CMS->GetCurrentTimelineTime() + AxisValue * 0.1f;
+		CMS->ScrubTimeline(NewTime);
+	}
+}
+
+void AWolfPlayerController::Move(const FInputActionValue& Value)
+{
+	const FRotator YawRotation(0, GetControlRotation().Yaw, 0);
+	const FRotationMatrix RotationMatrix(YawRotation);
+
+	const auto ForwardDirection = RotationMatrix.GetUnitAxis(EAxis::X);
+	const auto RightDirection = RotationMatrix.GetUnitAxis(EAxis::Y);
+
+	const auto MovementVector = Value.Get<FVector2D>();
+
+	if (auto* ControlledCharacter = GetCharacter())
+	{
+		ControlledCharacter->AddMovementInput(ForwardDirection, MovementVector.Y);
+		ControlledCharacter->AddMovementInput(RightDirection, MovementVector.X);
+	}
+}
+
+void AWolfPlayerController::Look(const FInputActionValue& Value)
+{
+	const auto LookVector = Value.Get<FVector2D>();
+	if (auto* ControlledCharacter = GetCharacter())
+	{
+		ControlledCharacter->AddControllerYawInput(LookVector.X);
+		ControlledCharacter->AddControllerPitchInput(LookVector.Y);
+	}
+}
+
+UWolfAbilitySystemComponent* AWolfPlayerController::GetASC()
+{
+	if (WolfASC) return WolfASC;
+
+	if (ACharacter* ControlledCharacter = GetCharacter())
+	{
+		WolfASC = Cast<UWolfAbilitySystemComponent>(
+			UAbilitySystemBlueprintLibrary::GetAbilitySystemComponent(ControlledCharacter));
+	}
+
+	return WolfASC;
+}
+
+UEnhancedInputLocalPlayerSubsystem* AWolfPlayerController::GetEnhancedInputSubsystem()
+{
+	if (EnhancedInputSubsystem) return EnhancedInputSubsystem;
+
+	EnhancedInputSubsystem = ULocalPlayer::GetSubsystem<UEnhancedInputLocalPlayerSubsystem>(GetLocalPlayer());
+
+	if (!EnhancedInputSubsystem)
+	{
+		WOLF_ERROR(TEXT("Failed to get EnhancedInputSubsystem from local player %s"), *GetLocalPlayer()->GetName());
+	}
+
+	return EnhancedInputSubsystem;
+}
+
+void AWolfPlayerController::ApplyInputMappingForMode(const FGameplayTag& Mode)
+{
+	if (!EnhancedInputSubsystem) EnhancedInputSubsystem = GetEnhancedInputSubsystem();
+	if (!EnhancedInputSubsystem) return;
+
+	if (const auto* IMC = CombatModeMappings.Find(Mode))
+	{
+		EnhancedInputSubsystem->ClearAllMappings();
+		EnhancedInputSubsystem->AddMappingContext(*IMC, 0);
+		WOLF_INFO(TEXT("Applied input mapping for mode: %s"), *Mode.ToString());
+	}
+	else
+	{
+		WOLF_WARN(TEXT("No InputMappingContext found for mode: %s"), *Mode.ToString());
+	}
+}
+</file>
+
 <file path="Source/WolfCore/Public/Core/WolfFunctionLibrary.h">
 #pragma once
 
@@ -3986,213 +4229,6 @@ private:
 };
 </file>
 
-<file path="Source/WolfCore/Private/Core/WolfPlayerController.cpp">
-// Fill out your copyright notice in the Description page of Project Settings.
-
-
-#include "WolfCore/Public/Core/WolfPlayerController.h"
-
-#include "AbilitySystemBlueprintLibrary.h"
-#include "Core/WolfFunctionLibrary.h"
-#include "Core/WolfGameplayTags.h"
-#include "Debug/WolfDebug.h"
-#include "Engine/LocalPlayer.h"
-#include "Engine/Engine.h"
-#include "EnhancedInputSubsystems.h"
-#include "GameFramework/Character.h"
-#include "Systems/CombatModeSubsystem.h"
-#include "WolfCore/Public/AbilitySystem/WolfAbilitySystemComponent.h"
-#include "WolfCore/Public/Input/WolfInputComponent.h"
-
-AWolfPlayerController::AWolfPlayerController()
-{
-}
-
-void AWolfPlayerController::PlayerTick(float DeltaTime)
-{
-	Super::PlayerTick(DeltaTime);
-}
-
-void AWolfPlayerController::BeginPlay()
-{
-	Super::BeginPlay();
-
-	if (!EnhancedInputSubsystem) EnhancedInputSubsystem = GetEnhancedInputSubsystem();
-	if (!WolfASC) WolfASC = GetASC();
-
-	const FWolfGameplayTags& WolfTags = FWolfGameplayTags::Get();
-
-	for (const auto InputStateTags = {WolfTags.InputState_RT, WolfTags.InputState_TB, WolfTags.InputState_OOC};
-	     const auto& Tag : InputStateTags)
-	{
-		WolfASC->RegisterGameplayTagEvent(Tag, EGameplayTagEventType::NewOrRemoved).AddUObject(
-			this, &ThisClass::OnCombatTagChanged);
-	}
-
-	WolfASC->AddLooseGameplayTag(WolfTags.Event_ModeSwitchReady);
-	WOLF_LOG(Log, TEXT("Player Controller ready to switch modes"));
-
-	if (const auto* CombatModeSubsystem = GetWorld()->GetSubsystem<UCombatModeSubsystem>())
-	{
-		const auto CurrentModeTag = CombatModeSubsystem->GetCurrentMode();
-		OnCombatTagChanged(CurrentModeTag, 1);
-	}
-}
-
-void AWolfPlayerController::SetupInputComponent()
-{
-	Super::SetupInputComponent();
-
-	auto* WolfInputComponent = CastChecked<UWolfInputComponent>(InputComponent);
-	if (!WolfInputComponent) return;
-
-	auto BindInputAction = [&](UInputAction* Action, auto Method)
-	{
-		if (Action) WolfInputComponent->BindAction(Action, ETriggerEvent::Triggered, this, Method);
-		else WOLF_WARN(TEXT("Tried to bind an input action to a null action"));
-	};
-
-	BindInputAction(ScrubAction, &ThisClass::HandleScrubInput);
-	BindInputAction(MoveAction, &ThisClass::Move);
-	BindInputAction(LookAction, &ThisClass::Look);
-
-	if (InputConfig)
-	{
-		WolfInputComponent->BindAbilityActions(
-			InputConfig,
-			this,
-			&ThisClass::AbilityInputTagPressed,
-			&ThisClass::AbilityInputTagReleased,
-			&ThisClass::AbilityInputTagHeld
-		);
-	}
-}
-
-void AWolfPlayerController::PostInitializeComponents()
-{
-	Super::PostInitializeComponents();
-}
-
-void AWolfPlayerController::OnCombatTagChanged(const FGameplayTag Tag, int32 NewCount)
-{
-	if (NewCount <= 0) return;
-
-	const auto TagName = Tag.ToString();
-
-	if (const auto* IMC = CombatModeMappings.Find(Tag))
-	{
-		EnhancedInputSubsystem->ClearAllMappings();
-		EnhancedInputSubsystem->AddMappingContext(*IMC, 0);
-		WOLF_INFO(TEXT("Switched to %s mode"), *TagName);
-	}
-	else
-	{
-		WOLF_WARN(TEXT("No InputMapping set for CombatModeTag %s"), *TagName);
-	}
-}
-
-void AWolfPlayerController::AbilityInputTagPressed(const FGameplayTag InputTag)
-{
-	WolfASC->AbilityInputTagPressed(InputTag);
-	WOLF_LOG(Log, TEXT( "Ability [%s] activated." ), *InputTag.ToString());
-}
-
-void AWolfPlayerController::AbilityInputTagReleased(const FGameplayTag InputTag)
-{
-	WolfASC->AbilityInputTagReleased(InputTag);
-}
-
-void AWolfPlayerController::AbilityInputTagHeld(const FGameplayTag InputTag)
-{
-	WolfASC->AbilityInputTagHeld(InputTag);
-}
-
-void AWolfPlayerController::HandleScrubInput(const FInputActionValue& Value)
-{
-	const auto AxisValue = Value.Get<float>();
-	if (FMath::IsNearlyZero(AxisValue)) return;
-
-	if (auto* CMS = UWolfFunctionLibrary::GetWorldSubsystem<UCombatModeSubsystem>(this))
-	{
-		if (!CMS->bIsInTB) return;
-
-		const auto NewTime = CMS->GetCurrentTimelineTime() + AxisValue * 0.1f;
-		CMS->ScrubTimeline(NewTime);
-	}
-}
-
-void AWolfPlayerController::Move(const FInputActionValue& Value)
-{
-	const FRotator YawRotation(0, GetControlRotation().Yaw, 0);
-	const FRotationMatrix RotationMatrix(YawRotation);
-
-	const auto ForwardDirection = RotationMatrix.GetUnitAxis(EAxis::X);
-	const auto RightDirection = RotationMatrix.GetUnitAxis(EAxis::Y);
-
-	const auto MovementVector = Value.Get<FVector2D>();
-
-	if (auto* ControlledCharacter = GetCharacter())
-	{
-		ControlledCharacter->AddMovementInput(ForwardDirection, MovementVector.Y);
-		ControlledCharacter->AddMovementInput(RightDirection, MovementVector.X);
-	}
-}
-
-void AWolfPlayerController::Look(const FInputActionValue& Value)
-{
-	const auto LookVector = Value.Get<FVector2D>();
-	if (auto* ControlledCharacter = GetCharacter())
-	{
-		ControlledCharacter->AddControllerYawInput(LookVector.X);
-		ControlledCharacter->AddControllerPitchInput(LookVector.Y);
-	}
-}
-
-UWolfAbilitySystemComponent* AWolfPlayerController::GetASC()
-{
-	if (WolfASC) return WolfASC;
-
-	if (ACharacter* ControlledCharacter = GetCharacter())
-	{
-		WolfASC = Cast<UWolfAbilitySystemComponent>(
-			UAbilitySystemBlueprintLibrary::GetAbilitySystemComponent(ControlledCharacter));
-	}
-
-	return WolfASC;
-}
-
-UEnhancedInputLocalPlayerSubsystem* AWolfPlayerController::GetEnhancedInputSubsystem()
-{
-	if (EnhancedInputSubsystem) return EnhancedInputSubsystem;
-
-	EnhancedInputSubsystem = ULocalPlayer::GetSubsystem<UEnhancedInputLocalPlayerSubsystem>(GetLocalPlayer());
-
-	if (!EnhancedInputSubsystem)
-	{
-		WOLF_ERROR(TEXT("Failed to get EnhancedInputSubsystem from local player %s"), *GetLocalPlayer()->GetName());
-	}
-
-	return EnhancedInputSubsystem;
-}
-
-void AWolfPlayerController::ApplyInputMappingForMode(const FGameplayTag& Mode)
-{
-	if (!EnhancedInputSubsystem) EnhancedInputSubsystem = GetEnhancedInputSubsystem();
-	if (!EnhancedInputSubsystem) return;
-
-	if (const auto* IMC = CombatModeMappings.Find(Mode))
-	{
-		EnhancedInputSubsystem->ClearAllMappings();
-		EnhancedInputSubsystem->AddMappingContext(*IMC, 0);
-		WOLF_INFO(TEXT("Applied input mapping for mode: %s"), *Mode.ToString());
-	}
-	else
-	{
-		WOLF_WARN(TEXT("No InputMappingContext found for mode: %s"), *Mode.ToString());
-	}
-}
-</file>
-
 <file path="Source/WolfCore/Private/Core/WolfPresageSimulator.cpp">
 // Fill out your copyright notice in the Description page of Project Settings.
 
@@ -4412,6 +4448,57 @@ protected:
  };
 </file>
 
+<file path="Source/WolfCore/Public/Core/WolfCombatSettings.h">
+#pragma once
+
+#include "CoreMinimal.h"
+#include "Engine/DeveloperSettings.h"
+#include "GameplayTagContainer.h"
+#include "Presage/PresageOrchestratorTypes.h"
+#include "WolfCombatSettings.generated.h"
+
+class UGameplayEffect;
+class UBaseCombatAbility;
+
+/**
+ * Developer settings for combat-related configuration, exposed in Project Settings.
+ */
+UCLASS(Config = Game, DefaultConfig, meta = (DisplayName = "Wolf Combat Settings"))
+class WOLFCORE_API UWolfCombatSettings : public UDeveloperSettings
+{
+	GENERATED_BODY()
+
+	// ============================================================================================================================
+	// Presage Configuration
+	// ============================================================================================================================
+
+public:
+	/** Soft class pointer to the GameplayEffect applied when entering presage simulation mode. */
+	UPROPERTY(Config, EditAnywhere, Category = "WolfCore|Presage")
+	TSoftClassPtr<UGameplayEffect> PresageEffectClass;
+
+	/** Fixed time step, in seconds, between each simulation tick during future-bake prediction.
+	  * Read once by CombatModeSubsystem at the start of each bake; all combatants in a given
+	  * bake always share this single value (see FrequencyFixSpec.md). */
+	UPROPERTY(Config, EditAnywhere, Category = "WolfCore|Presage", meta = (ClampMin = "0.01", UIMin = "0.01"))
+	float PresageSimulationStep = 0.1f;
+
+	/** Project-wide default interrupt response options, used when an ability doesn't specify its
+	  * own list. Not read by any logic yet — the Presage orchestrator's interrupt resolution
+	  * (added in a later stage) is the intended consumer. */
+	UPROPERTY(Config, EditAnywhere, Category = "WolfCore|Presage")
+	TArray<FInterruptResponseOption> DefaultInterruptResponses;
+
+	// ============================================================================================================================
+	// Combat Mode Configuration
+	// ============================================================================================================================
+
+	/** Map of combat mode GameplayTags to TimeDilation multipliers for temporal prediction scaling. */
+	UPROPERTY(Config, EditAnywhere, Category = "WolfCore|Combat", meta = (Categories = "InputState"))
+	TMap<FGameplayTag, float> ModeTimeDilationMap;
+};
+</file>
+
 <file path="Source/WolfCore/Public/Core/WolfAbilityComponent.h">
 // Fill out your copyright notice in the Description page of Project Settings.
 
@@ -4506,64 +4593,6 @@ private:
 	/** Array of cached gameplay attributes for quick access during ability resolution and combat calculations. */
 	UPROPERTY(Transient)
 	TArray<FGameplayAttribute> CachedAttributes;
-};
-</file>
-
-<file path="Source/WolfCore/Public/Core/WolfCombatSettings.h">
-#pragma once
-
-#include "CoreMinimal.h"
-#include "Engine/DeveloperSettings.h"
-#include "GameplayTagContainer.h"
-#include "Presage/PresageOrchestratorTypes.h"
-#include "WolfCombatSettings.generated.h"
-
-class UGameplayEffect;
-class UBaseCombatAbility;
-
-/**
- * Developer settings for combat-related configuration, exposed in Project Settings.
- */
-UCLASS(Config = Game, DefaultConfig, meta = (DisplayName = "Wolf Combat Settings"))
-class WOLFCORE_API UWolfCombatSettings : public UDeveloperSettings
-{
-	GENERATED_BODY()
-
-	// ============================================================================================================================
-	// Presage Configuration
-	// ============================================================================================================================
-
-public:
-	/** Soft class pointer to the GameplayEffect applied when entering presage simulation mode. */
-	UPROPERTY(Config, EditAnywhere, Category = "WolfCore|Presage")
-	TSoftClassPtr<UGameplayEffect> PresageEffectClass;
-
-	/** Fixed time step, in seconds, between each simulation tick during future-bake prediction.
-	  * Read once by CombatModeSubsystem at the start of each bake; all combatants in a given
-	  * bake always share this single value (see FrequencyFixSpec.md). */
-	UPROPERTY(Config, EditAnywhere, Category = "WolfCore|Presage", meta = (ClampMin = "0.01", UIMin = "0.01"))
-	float PresageSimulationStep = 0.1f;
-
-	/** Project-wide default interrupt response options, used when an ability doesn't specify its
-	  * own list. Not read by any logic yet — the Presage orchestrator's interrupt resolution
-	  * (added in a later stage) is the intended consumer. */
-	UPROPERTY(Config, EditAnywhere, Category = "WolfCore|Presage")
-	TArray<FInterruptResponseOption> DefaultInterruptResponses;
-
-	/** STAGE 3 STUB ONLY. Placeholder ability every AI-controlled combatant repeatedly "chooses"
-	  * for the full bake duration, used to validate the planning/execution plumbing end-to-end.
-	  * Replaced by real AI decision-making in stage 5 — do not build gameplay content against this
-	  * being the permanent mechanism. */
-	UPROPERTY(Config, EditAnywhere, Category = "WolfCore|Presage")
-	TSubclassOf<UBaseCombatAbility> DefaultPresageStubAbility;
-
-	// ============================================================================================================================
-	// Combat Mode Configuration
-	// ============================================================================================================================
-
-	/** Map of combat mode GameplayTags to TimeDilation multipliers for temporal prediction scaling. */
-	UPROPERTY(Config, EditAnywhere, Category = "WolfCore|Combat", meta = (Categories = "InputState"))
-	TMap<FGameplayTag, float> ModeTimeDilationMap;
 };
 </file>
 
@@ -5151,6 +5180,230 @@ struct FTemporalStates
 };
 </file>
 
+<file path="Source/WolfCore/Public/Systems/CombatModeSubsystem.h">
+// Fill out your copyright notice in the Description page of Project Settings.
+
+#pragma once
+
+#include "CoreMinimal.h"
+#include "Core/WolfGameplayTags.h"
+#include "Presage/ActorSnapshot.h"
+#include "Presage/PresageOrchestratorTypes.h"
+#include "Subsystems/WorldSubsystem.h"
+#include "Interfaces/IWolfCombatant.h"
+#include "CombatModeSubsystem.generated.h"
+
+struct FStreamableHandle;
+class UAbilitySystemComponent;
+class UWolfCombatant;
+class UBaseCombatAbility;
+
+/**
+ * Delegate broadcast when the global combat mode changes.
+ */
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnCombatModeChanged, FGameplayTag, NewMode);
+
+/**
+ * World subsystem managing combat mode state (Real-Time / Turn-Based).
+ * Handles mode transitions, time dilation, temporal snapshots, and presage simulation coordination.
+ */
+UCLASS()
+class WOLFCORE_API UCombatModeSubsystem : public UWorldSubsystem
+{
+	GENERATED_BODY()
+
+	// ============================================================================================================================
+	// Lifecycle
+	// ============================================================================================================================
+
+	/** Initializes the subsystem when it is registered with the world, setting up internal state and tag references. */
+	/**
+	 * @param Collection Reference to the FSubsystemCollectionBase containing all initialized subsystems.
+	 */
+	virtual void Initialize(FSubsystemCollectionBase& Collection) override;
+
+	/** Called when the world begins play, initializing combat mode state and loading default configuration. */
+	/**
+	 * @param InWorld Pointer to the UWorld being loaded for subsystem initialization.
+	 */
+	virtual void OnWorldBeginPlay(UWorld& InWorld) override;
+
+	// ============================================================================================================================
+	// Public API - Mode Management
+	// ============================================================================================================================
+
+public:
+	/** Sets the global combat mode to a new value, triggering mode transitions and updating all registered combatants. */
+	/**
+	 * @param NewMode The FGameplayTag representing the new combat mode (e.g., RT, TB).
+	 */
+	void SetMode(FGameplayTag NewMode);
+
+	/** Switches between combat modes using the player's current selection from the game instance configuration. */
+	void SwitchCombatMode();
+
+	/** Applies a specific combat mode to an individual actor, updating their ability system and state accordingly. */
+	/**
+	 * @param Combatant Pointer to the AActor whose combat mode is being updated (can be any actor type).
+	 * @param NewMode The FGameplayTag representing the new combat mode to apply.
+	 */
+	void ApplyModeToActor(const TScriptInterface<IWolfCombatant>& Combatant, FGameplayTag NewMode);
+
+	/** Returns the current global combat mode as a GameplayTag for Blueprint queries and runtime checks. */
+	UFUNCTION(BlueprintPure, Meta = (DisplayName = "Get Current Mode"), Category = "WolfCore|Combat")
+	FGameplayTag GetCurrentMode() const { return CurrentMode; }
+
+	/** Returns the current timeline position in seconds representing elapsed time within the active combat mode. */
+	UFUNCTION(BlueprintPure, Meta = (DisplayName = "Get Timeline Time"), Category = "WolfCore|Combat")
+	float GetCurrentTimelineTime() const { return CurrentTimelineTime; }
+
+	/** Boolean flag indicating whether the current combat mode is set to turn-based (TB) rather than real-time (RT). */
+	bool bIsInTB;
+
+	// ============================================================================================================================
+	// Public API - Snapshots & Timeline
+	// ============================================================================================================================
+
+	/** Captures the current world state into a FTemporalStates container at the specified timestamp for timeline scrubbing. */
+	UFUNCTION(BlueprintCallable, Meta = (DisplayName = "Capture World State"), Category = "WolfCore|Combat|Snapshots")
+	/**
+	 * @param Timestamp The time anchor in seconds at which to capture the world state snapshot.
+	 * @return FTemporalStates containing the captured world state mapped to the specified timestamp.
+	 */
+	FTemporalStates CaptureCurrentWorldState(float Timestamp);
+
+	/** Advances or rewinds the prediction timeline to a specific timestamp for scrubbing and visualization. */
+	UFUNCTION(BlueprintCallable, Meta = (DisplayName = "Scrub Timeline"), Category = "WolfCore|Combat")
+	/**
+	 * @param NewTime The target timeline position in seconds to scrub the prediction state to.
+	 */
+	void ScrubTimeline(float NewTime);
+
+	/** Re-bakes the prediction timeline from the master snapshot, preserving the current scrub position. */
+	void ReBakeTimeline();
+
+	/** Returns a reference to the master snapshot captured at the start of the current simulation session. */
+	const FTemporalStates& GetMasterSnapshot() const { return MasterStartSnapshot; }
+
+	// ============================================================================================================================
+	// Public API - Combatant Tracking
+	// ============================================================================================================================
+
+	/** Registers a combatant as an active participant, enabling it to receive mode updates and prediction data. */
+	/**
+	 * @param Combatant TScriptInterface<IWolfCombatant> representing the combatant being registered.
+	 */
+	void RegisterCombatant(const TScriptInterface<IWolfCombatant>& Combatant);
+
+	/** Unregisters a combatant from active participation, removing it from mode updates and prediction processing. */
+	/**
+	 * @param Combatant TScriptInterface<IWolfCombatant> representing the combatant being removed.
+	 */
+	void UnregisterCombatant(const TScriptInterface<IWolfCombatant>& Combatant);
+
+	/** Returns the array of weak references to tracked combatants currently registered with this subsystem. */
+	const TArray<TScriptInterface<IWolfCombatant>>& GetTrackedCombatants() const { return TrackedCombatants; }
+
+	/** Returns the fixed step size (seconds) used to produce the current PredictionBuffer contents.
+	  * This value is set once at bake-start and read by every UWolfPresageComponent::GetSnapshotAtTime()
+	  * call, ensuring index math uses the actual step size rather than a compile-time constant. */
+	float GetBakedStepSize() const { return BakedStepSize; }
+
+	/**
+	 * Returns the cached timing profile for the given ability class, computing and caching it on
+	 * first request via UBaseCombatAbility::ComputeAbilityTiming against the class's CDO sequence.
+	 * Returns a default-constructed (all-zero) FAbilityTimingProfile if AbilityClass is null.
+	 * Not called from anywhere yet in this stage.
+	 */
+	const FAbilityTimingProfile& GetOrComputeTimingProfile(TSubclassOf<UBaseCombatAbility> AbilityClass);
+
+	// ============================================================================================================================
+	// Events
+	// ============================================================================================================================
+
+	/** Multicast delegate broadcast whenever the global combat mode changes, notifying all registered listeners. */
+	UPROPERTY(BlueprintAssignable, Category = "WolfCore|Combat")
+	FOnCombatModeChanged OnCombatModeChanged;
+
+protected:
+	/** Temporal states container holding the master snapshot captured at simulation start for state restoration. */
+	FTemporalStates MasterStartSnapshot;
+
+	/** Current timeline position in seconds representing elapsed time within the active combat mode session. */
+	UPROPERTY(BlueprintReadOnly, Category = "WolfCore|Timeline")
+	float CurrentTimelineTime = 0.f;
+
+	/** Maximum allowed duration in seconds for the prediction timeline before requiring regeneration or reset. */
+	UPROPERTY(EditDefaultsOnly, Category = "WolfCore|Timeline")
+	float MaxTimelineDuration = 5.f;
+
+	private:
+	/** The fixed step size (seconds) used to produce the current PredictionBuffer contents across
+	  * every combatant in the active bake. Set once at the start of ExecuteFutureBake() from
+	  * UWolfCombatSettings::PresageSimulationStep; every UWolfPresageComponent::GetSnapshotAtTime()
+	  * call reads this via GetBakedStepSize(), so a designer-tuned change to the simulation rate
+	  * only needs to update this one path. */
+	float BakedStepSize = 0.1f; // Fallback only; overwritten from UWolfCombatSettings in SetMode().
+
+	/** Cache of derived ability timing profiles, keyed by ability class. AbilitySequence is
+	  * authored per-class and doesn't vary per instance, so this is computed once per class on
+	  * first request rather than recomputed for every planning decision. Not populated or read
+	  * anywhere yet — added in this stage as inert storage; stage 3 (planning) is the first
+	  * consumer. */
+	UPROPERTY()
+	TMap<TSubclassOf<UBaseCombatAbility>, FAbilityTimingProfile> TimingProfileCache;
+
+	/** Handles completion of presage effect loading, applying the loaded gameplay effect to the player's ability system. */
+	void OnPresageEffectLoaded();
+
+	/** Initializes subsystem defaults by setting up internal state, tag references, and configuration values at startup. */
+	void InitializeSubsystemDefaults();
+
+	/** Attempts to load the player-selected combat mode from game instance configuration for initial mode setup. */
+	/**
+	 * @return True if a valid player-selected mode was loaded; false otherwise (default level mode will be applied).
+	 */
+	bool TryLoadPlayerSelectedMode();
+
+	/** Applies the default combat mode from level settings when no player selection is available or valid. */
+	void ApplyDefaultLevelMode();
+
+	/** Handles presage drain effect application to an actor's ability system based on their current combat mode state. */
+	/**
+	 * @param ASC Pointer to the UAbilitySystemComponent receiving the drain effect modification.
+	 * @param CurrentActorMode The FGameplayTag representing the actor's current combat mode being evaluated.
+	 */
+	void HandlePresageDrainEffect(UAbilitySystemComponent* ASC, FGameplayTag CurrentActorMode);
+
+	/** Retrieves the player controller's Ability System Component (ASC) for gameplay effect application and state management. */
+	UAbilitySystemComponent* GetPlayerASC() const;
+
+	/** Returns the time dilation multiplier configured for a specific combat mode to control temporal prediction scaling. */
+	/**
+	 * @param Mode The FGameplayTag representing the combat mode whose dilation value is being queried.
+	 * @return Float representing the time dilation factor (e.g., 1.0 for RT, 0.5 for TB).
+	 */
+	static float GetDilationForMode(const FGameplayTag& Mode);
+
+	/** GameplayTag representing the current global combat mode (Real-Time or Turn-Based) active in this session. */
+	FGameplayTag CurrentMode;
+
+	/** Singleton gameplay tags structure providing framework-wide tag access for combat mode identification and filtering. */
+	FWolfGameplayTags WolfTag;
+
+	/** Shared pointer to a streamable handle managing asynchronous loading of the presage effect class asset. */
+	TSharedPtr<FStreamableHandle> PresageClassLoadHandle;
+
+	/** Subclass of GameplayEffect applied during presage simulation for drain effects and temporal state management. */
+	UPROPERTY()
+	TSubclassOf<UGameplayEffect> PresageEffectClass;
+
+	/** Array of weak script interfaces to combatants currently tracked by this subsystem for mode updates and prediction processing. */
+	UPROPERTY()
+	TArray<TScriptInterface<IWolfCombatant>> TrackedCombatants;
+};
+</file>
+
 <file path="Source/WolfCore/Public/Core/WolfPresageComponent.h">
 // Fill out your copyright notice in the Description page of Project Settings.
 
@@ -5377,545 +5630,6 @@ private:
 	/** Cached reference to the Ability System Component (ASC) for performance optimization during simulation ticks. */
 	UPROPERTY(Transient, VisibleInstanceOnly, Category = "WolfCore|Internal")
 	TObjectPtr<UWolfAbilitySystemComponent> CachedASC;
-};
-</file>
-
-<file path="Source/WolfCore/Public/Systems/CombatModeSubsystem.h">
-// Fill out your copyright notice in the Description page of Project Settings.
-
-#pragma once
-
-#include "CoreMinimal.h"
-#include "Core/WolfGameplayTags.h"
-#include "Presage/ActorSnapshot.h"
-#include "Presage/PresageOrchestratorTypes.h"
-#include "Subsystems/WorldSubsystem.h"
-#include "Interfaces/IWolfCombatant.h"
-#include "CombatModeSubsystem.generated.h"
-
-struct FStreamableHandle;
-class UAbilitySystemComponent;
-class UWolfCombatant;
-class UBaseCombatAbility;
-
-/**
- * Delegate broadcast when the global combat mode changes.
- */
-DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnCombatModeChanged, FGameplayTag, NewMode);
-
-/**
- * World subsystem managing combat mode state (Real-Time / Turn-Based).
- * Handles mode transitions, time dilation, temporal snapshots, and presage simulation coordination.
- */
-UCLASS()
-class WOLFCORE_API UCombatModeSubsystem : public UWorldSubsystem
-{
-	GENERATED_BODY()
-
-	// ============================================================================================================================
-	// Lifecycle
-	// ============================================================================================================================
-
-	/** Initializes the subsystem when it is registered with the world, setting up internal state and tag references. */
-	/**
-	 * @param Collection Reference to the FSubsystemCollectionBase containing all initialized subsystems.
-	 */
-	virtual void Initialize(FSubsystemCollectionBase& Collection) override;
-
-	/** Called when the world begins play, initializing combat mode state and loading default configuration. */
-	/**
-	 * @param InWorld Pointer to the UWorld being loaded for subsystem initialization.
-	 */
-	virtual void OnWorldBeginPlay(UWorld& InWorld) override;
-
-	// ============================================================================================================================
-	// Public API - Mode Management
-	// ============================================================================================================================
-
-public:
-	/** Sets the global combat mode to a new value, triggering mode transitions and updating all registered combatants. */
-	/**
-	 * @param NewMode The FGameplayTag representing the new combat mode (e.g., RT, TB).
-	 */
-	void SetMode(FGameplayTag NewMode);
-
-	/** Switches between combat modes using the player's current selection from the game instance configuration. */
-	void SwitchCombatMode();
-
-	/** Applies a specific combat mode to an individual actor, updating their ability system and state accordingly. */
-	/**
-	 * @param Combatant Pointer to the AActor whose combat mode is being updated (can be any actor type).
-	 * @param NewMode The FGameplayTag representing the new combat mode to apply.
-	 */
-	void ApplyModeToActor(const TScriptInterface<IWolfCombatant>& Combatant, FGameplayTag NewMode);
-
-	/** Returns the current global combat mode as a GameplayTag for Blueprint queries and runtime checks. */
-	UFUNCTION(BlueprintPure, Meta = (DisplayName = "Get Current Mode"), Category = "WolfCore|Combat")
-	FGameplayTag GetCurrentMode() const { return CurrentMode; }
-
-	/** Returns the current timeline position in seconds representing elapsed time within the active combat mode. */
-	UFUNCTION(BlueprintPure, Meta = (DisplayName = "Get Timeline Time"), Category = "WolfCore|Combat")
-	float GetCurrentTimelineTime() const { return CurrentTimelineTime; }
-
-	/** Boolean flag indicating whether the current combat mode is set to turn-based (TB) rather than real-time (RT). */
-	bool bIsInTB;
-
-	// ============================================================================================================================
-	// Public API - Snapshots & Timeline
-	// ============================================================================================================================
-
-	/** Captures the current world state into a FTemporalStates container at the specified timestamp for timeline scrubbing. */
-	UFUNCTION(BlueprintCallable, Meta = (DisplayName = "Capture World State"), Category = "WolfCore|Combat|Snapshots")
-	/**
-	 * @param Timestamp The time anchor in seconds at which to capture the world state snapshot.
-	 * @return FTemporalStates containing the captured world state mapped to the specified timestamp.
-	 */
-	FTemporalStates CaptureCurrentWorldState(float Timestamp);
-
-	/** Advances or rewinds the prediction timeline to a specific timestamp for scrubbing and visualization. */
-	UFUNCTION(BlueprintCallable, Meta = (DisplayName = "Scrub Timeline"), Category = "WolfCore|Combat")
-	/**
-	 * @param NewTime The target timeline position in seconds to scrub the prediction state to.
-	 */
-	void ScrubTimeline(float NewTime);
-
-	/** Re-bakes the prediction timeline from the master snapshot, preserving the current scrub position. */
-	void ReBakeTimeline();
-
-	/** Returns a reference to the master snapshot captured at the start of the current simulation session. */
-	const FTemporalStates& GetMasterSnapshot() const { return MasterStartSnapshot; }
-
-	// ============================================================================================================================
-	// Public API - Combatant Tracking
-	// ============================================================================================================================
-
-	/** Registers a combatant as an active participant, enabling it to receive mode updates and prediction data. */
-	/**
-	 * @param Combatant TScriptInterface<IWolfCombatant> representing the combatant being registered.
-	 */
-	void RegisterCombatant(const TScriptInterface<IWolfCombatant>& Combatant);
-
-	/** Unregisters a combatant from active participation, removing it from mode updates and prediction processing. */
-	/**
-	 * @param Combatant TScriptInterface<IWolfCombatant> representing the combatant being removed.
-	 */
-	void UnregisterCombatant(const TScriptInterface<IWolfCombatant>& Combatant);
-
-	/** Returns the array of weak references to tracked combatants currently registered with this subsystem. */
-	const TArray<TScriptInterface<IWolfCombatant>>& GetTrackedCombatants() const { return TrackedCombatants; }
-
-	/** Returns the fixed step size (seconds) used to produce the current PredictionBuffer contents.
-	  * This value is set once at bake-start and read by every UWolfPresageComponent::GetSnapshotAtTime()
-	  * call, ensuring index math uses the actual step size rather than a compile-time constant. */
-	float GetBakedStepSize() const { return BakedStepSize; }
-
-	/**
-	 * Returns the cached timing profile for the given ability class, computing and caching it on
-	 * first request via UBaseCombatAbility::ComputeAbilityTiming against the class's CDO sequence.
-	 * Returns a default-constructed (all-zero) FAbilityTimingProfile if AbilityClass is null.
-	 * Not called from anywhere yet in this stage.
-	 */
-	const FAbilityTimingProfile& GetOrComputeTimingProfile(TSubclassOf<UBaseCombatAbility> AbilityClass);
-
-	// ============================================================================================================================
-	// Events
-	// ============================================================================================================================
-
-	/** Multicast delegate broadcast whenever the global combat mode changes, notifying all registered listeners. */
-	UPROPERTY(BlueprintAssignable, Category = "WolfCore|Combat")
-	FOnCombatModeChanged OnCombatModeChanged;
-
-protected:
-	/** Temporal states container holding the master snapshot captured at simulation start for state restoration. */
-	FTemporalStates MasterStartSnapshot;
-
-	/** Current timeline position in seconds representing elapsed time within the active combat mode session. */
-	UPROPERTY(BlueprintReadOnly, Category = "WolfCore|Timeline")
-	float CurrentTimelineTime = 0.f;
-
-	/** Maximum allowed duration in seconds for the prediction timeline before requiring regeneration or reset. */
-	UPROPERTY(EditDefaultsOnly, Category = "WolfCore|Timeline")
-	float MaxTimelineDuration = 5.f;
-
-	private:
-	/** The fixed step size (seconds) used to produce the current PredictionBuffer contents across
-	  * every combatant in the active bake. Set once at the start of ExecuteFutureBake() from
-	  * UWolfCombatSettings::PresageSimulationStep; every UWolfPresageComponent::GetSnapshotAtTime()
-	  * call reads this via GetBakedStepSize(), so a designer-tuned change to the simulation rate
-	  * only needs to update this one path. */
-	float BakedStepSize = 0.1f; // Fallback only; overwritten from UWolfCombatSettings in SetMode().
-
-	/** Cache of derived ability timing profiles, keyed by ability class. AbilitySequence is
-	  * authored per-class and doesn't vary per instance, so this is computed once per class on
-	  * first request rather than recomputed for every planning decision. Not populated or read
-	  * anywhere yet — added in this stage as inert storage; stage 3 (planning) is the first
-	  * consumer. */
-	UPROPERTY()
-	TMap<TSubclassOf<UBaseCombatAbility>, FAbilityTimingProfile> TimingProfileCache;
-
-	/** Handles completion of presage effect loading, applying the loaded gameplay effect to the player's ability system. */
-	void OnPresageEffectLoaded();
-
-	/** Initializes subsystem defaults by setting up internal state, tag references, and configuration values at startup. */
-	void InitializeSubsystemDefaults();
-
-	/** Attempts to load the player-selected combat mode from game instance configuration for initial mode setup. */
-	/**
-	 * @return True if a valid player-selected mode was loaded; false otherwise (default level mode will be applied).
-	 */
-	bool TryLoadPlayerSelectedMode();
-
-	/** Applies the default combat mode from level settings when no player selection is available or valid. */
-	void ApplyDefaultLevelMode();
-
-	/** Handles presage drain effect application to an actor's ability system based on their current combat mode state. */
-	/**
-	 * @param ASC Pointer to the UAbilitySystemComponent receiving the drain effect modification.
-	 * @param CurrentActorMode The FGameplayTag representing the actor's current combat mode being evaluated.
-	 */
-	void HandlePresageDrainEffect(UAbilitySystemComponent* ASC, FGameplayTag CurrentActorMode);
-
-	/** Retrieves the player controller's Ability System Component (ASC) for gameplay effect application and state management. */
-	UAbilitySystemComponent* GetPlayerASC() const;
-
-	/** Returns the time dilation multiplier configured for a specific combat mode to control temporal prediction scaling. */
-	/**
-	 * @param Mode The FGameplayTag representing the combat mode whose dilation value is being queried.
-	 * @return Float representing the time dilation factor (e.g., 1.0 for RT, 0.5 for TB).
-	 */
-	static float GetDilationForMode(const FGameplayTag& Mode);
-
-	/** GameplayTag representing the current global combat mode (Real-Time or Turn-Based) active in this session. */
-	FGameplayTag CurrentMode;
-
-	/** Singleton gameplay tags structure providing framework-wide tag access for combat mode identification and filtering. */
-	FWolfGameplayTags WolfTag;
-
-	/** Shared pointer to a streamable handle managing asynchronous loading of the presage effect class asset. */
-	TSharedPtr<FStreamableHandle> PresageClassLoadHandle;
-
-	/** Subclass of GameplayEffect applied during presage simulation for drain effects and temporal state management. */
-	UPROPERTY()
-	TSubclassOf<UGameplayEffect> PresageEffectClass;
-
-	/** Array of weak script interfaces to combatants currently tracked by this subsystem for mode updates and prediction processing. */
-	UPROPERTY()
-	TArray<TScriptInterface<IWolfCombatant>> TrackedCombatants;
-};
-</file>
-
-<file path="Source/WolfCore/Public/Abilities/BaseCombatAbility.h">
-// Fill out your copyright notice in the Description page of Project Settings.
-
-#pragma once
-
-#include "CoreMinimal.h"
-#include "Abilities/GameplayAbility.h"
-#include "Presage/PresageOrchestratorTypes.h"
-#include "BaseCombatAbility.generated.h"
-
-// ============================================================================================================================
-// Enums
-// ============================================================================================================================
-
-/** Enumerates the different period types within a combat ability sequence. */
-UENUM()
-enum class EPeriodType : uint8
-{
-	/** The windup phase where animation begins but no attack has connected yet. */
-	Windup,
-	/** The active attack phase where damage and hit detection occur. */
-	Attack,
-	/** A waiting period between attacks before proceeding to the next sequence. */
-	Wait,
-	/** An evasion phase where the character dodges incoming attacks. */
-	Evasion,
-	/** A movement-to-target phase for repositioning during combat sequences. */
-	MoveTo
-};
-
-/**
- * Describes a single GameplayEffect application tied to a combat period — the effect class,
- * its magnitude, and whether it targets the source (self) or the target actor.
- */
-USTRUCT(BlueprintType)
-struct FCombatHitEffect
-{
-	GENERATED_BODY()
-
-	/** GameplayEffect to apply. If unset, this entry is skipped. */
-	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "WolfCore|Hit Effects")
-	TSubclassOf<UGameplayEffect> EffectClass;
-
-	/** Magnitude passed via SetByCaller. */
-	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "WolfCore|Hit Effects")
-	FScalableFloat Amount = 0.f;
-
-	/** True = apply to the source (attacking) actor. False = apply to the target actor. */
-	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "WolfCore|Hit Effects")
-	bool bSelfTarget = false;
-
-	/**
-	 * SetByCaller tag for the magnitude. Left invalid by default; UBaseCombatAbility::ApplyHitEffects
-	 * falls back to FWolfGameplayTags::Get().Data_Amount when this is unset, matching current
-	 * behavior where every effect used the same tag. Can be overridden per-entry if a future GE
-	 * needs a distinct SetByCaller tag.
-	 */
-	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "WolfCore|Hit Effects")
-	FGameplayTag DataAmountTag;
-};
-
-/**
- * Describes a single period within a combat ability sequence (montage, duration, attribute effects).
- */
-USTRUCT(BlueprintType)
-struct FCombatPeriod
-{
-	GENERATED_BODY()
-
-	/** The type of this combat period (windup, attack, wait, etc.). */
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "WolfCore|Period")
-	EPeriodType Type = EPeriodType::Attack;
-
-	/** The animation montage to play for this period's sequence. */
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "WolfCore|Period")
-	UAnimMontage* Montage = nullptr;
-
-	/** Duration of this period in seconds (fallback value if no montage is assigned). */
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "WolfCore|Period")
-	float Duration = 0.5f;
-
-	/** Hit delay time in seconds for Presage prediction when no montage notify is available. */
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "WolfCore|Period")
-	float HitDelay = 0.2f;
-
-	// --- Attribute Data ---
-
-	/** All GameplayEffects applied when this period's hit resolves (damage, resource gain, etc). */
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "WolfCore|Attribute Effects")
-	TArray<FCombatHitEffect> HitEffects;
-
-	/** Attack range in centimeters for hit detection and collision prediction. */
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "WolfCore|Movement")
-	float Range = 150.f;
-
-	/** Destination FVector for movement-to targets during MoveTo periods. */
-	UPROPERTY(BlueprintReadOnly, Category = "WolfCore|Movement")
-	FVector MoveToDestination = FVector::ZeroVector;
-};
-
-/**
- * Base combat ability with period-based sequence execution and Presage integration.
- */
-UCLASS()
-class WOLFCORE_API UBaseCombatAbility : public UGameplayAbility
-{
-	GENERATED_BODY()
-
-	// ============================================================================================================================
-	// Lifecycle
-	// ============================================================================================================================
-
-public:
-	/** Default constructor for UBaseCombatAbility. */
-	UBaseCombatAbility();
-
-	/** Overrides UGameplayAbility::ActivateAbility to broadcast OnAbilityActivated after parent execution. */
-	virtual void ActivateAbility(const FGameplayAbilitySpecHandle Handle,
-		const FGameplayAbilityActorInfo* ActorInfo,
-		const FGameplayAbilityActivationInfo ActivationInfo,
-		const FGameplayEventData* TriggerEventData) override;
-
-	/** Overrides UGameplayAbility::EndAbility to broadcast OnAbilityDeactivated before parent execution. */
-	virtual void EndAbility(const FGameplayAbilitySpecHandle Handle,
-		const FGameplayAbilityActorInfo* ActorInfo,
-		const FGameplayAbilityActivationInfo ActivationInfo,
-		bool bReplicateEndAbility,
-		bool bWasCancelled) override;
-
-	// ============================================================================================================================
-	// Ability Lifecycle Events
-	// ============================================================================================================================
-
-	DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnAbilityActivated, UBaseCombatAbility*, Ability);
-	DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnAbilityDeactivated, UBaseCombatAbility*, Ability);
-
-	UPROPERTY(BlueprintAssignable, Category = "WolfCore|Events")
-	FOnAbilityActivated OnAbilityActivated;
-
-	UPROPERTY(BlueprintAssignable, Category = "WolfCore|Events")
-	FOnAbilityDeactivated OnAbilityDeactivated;
-
-	// ============================================================================================================================
-	// Combat Data Configuration
-	// ============================================================================================================================
-
-	/** Returns the complete animation and attack sequence for this ability. */
-	const TArray<FCombatPeriod>& GetAbilitySequence() const { return AbilitySequence; }
-
-	/** GameplayTag used to identify input bindings that trigger the startup of this combat sequence. */
-	UPROPERTY(EditDefaultsOnly, Category = "WolfCore|Combat Data")
-	FGameplayTag StartupInputTag;
-
-	/** GameplayTag representing the hit event that triggers attack resolution and damage application. */
-	UPROPERTY(EditDefaultsOnly, Category = "WolfCore|Combat Data")
-	FGameplayTag HitEventTag;
-
-	// ============================================================================================================================
-	// Presage API
-	// ============================================================================================================================
-
-	/** Calculates the projected time until impact based on current prediction state and animation timing. */
-	UFUNCTION(BlueprintCallable, Meta = (DisplayName = "Calculate Projected Impact Time"), Category = "WolfCore|Presage")
-	/**
-	 * @return Float representing the projected time to impact in seconds.
-	 */
-	float CalculateProjectedImpactTime() const;
-
-	/** Returns the current index within the ability sequence that is actively executing. */
-	int32 GetCurrentPeriodIndex() const { return CurrentPeriodIndex; }
-
-	/** Sets the current period index in the ability sequence for direct state manipulation. */
-	/**
-	 * @param NewIndex The new period index to set as the active sequence position.
-	 */
-	void SetCurrentPeriodIndex(int32 NewIndex) { CurrentPeriodIndex = NewIndex; }
-
-	/** Checks whether the character is invulnerable at a given time relative to the current prediction window. */
-	/**
-	 * @param RelativeTime Time delta to query against the prediction buffer.
-	 * @return True if the character is invulnerable at the specified time; false otherwise.
-	 */
-	bool IsInvulnerableAt(float RelativeTime) const;
-
-	/** Returns the duration of a combat period from its configuration data. Static helper method. */
-	/**
-	 * @param Period The FCombatPeriod to retrieve duration information from.
-	 * @return Float representing the period duration in seconds.
-	 */
-	static float GetPeriodDuration(const FCombatPeriod& Period);
-
-	/** Returns the progress through the current combat period as a normalized value between 0 and 1. */
-	UFUNCTION(BlueprintCallable, Meta = (DisplayName = "Get Period Progress"), Category = "WolfCore|Presage")
-	/**
-	 * @return Float representing the progress (in seconds) of the current period (0.0 to 1.0).
-	 */
-	float GetPeriodProgress() const;
-
-	/** Calculates the duration required for movement between two points given velocity and acceleration parameters. */
-	UFUNCTION(BlueprintCallable, Meta = (DisplayName = "Calculate Movement Duration"), Category = "WolfCore|Presage")
-	/**
-	 * @param TotalDistance The total distance to travel in centimeters.
-	 * @param MaxVelocity The maximum achievable velocity in cm/s.
-	 * @param Acceleration The acceleration rate in cm/s².
-	 * @param StartVelocity The initial velocity at the start of movement in cm/s.
-	 * @return Float representing the estimated movement duration in seconds.
-	 */
-	static float CalculateMovementDuration(float TotalDistance, float MaxVelocity, float Acceleration, float StartVelocity);
-
-	/** Initializes a transient ability instance for presage simulation with a copied sequence. */
-	void InitializeForSimulation(const TArray<FCombatPeriod>& InSequence);
-
-	/** Resolves MoveTo destinations in a sequence using a source location and target actor. */
-	static void ResolveMoveToDestinations(TArray<FCombatPeriod>& Sequence, const FVector& SourceLocation, AActor* Target);
-
-	/**
-	 * Computes a derived timing breakdown (windup / active window / recovery) for the given
-	 * ability sequence. The active window is defined as the span from the first period containing
-	 * at least one FCombatHitEffect through the last such period. Sequences with no hit-capable
-	 * periods are treated as pure windup with no active window and no recovery.
-	 * This is a pure function of the sequence data — it does not read any instance state and does
-	 * not require a valid ability instance to call.
-	 */
-	static FAbilityTimingProfile ComputeAbilityTiming(const TArray<FCombatPeriod>& Sequence);
-
-	// ============================================================================================================================
-	// Execution State (Protected)
-	// ============================================================================================================================
-
-protected:
-	/** Array of FCombatPeriod entries defining the complete animation and attack sequence for this ability. */
-	UPROPERTY(EditDefaultsOnly, Category = "WolfCore|Combat Data")
-	TArray<FCombatPeriod> AbilitySequence;
-
-	/** Per-ability interrupt response options, used instead of UWolfCombatSettings::
-	  * DefaultInterruptResponses when non-empty. See FInterruptResponseOption. */
-	UPROPERTY(EditDefaultsOnly, Category = "WolfCore|Presage")
-	TArray<FInterruptResponseOption> InterruptResponses;
-
-	/** Index of the current period within the ability sequence that is actively executing. */
-	int32 CurrentPeriodIndex = 0;
-
-	/** Timestamp marking when the current period began its execution in seconds. */
-	float CurrentPeriodStartTime = 0.f;
-
-	// --- Main Loop ---
-
-	/** Initiates the complete combat sequence from the beginning of the ability's AbilitySequence array. */
-	UFUNCTION()
-	void StartCombatSequence();
-
-	/** Executes a waiting period, pausing the sequence for the specified duration before continuing. */
-	/**
-	 * @param Period The FCombatPeriod containing wait timing and configuration data.
-	 */
-	void ExecuteWait(const FCombatPeriod& Period);
-
-	/** Executes an animated period by playing the associated montage and handling animation notifies. */
-	/**
-	 * @param Period The FCombatPeriod containing montage and attack configuration data.
-	 */
-	void ExecuteAnimatedPeriod(const FCombatPeriod& Period);
-
-	/** Advances the sequence to the next period in the ability's combat timeline. */
-	UFUNCTION()
-	void PlayNextPeriod();
-
-	/** Executes a movement-to-target phase, moving the character toward the specified destination. */
-	/**
-	 * @param Period The FCombatPeriod containing movement parameters and target location.
-	 */
-	void ExecuteMoveTo(FCombatPeriod& Period);
-
-	/** Retrieves the target actor from the blackboard data for attack targeting and combat resolution. */
-	AActor* GetTargetFromBlackboard() const;
-
-	/** Handles completion events for the current period, triggering transitions to the next sequence phase. */
-	UFUNCTION()
-	void OnPeriodCompleted();
-
-	/** Handles event notifications received during animation montages for hit detection and state changes. */
-	/**
-	 * @param EventData The FGameplayEventData containing event context and parameters.
-	 */
-	UFUNCTION()
-	void OnEventReceived(FGameplayEventData EventData);
-
-	/** Processes the attack hit event, applying damage, flow gain, and collision prediction for the current period. */
-	/**
-	 * @param CurrentAttackPeriod Reference to the FCombatPeriod currently executing its attack phase.
-	 */
-	virtual void HandleAttackHitEvent(const FCombatPeriod& CurrentAttackPeriod);
-
-	// ============================================================================================================================
-	// Hit Effect Application
-	// ============================================================================================================================
-
-	/**
-	 * Applies every FCombatHitEffect entry in Period between this ability's source actor and
-	 * TargetActor. Central extension point so derived abilities (RT trace-based, TB
-	 * prediction-based) share one application path. Virtual so a derived ability can override
-	 * application semantics if it ever needs to (e.g. different mitigation rules) without touching
-	 * callers.
-	 *
-	 * @param Period      The period whose HitEffects should be applied.
-	 * @param TargetActor The resolved target actor (RT: trace hit actor; TB: blackboard target).
-	 * @param HitResult    Optional trace hit result, added to the effect context if present.
-	 * @return True if at least one effect was applied. Kept as bool since RT's debug draw and
-	 *         potential future callers can use it; if it ends up unused by every caller, this can
-	 *         be simplified to void later.
-	 */
-	virtual bool ApplyHitEffects(const FCombatPeriod& Period, AActor* TargetActor, const FHitResult* HitResult = nullptr);
 };
 </file>
 
@@ -6317,6 +6031,321 @@ bool UBaseCombatAbility::IsInvulnerableAt(float RelativeTime) const
 	}
 	return false;
 }
+</file>
+
+<file path="Source/WolfCore/Public/Abilities/BaseCombatAbility.h">
+// Fill out your copyright notice in the Description page of Project Settings.
+
+#pragma once
+
+#include "CoreMinimal.h"
+#include "Abilities/GameplayAbility.h"
+#include "Presage/PresageOrchestratorTypes.h"
+#include "BaseCombatAbility.generated.h"
+
+// ============================================================================================================================
+// Enums
+// ============================================================================================================================
+
+/** Enumerates the different period types within a combat ability sequence. */
+UENUM()
+enum class EPeriodType : uint8
+{
+	/** The windup phase where animation begins but no attack has connected yet. */
+	Windup,
+	/** The active attack phase where damage and hit detection occur. */
+	Attack,
+	/** A waiting period between attacks before proceeding to the next sequence. */
+	Wait,
+	/** An evasion phase where the character dodges incoming attacks. */
+	Evasion,
+	/** A movement-to-target phase for repositioning during combat sequences. */
+	MoveTo
+};
+
+/**
+ * Describes a single GameplayEffect application tied to a combat period — the effect class,
+ * its magnitude, and whether it targets the source (self) or the target actor.
+ */
+USTRUCT(BlueprintType)
+struct FCombatHitEffect
+{
+	GENERATED_BODY()
+
+	/** GameplayEffect to apply. If unset, this entry is skipped. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "WolfCore|Hit Effects")
+	TSubclassOf<UGameplayEffect> EffectClass;
+
+	/** Magnitude passed via SetByCaller. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "WolfCore|Hit Effects")
+	FScalableFloat Amount = 0.f;
+
+	/** True = apply to the source (attacking) actor. False = apply to the target actor. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "WolfCore|Hit Effects")
+	bool bSelfTarget = false;
+
+	/**
+	 * SetByCaller tag for the magnitude. Left invalid by default; UBaseCombatAbility::ApplyHitEffects
+	 * falls back to FWolfGameplayTags::Get().Data_Amount when this is unset, matching current
+	 * behavior where every effect used the same tag. Can be overridden per-entry if a future GE
+	 * needs a distinct SetByCaller tag.
+	 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "WolfCore|Hit Effects")
+	FGameplayTag DataAmountTag;
+};
+
+/**
+ * Describes a single period within a combat ability sequence (montage, duration, attribute effects).
+ */
+USTRUCT(BlueprintType)
+struct FCombatPeriod
+{
+	GENERATED_BODY()
+
+	/** The type of this combat period (windup, attack, wait, etc.). */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "WolfCore|Period")
+	EPeriodType Type = EPeriodType::Attack;
+
+	/** The animation montage to play for this period's sequence. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "WolfCore|Period")
+	UAnimMontage* Montage = nullptr;
+
+	/** Duration of this period in seconds (fallback value if no montage is assigned). */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "WolfCore|Period")
+	float Duration = 0.5f;
+
+	/** Hit delay time in seconds for Presage prediction when no montage notify is available. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "WolfCore|Period")
+	float HitDelay = 0.2f;
+
+	// --- Attribute Data ---
+
+	/** All GameplayEffects applied when this period's hit resolves (damage, resource gain, etc). */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "WolfCore|Attribute Effects")
+	TArray<FCombatHitEffect> HitEffects;
+
+	/** Attack range in centimeters for hit detection and collision prediction. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "WolfCore|Movement")
+	float Range = 150.f;
+
+	/** Destination FVector for movement-to targets during MoveTo periods. */
+	UPROPERTY(BlueprintReadOnly, Category = "WolfCore|Movement")
+	FVector MoveToDestination = FVector::ZeroVector;
+};
+
+/**
+ * Base combat ability with period-based sequence execution and Presage integration.
+ */
+UCLASS()
+class WOLFCORE_API UBaseCombatAbility : public UGameplayAbility
+{
+	GENERATED_BODY()
+
+	// ============================================================================================================================
+	// Lifecycle
+	// ============================================================================================================================
+
+public:
+	/** Default constructor for UBaseCombatAbility. */
+	UBaseCombatAbility();
+
+	/** Overrides UGameplayAbility::ActivateAbility to broadcast OnAbilityActivated after parent execution. */
+	virtual void ActivateAbility(const FGameplayAbilitySpecHandle Handle,
+		const FGameplayAbilityActorInfo* ActorInfo,
+		const FGameplayAbilityActivationInfo ActivationInfo,
+		const FGameplayEventData* TriggerEventData) override;
+
+	/** Overrides UGameplayAbility::EndAbility to broadcast OnAbilityDeactivated before parent execution. */
+	virtual void EndAbility(const FGameplayAbilitySpecHandle Handle,
+		const FGameplayAbilityActorInfo* ActorInfo,
+		const FGameplayAbilityActivationInfo ActivationInfo,
+		bool bReplicateEndAbility,
+		bool bWasCancelled) override;
+
+	// ============================================================================================================================
+	// Ability Lifecycle Events
+	// ============================================================================================================================
+
+	DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnAbilityActivated, UBaseCombatAbility*, Ability);
+	DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnAbilityDeactivated, UBaseCombatAbility*, Ability);
+
+	UPROPERTY(BlueprintAssignable, Category = "WolfCore|Events")
+	FOnAbilityActivated OnAbilityActivated;
+
+	UPROPERTY(BlueprintAssignable, Category = "WolfCore|Events")
+	FOnAbilityDeactivated OnAbilityDeactivated;
+
+	// ============================================================================================================================
+	// Combat Data Configuration
+	// ============================================================================================================================
+
+	/** Returns the complete animation and attack sequence for this ability. */
+	const TArray<FCombatPeriod>& GetAbilitySequence() const { return AbilitySequence; }
+
+	/** GameplayTag used to identify input bindings that trigger the startup of this combat sequence. */
+	UPROPERTY(EditDefaultsOnly, Category = "WolfCore|Combat Data")
+	FGameplayTag StartupInputTag;
+
+	/** GameplayTag representing the hit event that triggers attack resolution and damage application. */
+	UPROPERTY(EditDefaultsOnly, Category = "WolfCore|Combat Data")
+	FGameplayTag HitEventTag;
+
+	/** Per-ability interrupt response options, used instead of UWolfCombatSettings::
+	  * DefaultInterruptResponses when non-empty. See FInterruptResponseOption. */
+	UPROPERTY(EditDefaultsOnly, Category = "WolfCore|Presage")
+	TArray<FInterruptResponseOption> InterruptResponses;
+
+	// ============================================================================================================================
+	// Presage API
+	// ============================================================================================================================
+
+	/** Calculates the projected time until impact based on current prediction state and animation timing. */
+	UFUNCTION(BlueprintCallable, Meta = (DisplayName = "Calculate Projected Impact Time"), Category = "WolfCore|Presage")
+	/**
+	 * @return Float representing the projected time to impact in seconds.
+	 */
+	float CalculateProjectedImpactTime() const;
+
+	/** Returns the current index within the ability sequence that is actively executing. */
+	int32 GetCurrentPeriodIndex() const { return CurrentPeriodIndex; }
+
+	/** Sets the current period index in the ability sequence for direct state manipulation. */
+	/**
+	 * @param NewIndex The new period index to set as the active sequence position.
+	 */
+	void SetCurrentPeriodIndex(int32 NewIndex) { CurrentPeriodIndex = NewIndex; }
+
+	/** Checks whether the character is invulnerable at a given time relative to the current prediction window. */
+	/**
+	 * @param RelativeTime Time delta to query against the prediction buffer.
+	 * @return True if the character is invulnerable at the specified time; false otherwise.
+	 */
+	bool IsInvulnerableAt(float RelativeTime) const;
+
+	/** Returns the duration of a combat period from its configuration data. Static helper method. */
+	/**
+	 * @param Period The FCombatPeriod to retrieve duration information from.
+	 * @return Float representing the period duration in seconds.
+	 */
+	static float GetPeriodDuration(const FCombatPeriod& Period);
+
+	/** Returns the progress through the current combat period as a normalized value between 0 and 1. */
+	UFUNCTION(BlueprintCallable, Meta = (DisplayName = "Get Period Progress"), Category = "WolfCore|Presage")
+	/**
+	 * @return Float representing the progress (in seconds) of the current period (0.0 to 1.0).
+	 */
+	float GetPeriodProgress() const;
+
+	/** Calculates the duration required for movement between two points given velocity and acceleration parameters. */
+	UFUNCTION(BlueprintCallable, Meta = (DisplayName = "Calculate Movement Duration"), Category = "WolfCore|Presage")
+	/**
+	 * @param TotalDistance The total distance to travel in centimeters.
+	 * @param MaxVelocity The maximum achievable velocity in cm/s.
+	 * @param Acceleration The acceleration rate in cm/s².
+	 * @param StartVelocity The initial velocity at the start of movement in cm/s.
+	 * @return Float representing the estimated movement duration in seconds.
+	 */
+	static float CalculateMovementDuration(float TotalDistance, float MaxVelocity, float Acceleration, float StartVelocity);
+
+	/** Initializes a transient ability instance for presage simulation with a copied sequence. */
+	void InitializeForSimulation(const TArray<FCombatPeriod>& InSequence);
+
+	/** Resolves MoveTo destinations in a sequence using a source location and target actor. */
+	static void ResolveMoveToDestinations(TArray<FCombatPeriod>& Sequence, const FVector& SourceLocation, AActor* Target);
+
+	/**
+	 * Computes a derived timing breakdown (windup / active window / recovery) for the given
+	 * ability sequence. The active window is defined as the span from the first period containing
+	 * at least one FCombatHitEffect through the last such period. Sequences with no hit-capable
+	 * periods are treated as pure windup with no active window and no recovery.
+	 * This is a pure function of the sequence data — it does not read any instance state and does
+	 * not require a valid ability instance to call.
+	 */
+	static FAbilityTimingProfile ComputeAbilityTiming(const TArray<FCombatPeriod>& Sequence);
+
+	// ============================================================================================================================
+	// Execution State (Protected)
+	// ============================================================================================================================
+
+protected:
+	/** Array of FCombatPeriod entries defining the complete animation and attack sequence for this ability. */
+	UPROPERTY(EditDefaultsOnly, Category = "WolfCore|Combat Data")
+	TArray<FCombatPeriod> AbilitySequence;
+
+	/** Index of the current period within the ability sequence that is actively executing. */
+	int32 CurrentPeriodIndex = 0;
+
+	/** Timestamp marking when the current period began its execution in seconds. */
+	float CurrentPeriodStartTime = 0.f;
+
+	// --- Main Loop ---
+
+	/** Initiates the complete combat sequence from the beginning of the ability's AbilitySequence array. */
+	UFUNCTION()
+	void StartCombatSequence();
+
+	/** Executes a waiting period, pausing the sequence for the specified duration before continuing. */
+	/**
+	 * @param Period The FCombatPeriod containing wait timing and configuration data.
+	 */
+	void ExecuteWait(const FCombatPeriod& Period);
+
+	/** Executes an animated period by playing the associated montage and handling animation notifies. */
+	/**
+	 * @param Period The FCombatPeriod containing montage and attack configuration data.
+	 */
+	void ExecuteAnimatedPeriod(const FCombatPeriod& Period);
+
+	/** Advances the sequence to the next period in the ability's combat timeline. */
+	UFUNCTION()
+	void PlayNextPeriod();
+
+	/** Executes a movement-to-target phase, moving the character toward the specified destination. */
+	/**
+	 * @param Period The FCombatPeriod containing movement parameters and target location.
+	 */
+	void ExecuteMoveTo(FCombatPeriod& Period);
+
+	/** Retrieves the target actor from the blackboard data for attack targeting and combat resolution. */
+	AActor* GetTargetFromBlackboard() const;
+
+	/** Handles completion events for the current period, triggering transitions to the next sequence phase. */
+	UFUNCTION()
+	void OnPeriodCompleted();
+
+	/** Handles event notifications received during animation montages for hit detection and state changes. */
+	/**
+	 * @param EventData The FGameplayEventData containing event context and parameters.
+	 */
+	UFUNCTION()
+	void OnEventReceived(FGameplayEventData EventData);
+
+	/** Processes the attack hit event, applying damage, flow gain, and collision prediction for the current period. */
+	/**
+	 * @param CurrentAttackPeriod Reference to the FCombatPeriod currently executing its attack phase.
+	 */
+	virtual void HandleAttackHitEvent(const FCombatPeriod& CurrentAttackPeriod);
+
+	// ============================================================================================================================
+	// Hit Effect Application
+	// ============================================================================================================================
+
+	/**
+	 * Applies every FCombatHitEffect entry in Period between this ability's source actor and
+	 * TargetActor. Central extension point so derived abilities (RT trace-based, TB
+	 * prediction-based) share one application path. Virtual so a derived ability can override
+	 * application semantics if it ever needs to (e.g. different mitigation rules) without touching
+	 * callers.
+	 *
+	 * @param Period      The period whose HitEffects should be applied.
+	 * @param TargetActor The resolved target actor (RT: trace hit actor; TB: blackboard target).
+	 * @param HitResult    Optional trace hit result, added to the effect context if present.
+	 * @return True if at least one effect was applied. Kept as bool since RT's debug draw and
+	 *         potential future callers can use it; if it ends up unused by every caller, this can
+	 *         be simplified to void later.
+	 */
+	virtual bool ApplyHitEffects(const FCombatPeriod& Period, AActor* TargetActor, const FHitResult* HitResult = nullptr);
+};
 </file>
 
 <file path="Source/WolfCore/Private/Character/WolfCharacterBase.cpp">

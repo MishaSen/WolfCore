@@ -8,6 +8,7 @@
 
 class UCombatModeSubsystem;
 class UBaseCombatAbility;
+class UAbilitySystemComponent;
 
 /**
  * Presage planning phase. Produces a finalized per-combatant Action Plan (as a flat list of
@@ -38,7 +39,7 @@ public:
 	  * Ledger in place; call after RunPlanning and before DistributePlan. */
 	static void ResolveInterrupts(TArray<FIntentEntry>& Ledger);
 
-private:
+	private:
 	/** Returns the interrupt response table to use for the given entry: its ability's own
 	  * InterruptResponses if non-empty, else UWolfCombatSettings::DefaultInterruptResponses.
 	  * STAGE 4 SIMPLIFICATION: RequiredTags gating is not evaluated yet (no live tag-state model
@@ -50,11 +51,18 @@ private:
 
 	/** Weighted random pick among Options. Returns nullptr if Options is empty. */
 	static const FInterruptResponseOption* PickWeightedResponse(const TArray<FInterruptResponseOption>& Options);
+
 	/**
-	 * STAGE 3 STUB — returns UWolfCombatSettings::DefaultPresageStubAbility unconditionally. Real
-	 * AI decision-making (constraint-gated ability selection, disposition-weighted negotiation) is
-	 * stage 5. This function's only job right now is giving Execution something non-trivial to
-	 * chain through, to validate the plumbing.
+	 * Selects an ability for the given AI-controlled combatant from its actual granted kit,
+	 * filtered to UBaseCombatAbility subclasses that report CanActivateAbility() true right now
+	 * (respecting real ActivationBlockedTags/ActivationRequiredTags, cooldown, and cost — the same
+	 * gating real-time activation already uses). Picks uniformly at random among valid candidates.
+	 * Returns nullptr if the combatant has no ASC, or no currently-valid UBaseCombatAbility.
+	 *
+	 * Deliberately simple: "smarter" selection (favoring a follow-up on an ally's attack, avoiding
+	 * a redundant repeat, weighting by target distance) needs to know what else is being planned
+	 * in this bake, which requires the round-based negotiation this stage does not implement —
+	 * see stage 6.
 	 */
-	static TSubclassOf<UBaseCombatAbility> DecideIntent_Stub();
+	static TSubclassOf<UBaseCombatAbility> DecideIntent(const TScriptInterface<IWolfCombatant>& Combatant);
 };

@@ -6,12 +6,8 @@
 #include "Core/WolfPresageComponent.h"
 #include "Debug/WolfDebug.h"
 #include "GameFramework/Pawn.h"
-
-TSubclassOf<UBaseCombatAbility> FPresageOrchestrator::DecideIntent_Stub()
-{
-	const auto* Settings = GetDefault<UWolfCombatSettings>();
-	return Settings ? Settings->DefaultPresageStubAbility : nullptr;
-}
+#include "AbilitySystemComponent.h"
+#include "AbilitySystemInterface.h"
 
 TArray<FIntentEntry> FPresageOrchestrator::RunPlanning(
 	UCombatModeSubsystem* CMS,
@@ -61,7 +57,7 @@ TArray<FIntentEntry> FPresageOrchestrator::RunPlanning(
 			continue;
 		}
 
-		// AI combatant: chain the stub ability back-to-back until it covers the full duration.
+		// AI combatant: chain valid abilities back-to-back until it covers the full duration.
 		// Real disposition/negotiation/interrupts are not implemented yet (stage 5 for negotiation;
 		// interrupts as of this stage are detected but only "take the hit" is functional).
 		AActor* StubTarget = nullptr;
@@ -78,7 +74,7 @@ TArray<FIntentEntry> FPresageOrchestrator::RunPlanning(
 		float TimeCursor = 0.f;
 		while (TimeCursor < Duration)
 		{
-			const auto AbilityClass = DecideIntent_Stub();
+			const auto AbilityClass = DecideIntent(Combatant);
 			if (!AbilityClass) break; // nothing configured — leave this combatant with no plan.
 
 			FIntentEntry Entry;
@@ -90,7 +86,7 @@ TArray<FIntentEntry> FPresageOrchestrator::RunPlanning(
 			Entry.Target = StubTarget; // STAGE 4 STUB — first other tracked combatant, not real targeting.
 			Ledger.Add(Entry);
 
-			// Guard against a zero-duration stub ability looping forever.
+			// Guard against a zero-duration ability looping forever.
 			TimeCursor += FMath::Max(Entry.Timing.TotalDuration, KINDA_SMALL_NUMBER);
 		}
 	}
@@ -236,4 +232,35 @@ const FInterruptResponseOption* FPresageOrchestrator::PickWeightedResponse(const
 		if (Roll <= 0.f) return &Option;
 	}
 	return &Options.Last();
+}
+
+TSubclassOf<UBaseCombatAbility> FPresageOrchestrator::DecideIntent(const TScriptInterface<IWolfCombatant>& Combatant)
+{
+	const auto* Actor = Cast<AActor>(Combatant.GetObject());
+	if (!IsValid(Actor)) return nullptr;
+
+	const auto* ASI = Cast<IAbilitySystemInterface>(Actor);
+	UAbilitySystemComponent* ASC = ASI ? ASI->GetAbilitySystemComponent() : nullptr;
+	if (!ASC) return nullptr;
+
+	TArray<TSubclassOf<UBaseCombatAbility>> ValidCandidates;
+
+	FScopedAbilityListLock ActiveScopeLock(*ASC);
+	for (const auto& Spec : ASC->GetActivatableAbilities())
+	{
+		UBaseCombatAbility* CombatAbility = Cast<UBaseCombatAbility>(Spec.Ability);
+		if (!CombatAbility) continue; // not a combat ability (e.g. a passive/buff-only ability)
+
+		if (!CombatAbility->CanActivateAbility(Spec.Handle, ASC->AbilityActorInfo.Get()))
+		{
+			continue; // blocked by tags, on cooldown, insufficient cost — same real gating, no
+			          // special-cased orchestrator rule.
+		}
+
+		ValidCandidates.Add(CombatAbility->GetClass());
+	}
+
+	if (ValidCandidates.Num() == 0) return nullptr;
+
+	return ValidCandidates[FMath::RandRange(0, ValidCandidates.Num() - 1)];
 }
