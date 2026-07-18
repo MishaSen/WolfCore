@@ -1,7 +1,7 @@
 # WolfCore Active Context
 
 ## Current Work Focus
-Memory Bank initialization for WolfCore project. All core documentation files are being created to establish the knowledge base for future development sessions.
+Presage Orchestrator Stage 6 implementation — two-round negotiation with disposition-weighted commit/defer and reactive reads. This is the final planned stage of the Presage Orchestrator rollout per the architecture doc.
 
 ## Recent Changes
 - Initial Memory Bank setup completed
@@ -10,6 +10,13 @@ Memory Bank initialization for WolfCore project. All core documentation files ar
 - Connected to Linear team "MishaNes" (key: MIS)
 - Server name in settings: github.com/cline/linear-mcp
 - Fixed TB → RT input controls stuck bug (commit: 57de1857d4f37e2b7f7b941d84a2452ebb9d5e28)
+- **Stage 6 Presage Orchestrator implemented**: Two-round negotiation with disposition-weighted commit/defer + reactive reads
+  - Added `ArchetypeTag` to `BaseCombatAbility.h` for archetype-based redundancy detection
+  - Added `ReactiveDispositionWeight` to `WolfEnemyBase.h` for disposition-based defer probability
+  - Restructured `RunPlanning` with round 1 (commit) and round 2 (defer) negotiation
+  - Added `IsArchetypeRedundantAgainstTarget` helper for ledger-based archetype comparison
+  - Extracted `DeclareChainedIntents` shared loop for both rounds
+  - Updated `DecideIntent` to accept Target and Ledger for redundancy-aware selection
 
 ## Next Steps
 - Complete remaining Memory Bank files: systemPatterns.md, techContext.md, progress.md

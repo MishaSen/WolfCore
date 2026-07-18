@@ -28,6 +28,13 @@ public:
 	/** Default constructor for AWolfEnemyBase, initializing enemy-specific AI components. */
 	AWolfEnemyBase();
 
+	/** Probability [0,1] that this combatant defers its Presage-planning decision to round 2 instead
+	  * of committing immediately in round 1. Higher values behave more "reactively" — they wait to
+	  * see what other combatants declare before picking their own action. See
+	  * FPresageOrchestrator::RunPlanning. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "WolfCore|AI", meta = (ClampMin = "0.0", ClampMax = "1.0", UIMin = "0.0", UIMax = "1.0"))
+	float ReactiveDispositionWeight = 0.3f;
+
 protected:
 	/** Handles possession by a new controller, setting up behavior tree and AI state accordingly. Overrides ACharacter::PossessedBy(). */
 	/**

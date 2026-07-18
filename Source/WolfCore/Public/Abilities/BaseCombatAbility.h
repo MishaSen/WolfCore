@@ -154,6 +154,15 @@ public:
 	UPROPERTY(EditDefaultsOnly, Category = "WolfCore|Combat Data")
 	FGameplayTag HitEventTag;
 
+	/** Identifies the "nature" of this ability for reactive planning-phase reads (e.g. avoiding a
+	  * redundant repeat against the same target) — not used for gameplay logic, only for the Presage
+	  * orchestrator's negotiation phase. Author using an Ability.Archetype.* convention, e.g.
+	  * Ability.Archetype.HeavyMelee, Ability.Archetype.Ranged, Ability.Archetype.Defensive. Leave
+	  * unset (invalid) if this ability doesn't need to participate in archetype-based comparisons —
+	  * an unset tag is never treated as matching another unset tag (see PresageOrchestrator.cpp). */
+	UPROPERTY(EditDefaultsOnly, Category = "WolfCore|Combat Data")
+	FGameplayTag ArchetypeTag;
+
 	/** Per-ability interrupt response options, used instead of UWolfCombatSettings::
 	  * DefaultInterruptResponses when non-empty. See FInterruptResponseOption. */
 	UPROPERTY(EditDefaultsOnly, Category = "WolfCore|Presage")

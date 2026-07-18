@@ -5,6 +5,7 @@
 #include "Core/WolfCombatSettings.h"
 #include "Core/WolfPresageComponent.h"
 #include "Debug/WolfDebug.h"
+#include "Character/WolfEnemyBase.h"
 #include "GameFramework/Pawn.h"
 #include "AbilitySystemComponent.h"
 #include "AbilitySystemInterface.h"
@@ -17,6 +18,16 @@ TArray<FIntentEntry> FPresageOrchestrator::RunPlanning(
 	TArray<FIntentEntry> Ledger;
 	if (!CMS) return Ledger;
 
+	// Deferred AI combatants carry their resolved stub target forward to round 2 so it isn't
+	// recomputed there — target resolution itself is unchanged from stage 4/5.
+	struct FDeferredCombatant
+	{
+		TScriptInterface<IWolfCombatant> Combatant;
+		AActor* Target = nullptr;
+	};
+	TArray<FDeferredCombatant> Deferred;
+
+	// Round 1
 	for (const auto& Combatant : Combatants)
 	{
 		const auto* Actor = Cast<AActor>(Combatant.GetObject());
@@ -30,8 +41,8 @@ TArray<FIntentEntry> FPresageOrchestrator::RunPlanning(
 
 		if (bIsPlayer)
 		{
-			// Player's own intent comes from the existing injection mechanism, not the orchestrator.
-			// At most one entry — Execution does not auto-continue the player past it (stage 3 scope).
+			// Player's own intent comes from the existing injection mechanism, not the
+			// orchestrator — unchanged from stage 3/4/5. Not subject to negotiation.
 			if (Presage->HasInjectedAbilityRequest())
 			{
 				const auto& Request = Presage->GetInjectedAbilityRequest();
@@ -57,9 +68,7 @@ TArray<FIntentEntry> FPresageOrchestrator::RunPlanning(
 			continue;
 		}
 
-		// AI combatant: chain valid abilities back-to-back until it covers the full duration.
-		// Real disposition/negotiation/interrupts are not implemented yet (stage 5 for negotiation;
-		// interrupts as of this stage are detected but only "take the hit" is functional).
+		// Stub target resolution — unchanged from stage 4/5.
 		AActor* StubTarget = nullptr;
 		for (const auto& Other : Combatants)
 		{
@@ -71,24 +80,35 @@ TArray<FIntentEntry> FPresageOrchestrator::RunPlanning(
 			}
 		}
 
-		float TimeCursor = 0.f;
-		while (TimeCursor < Duration)
+		// Disposition roll: higher ReactiveDispositionWeight means more likely to wait for
+		// round 2. Only AWolfEnemyBase carries this trait today; anything else implementing
+		// IWolfCombatant that isn't one always commits in round 1 (weight 0).
+		const auto* Enemy = Cast<AWolfEnemyBase>(Actor);
+		const float DispositionWeight = Enemy ? Enemy->ReactiveDispositionWeight : 0.f;
+
+		if (FMath::FRand() < DispositionWeight)
 		{
-			const auto AbilityClass = DecideIntent(Combatant);
-			if (!AbilityClass) break; // nothing configured — leave this combatant with no plan.
-
-			FIntentEntry Entry;
-			Entry.Combatant = Combatant;
-			Entry.AbilityClass = AbilityClass;
-			Entry.Timing = CMS->GetOrComputeTimingProfile(AbilityClass);
-			Entry.StartTime = TimeCursor;
-			Entry.Status = EIntentStatus::Confirmed;
-			Entry.Target = StubTarget; // STAGE 4 STUB — first other tracked combatant, not real targeting.
-			Ledger.Add(Entry);
-
-			// Guard against a zero-duration ability looping forever.
-			TimeCursor += FMath::Max(Entry.Timing.TotalDuration, KINDA_SMALL_NUMBER);
+			Deferred.Add({ Combatant, StubTarget });
+			continue; // no ledger entry yet — "waiting" is internal to planning, not a declared intent.
 		}
+
+		DeclareChainedIntents(CMS, Combatant, StubTarget, Duration, Ledger);
+	}
+
+	// Round 2 — hard-capped: every deferred combatant commits here, no further deferring.
+	// By this point Ledger already contains every round-1 committer's entries, so these
+	// combatants are genuinely reacting to what's already been declared.
+	for (const auto& DeferredEntry : Deferred)
+	{
+		DeclareChainedIntents(CMS, DeferredEntry.Combatant, DeferredEntry.Target, Duration, Ledger);
+	}
+
+	// Negotiation is over — finalize every entry produced this pass. Interrupt resolution
+	// (stage 4's ResolveInterrupts, called separately by the caller) is what moves an entry
+	// to Interrupted; nothing here does that.
+	for (FIntentEntry& Entry : Ledger)
+	{
+		Entry.Status = EIntentStatus::Confirmed;
 	}
 
 	return Ledger;
@@ -234,7 +254,10 @@ const FInterruptResponseOption* FPresageOrchestrator::PickWeightedResponse(const
 	return &Options.Last();
 }
 
-TSubclassOf<UBaseCombatAbility> FPresageOrchestrator::DecideIntent(const TScriptInterface<IWolfCombatant>& Combatant)
+TSubclassOf<UBaseCombatAbility> FPresageOrchestrator::DecideIntent(
+	const TScriptInterface<IWolfCombatant>& Combatant,
+	const AActor* Target,
+	const TArray<FIntentEntry>& Ledger)
 {
 	const auto* Actor = Cast<AActor>(Combatant.GetObject());
 	if (!IsValid(Actor)) return nullptr;
@@ -249,12 +272,11 @@ TSubclassOf<UBaseCombatAbility> FPresageOrchestrator::DecideIntent(const TScript
 	for (const auto& Spec : ASC->GetActivatableAbilities())
 	{
 		UBaseCombatAbility* CombatAbility = Cast<UBaseCombatAbility>(Spec.Ability);
-		if (!CombatAbility) continue; // not a combat ability (e.g. a passive/buff-only ability)
+		if (!CombatAbility) continue;
 
 		if (!CombatAbility->CanActivateAbility(Spec.Handle, ASC->AbilityActorInfo.Get()))
 		{
-			continue; // blocked by tags, on cooldown, insufficient cost — same real gating, no
-			          // special-cased orchestrator rule.
+			continue;
 		}
 
 		ValidCandidates.Add(CombatAbility->GetClass());
@@ -262,5 +284,69 @@ TSubclassOf<UBaseCombatAbility> FPresageOrchestrator::DecideIntent(const TScript
 
 	if (ValidCandidates.Num() == 0) return nullptr;
 
-	return ValidCandidates[FMath::RandRange(0, ValidCandidates.Num() - 1)];
+	// Prefer candidates that don't repeat an archetype already declared against this same target —
+	// this is the only new behavior stage 6 adds to selection itself; everything else about
+	// candidate gathering is unchanged from stage 5.
+	TArray<TSubclassOf<UBaseCombatAbility>> PreferredCandidates;
+	for (const auto& Candidate : ValidCandidates)
+	{
+		if (!IsArchetypeRedundantAgainstTarget(Candidate, Target, Ledger))
+		{
+			PreferredCandidates.Add(Candidate);
+		}
+	}
+
+	const TArray<TSubclassOf<UBaseCombatAbility>>& Pool = PreferredCandidates.Num() > 0 ? PreferredCandidates : ValidCandidates;
+	return Pool[FMath::RandRange(0, Pool.Num() - 1)];
+}
+
+void FPresageOrchestrator::DeclareChainedIntents(
+	UCombatModeSubsystem* CMS,
+	const TScriptInterface<IWolfCombatant>& Combatant,
+	AActor* Target,
+	float Duration,
+	TArray<FIntentEntry>& Ledger)
+{
+	float TimeCursor = 0.f;
+	while (TimeCursor < Duration)
+	{
+		const auto AbilityClass = DecideIntent(Combatant, Target, Ledger);
+		if (!AbilityClass) break;
+
+		FIntentEntry Entry;
+		Entry.Combatant = Combatant;
+		Entry.AbilityClass = AbilityClass;
+		Entry.Timing = CMS->GetOrComputeTimingProfile(AbilityClass);
+		Entry.StartTime = TimeCursor;
+		Entry.Status = EIntentStatus::Declared; // finalized to Confirmed once both rounds complete — see RunPlanning
+		Entry.Target = Target;
+		Ledger.Add(Entry);
+
+		TimeCursor += FMath::Max(Entry.Timing.TotalDuration, KINDA_SMALL_NUMBER);
+	}
+}
+
+bool FPresageOrchestrator::IsArchetypeRedundantAgainstTarget(
+	TSubclassOf<UBaseCombatAbility> CandidateClass,
+	const AActor* Target,
+	const TArray<FIntentEntry>& Ledger)
+{
+	if (!Target || !CandidateClass) return false;
+
+	const auto* CandidateCDO = CandidateClass->GetDefaultObject<UBaseCombatAbility>();
+	if (!CandidateCDO || !CandidateCDO->ArchetypeTag.IsValid()) return false; // unset tag never matches
+
+	for (const FIntentEntry& Entry : Ledger)
+	{
+		if (Entry.Target.Get() != Target) continue;
+		if (!Entry.AbilityClass) continue;
+
+		const auto* EntryCDO = Entry.AbilityClass->GetDefaultObject<UBaseCombatAbility>();
+		if (EntryCDO && EntryCDO->ArchetypeTag.IsValid() && EntryCDO->ArchetypeTag == CandidateCDO->ArchetypeTag)
+		{
+			return true;
+		}
+	}
+
+	return false;
 }
