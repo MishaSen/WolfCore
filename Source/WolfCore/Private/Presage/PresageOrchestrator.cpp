@@ -83,8 +83,7 @@ TArray<FIntentEntry> FPresageOrchestrator::RunPlanning(
 		// Disposition roll: higher ReactiveDispositionWeight means more likely to wait for
 		// round 2. Only AWolfEnemyBase carries this trait today; anything else implementing
 		// IWolfCombatant that isn't one always commits in round 1 (weight 0).
-		const auto* Enemy = Cast<AWolfEnemyBase>(Actor);
-		const float DispositionWeight = Enemy ? Enemy->ReactiveDispositionWeight : 0.f;
+		const float DispositionWeight = Combatant.GetInterface()->GetReactiveDispositionweight();
 
 		if (FMath::FRand() < DispositionWeight)
 		{

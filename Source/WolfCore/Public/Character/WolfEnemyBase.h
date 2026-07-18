@@ -28,12 +28,8 @@ public:
 	/** Default constructor for AWolfEnemyBase, initializing enemy-specific AI components. */
 	AWolfEnemyBase();
 
-	/** Probability [0,1] that this combatant defers its Presage-planning decision to round 2 instead
-	  * of committing immediately in round 1. Higher values behave more "reactively" — they wait to
-	  * see what other combatants declare before picking their own action. See
-	  * FPresageOrchestrator::RunPlanning. */
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "WolfCore|AI", meta = (ClampMin = "0.0", ClampMax = "1.0", UIMin = "0.0", UIMax = "1.0"))
-	float ReactiveDispositionWeight = 0.3f;
+	/// @brief Overrides  IWolfCombatants's default (0) with this enemy's actual disposition property.
+	virtual float GetReactiveDispositionweight() const override { return ReactiveDispositionWeight; }
 
 protected:
 	/** Handles possession by a new controller, setting up behavior tree and AI state accordingly. Overrides ACharacter::PossessedBy(). */
@@ -53,4 +49,11 @@ protected:
 	/** Team identifier used for ally/enemy grouping and team-based combat interactions. */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "WolfCore|AI")
 	uint8 TeamID = 2;
+	
+	/** Probability [0,1] that this combatant defers its Presage-planning decision to round 2 instead
+	  * of committing immediately in round 1. Higher values behave more "reactively" — they wait to
+	  * see what other combatants declare before picking their own action. See
+	  * FPresageOrchestrator::RunPlanning. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "WolfCore|AI", meta = (ClampMin = "0.0", ClampMax = "1.0", UIMin = "0.0", UIMax = "1.0"))
+	float ReactiveDispositionWeight = 0.3f;
 };

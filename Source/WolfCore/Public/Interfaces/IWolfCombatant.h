@@ -64,4 +64,9 @@ public:
 	/// @brief Retrieves the current ability progress (period time) for simulation sync.
 	/// @return Float representing the active ability's period progress in seconds.
 	virtual float GetActiveAbilityProgress() const = 0;
+
+	/// @brief Probability [0,1] that this combatant defers its Presage-planning decision to round 2
+	/// instead of committing immediately i n round 1. Default 0 - non-enemy combatants (player,
+	/// environmental actors, etc.) never defer unless they explicitly opt in.
+	virtual float GetReactiveDispositionweight() const { return 0.f; }
 };
