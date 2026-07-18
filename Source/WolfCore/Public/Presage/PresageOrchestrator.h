@@ -32,7 +32,24 @@ public:
 		const TArray<TScriptInterface<IWolfCombatant>>& Combatants,
 		const TArray<FIntentEntry>& Plan);
 
+	/** Detects interrupts (one combatant's planned attack landing during another's windup) and
+	  * resolves them. Only "take the hit" is mechanically functional this stage — any other
+	  * authored FInterruptResponseOption is logged and falls back to the same behavior. Mutates
+	  * Ledger in place; call after RunPlanning and before DistributePlan. */
+	static void ResolveInterrupts(TArray<FIntentEntry>& Ledger);
+
 private:
+	/** Returns the interrupt response table to use for the given entry: its ability's own
+	  * InterruptResponses if non-empty, else UWolfCombatSettings::DefaultInterruptResponses.
+	  * STAGE 4 SIMPLIFICATION: RequiredTags gating is not evaluated yet (no live tag-state model
+	  * to check against) — only options with an empty RequiredTags container are considered
+	  * available. This is safe today because only the always-available take-hit fallback is
+	  * mechanically implemented regardless of which option gets picked; RequiredTags gating
+	  * becomes meaningful once stage 5 or later work adds real response types that need it. */
+	static TArray<FInterruptResponseOption> GetAvailableResponses(const FIntentEntry& InterruptedEntry);
+
+	/** Weighted random pick among Options. Returns nullptr if Options is empty. */
+	static const FInterruptResponseOption* PickWeightedResponse(const TArray<FInterruptResponseOption>& Options);
 	/**
 	 * STAGE 3 STUB — returns UWolfCombatSettings::DefaultPresageStubAbility unconditionally. Real
 	 * AI decision-making (constraint-gated ability selection, disposition-weighted negotiation) is

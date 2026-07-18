@@ -93,6 +93,17 @@ struct WOLFCORE_API FIntentEntry
 	  * cannot be offered a new decision. */
 	UPROPERTY(BlueprintReadOnly, Category = "WolfCore|Presage")
 	float UnavailableUntil = 0.f;
+
+	/** True if this intent was interrupted during temporal resolution and InterruptedAtTime holds
+	  * a meaningful value. Set by FPresageOrchestrator::ResolveInterrupts. */
+	UPROPERTY(BlueprintReadOnly, Category = "WolfCore|Presage")
+	bool bHasInterruptedAtTime = false;
+
+	/** Only meaningful if bHasInterruptedAtTime is true. Timeline time at which the interrupting
+	  * attack actually lands — Execution cuts this entry's ability short at this time instead of
+	  * letting it run to its natural completion. */
+	UPROPERTY(BlueprintReadOnly, Category = "WolfCore|Presage")
+	float InterruptedAtTime = 0.f;
 };
 
 /**

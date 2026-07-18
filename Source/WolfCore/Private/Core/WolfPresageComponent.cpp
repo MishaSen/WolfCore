@@ -63,13 +63,27 @@ void UWolfPresageComponent::SimulateTick(float Step)
 		);
 
 		// If this was our own planned/simulated ability (not a real one carried over from RT) and
-		// its sequence just ran out, free it up so the next planned intent can take over. Mirrors
-		// the stage 2 fix for the real-ability case, applied here to the simulated side.
-		if (ActiveAbility == SimulatedAbility
-			&& !ActiveAbility->GetAbilitySequence().IsValidIndex(ActiveAbility->GetCurrentPeriodIndex()))
+		// its sequence just ran out, OR it's been interrupted and reached its cutoff time, free it
+		// up so the next planned intent can take over.
+		if (ActiveAbility == SimulatedAbility)
 		{
-			bSimulatedAbilityActive = false;
-			++NextPlannedIntentIndex;
+			bool bExhausted = !ActiveAbility->GetAbilitySequence().IsValidIndex(ActiveAbility->GetCurrentPeriodIndex());
+
+			bool bInterruptedNow = false;
+			if (PlannedIntents.IsValidIndex(NextPlannedIntentIndex))
+			{
+				const FIntentEntry& CurrentEntry = PlannedIntents[NextPlannedIntentIndex];
+				if (CurrentEntry.bHasInterruptedAtTime && SimElapsedTime >= CurrentEntry.InterruptedAtTime)
+				{
+					bInterruptedNow = true;
+				}
+			}
+
+			if (bExhausted || bInterruptedNow)
+			{
+				bSimulatedAbilityActive = false;
+				++NextPlannedIntentIndex;
+			}
 		}
 	}
 

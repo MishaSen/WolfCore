@@ -150,7 +150,8 @@ void UCombatModeSubsystem::SetMode(FGameplayTag NewMode)
 			BakedStepSize = FMath::Max(Settings->PresageSimulationStep, 0.01f);
 		}
 
-		const auto Plan = FPresageOrchestrator::RunPlanning(this, TrackedCombatants, MaxTimelineDuration);
+		auto Plan = FPresageOrchestrator::RunPlanning(this, TrackedCombatants, MaxTimelineDuration);
+		FPresageOrchestrator::ResolveInterrupts(Plan);
 		FPresageOrchestrator::DistributePlan(TrackedCombatants, Plan);
 
 		FWolfPresageSimulator::ExecuteFutureBake(TrackedCombatants, MaxTimelineDuration, BakedStepSize);
@@ -227,7 +228,8 @@ void UCombatModeSubsystem::ReBakeTimeline()
 
 	const float ScrubTime = CurrentTimelineTime;
 
-	const auto Plan = FPresageOrchestrator::RunPlanning(this, TrackedCombatants, MaxTimelineDuration);
+	auto Plan = FPresageOrchestrator::RunPlanning(this, TrackedCombatants, MaxTimelineDuration);
+	FPresageOrchestrator::ResolveInterrupts(Plan);
 	FPresageOrchestrator::DistributePlan(TrackedCombatants, Plan);
 
 	FWolfPresageSimulator::ExecuteFutureBake(TrackedCombatants, MaxTimelineDuration, BakedStepSize);

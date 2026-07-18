@@ -154,6 +154,11 @@ public:
 	UPROPERTY(EditDefaultsOnly, Category = "WolfCore|Combat Data")
 	FGameplayTag HitEventTag;
 
+	/** Per-ability interrupt response options, used instead of UWolfCombatSettings::
+	  * DefaultInterruptResponses when non-empty. See FInterruptResponseOption. */
+	UPROPERTY(EditDefaultsOnly, Category = "WolfCore|Presage")
+	TArray<FInterruptResponseOption> InterruptResponses;
+
 	// ============================================================================================================================
 	// Presage API
 	// ============================================================================================================================
