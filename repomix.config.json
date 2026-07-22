@@ -20,7 +20,9 @@
       "*.umap",
       "*.target",
       "*.modules",
-      "*.DotSettings.user"
+      "*.DotSettings.user",
+      "docs/**",
+      "repomix-output.txt"
     ]
   }
 }

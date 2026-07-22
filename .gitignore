@@ -35,3 +35,6 @@ Source/**/*.gen.h
 *.xcodeproj
 *.xcworkspace
 *.DS_Store
+
+# Repomix
+*.repomix-output.txt
