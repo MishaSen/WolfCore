@@ -9,6 +9,7 @@
 #include "Presage/PresageOrchestratorTypes.h"
 #include "Subsystems/WorldSubsystem.h"
 #include "Interfaces/IWolfCombatant.h"
+#include "Tickable.h"
 #include "CombatModeSubsystem.generated.h"
 
 struct FStreamableHandle;
@@ -22,13 +23,102 @@ class UBaseCombatAbility;
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnCombatModeChanged, FGameplayTag, NewMode);
 
 /**
+ * THE EXACT-PREVIEW CONTRACT (normative — binding on PresagePreview stages 2–3 and all future
+ * TB-adjacent work; see PresagePreviewStage1.md for full rationale).
+ *
+ * In-contract (must round-trip on scrub, must match between preview and execution):
+ *   - Actor transform (location, rotation) and velocity.
+ *   - Active montage identity and playback position.
+ *   - Active ability identity and current period index.
+ *   - All attributes registered in UCharacterStatConfig (Health, MaxHealth, FlowGauge,
+ *     Adrenaline) — once stage 2 makes them change during the bake.
+ *   - Predicted death (health reaching 0 in the bake) — as data/presentation only during
+ *     preview; see below.
+ *
+ * Out-of-contract (consciously excluded):
+ *   - GameplayEffect object instances. Preview never applies real GEs (stage 3 enforces this).
+ *     A restore-by-reapplication path can never be provably exact (durations, periodic-tick
+ *     phase, and stack state don't survive reconstruction) — removing real effects from preview
+ *     makes the contract trivially satisfiable instead of heroically maintained.
+ *   - Cooldowns. No ability meaningfully uses them yet; excluded until one does.
+ *   - AI blackboard targets. Resolved into FIntentEntry.Target at plan time; the blackboard is a
+ *     planning INPUT, not previewed state.
+ *
+ * Named intentional behaviors:
+ *   - RestoreGAS's dead-tag reset is intentional: death is previewable and rewindable. Scrubbing
+ *     behind a predicted death shows the actor alive. Nobody "fixes" this later. Real death (with
+ *     Die()'s collision/movement side effects) occurs only during execution, via real GE
+ *     application (stage 3).
+ *   - Predicted death during preview is data + presentation only: health 0 in the snapshot, no
+ *     Die() side effects — falls out naturally from stage 2 writing attributes via
+ *     SetNumericAttributeBase, which does not fire PostGameplayEffectExecute.
+ *
+ * MAGNITUDE-PREDICTABILITY RULE (binding on all future ability/effect authoring): every
+ * FCombatHitEffect used by a TB-previewable ability must have a numerically predictable
+ * magnitude — computable at bake time from the SetByCaller amount at ability level, without
+ * live-ASC-dependent inputs. Stage 2 computes predicted deltas from exactly this path; stage 3
+ * applies the real GE from exactly this path. A GE whose real application could diverge from its
+ * predicted delta is a contract violation. Stage 3's divergence guard should never fire; when it
+ * does, it names the exact authored effect that broke this rule.
+ */
+UENUM(BlueprintType)
+enum class ETBPhase : uint8
+{
+	/** Not in TB at all. */
+	None,
+	/** TB entered, scene frozen (global dilation 0), whole future baked, player scrubs/selects.
+	  * Untimed — the Flow budget maps to execution timeline length, not think-time. */
+	Planning,
+	/** Lock-in has occurred; the baked plan is playing forward in real (unscaled) time. Still TB
+	  * mode, not RT. Cannot be exited before the plan completes except by the damage hard-exit. */
+	Executing
+};
+
+/** Maps to vision's three TB endings. See UCombatModeSubsystem::ExitTB. */
+UENUM(BlueprintType)
+enum class ETBExitReason : uint8
+{
+	/** Reached the end of the budgeted timeline without an ending action — the neutral
+	  * "flow depleted / didn't find the play" outcome. */
+	PlanCompleted,
+	/** An ability tagged as an ending action (UWolfCombatSettings::TBEndingActionArchetypeTag)
+	  * executed. Bonus effects are explicitly TBD per vision — this stage recognizes and logs
+	  * only; no bonus is applied. */
+	EndingAction,
+	/** The player or a linked ally took damage during Executing (this ending is only possible
+	  * during Executing — nothing real happens during Planning, so nothing can deal damage then). */
+	DamageTaken
+};
+
+/**
  * World subsystem managing combat mode state (Real-Time / Turn-Based).
  * Handles mode transitions, time dilation, temporal snapshots, and presage simulation coordination.
  */
 UCLASS()
-class WOLFCORE_API UCombatModeSubsystem : public UWorldSubsystem
+class WOLFCORE_API UCombatModeSubsystem : public UWorldSubsystem, public FTickableGameObject
 {
 	GENERATED_BODY()
+
+	// ============================================================================================================================
+	// FTickableGameObject
+	// ============================================================================================================================
+
+public:
+	/** Advances ExecutionClock by unscaled real delta time and scrubs the timeline to it. No-op
+	  * (via IsTickable) outside TBPhase::Executing. */
+	virtual void Tick(float DeltaTime) override;
+
+	/** Only ticks while actively playing back a locked-in TB plan. */
+	virtual bool IsTickable() const override { return TBPhase == ETBPhase::Executing; }
+
+	virtual TStatId GetStatId() const override
+	{
+		RETURN_QUICK_DECLARE_CYCLE_STAT(UCombatModeSubsystem, STATGROUP_Tickables);
+	}
+
+	/** Restricts ticking to this subsystem's own world — without this override,
+	  * FTickableGameObject ticks across every world (e.g. every PIE instance), not just this one. */
+	virtual UWorld* GetTickableGameObjectWorld() const override { return GetWorld(); }
 
 	// ============================================================================================================================
 	// Lifecycle
@@ -77,6 +167,22 @@ public:
 
 	/** Boolean flag indicating whether the current combat mode is set to turn-based (TB) rather than real-time (RT). */
 	bool bIsInTB;
+
+	/** Current TB phase. None outside TB; must be Planning or Executing whenever bIsInTB is true. */
+	UFUNCTION(BlueprintPure, Category = "WolfCore|Combat")
+	ETBPhase GetTBPhase() const { return TBPhase; }
+
+	/** Transitions Planning -> Executing: calls the Flow deduction hook (OnLockInFlowDeduction),
+	  * scrubs to 0, and starts execution playback. No-op with a warning log if not currently in
+	  * TBPhase::Planning. The "every free linked ally has an action queued" gate is UI-layer
+	  * validation — this function does not re-check it; there is no ally roster to check yet. */
+	void LockInPlan();
+
+	/** Transitions Executing (or, degenerate case, Planning via manual abandon) back to RT.
+	  * Reason determines exit-specific handling (hard-exit debuff, ending-action log). Victims is
+	  * only meaningful for ETBExitReason::DamageTaken — each valid entry receives
+	  * UWolfCombatSettings::TBHardExitDebuffClass if configured. */
+	void ExitTB(ETBExitReason Reason, const TArray<TWeakObjectPtr<AActor>>& Victims = {});
 
 	// ============================================================================================================================
 	// Public API - Snapshots & Timeline
@@ -163,6 +269,36 @@ protected:
 	/** Maximum allowed duration in seconds for the prediction timeline before requiring regeneration or reset. */
 	UPROPERTY(EditDefaultsOnly, Category = "WolfCore|Timeline")
 	float MaxTimelineDuration = 5.f;
+
+	/** None outside TB; Planning immediately on TB entry; Executing once LockInPlan() runs. */
+	UPROPERTY(BlueprintReadOnly, Category = "WolfCore|Timeline")
+	ETBPhase TBPhase = ETBPhase::None;
+
+	/** Elapsed unscaled real time since LockInPlan() started execution playback. Reset to 0 by
+	  * LockInPlan(); advanced by Tick(); read by ScrubTimeline, CheckExecutionDamageExit, and
+	  * CheckEndingAction every Executing tick. */
+	float ExecutionClock = 0.f;
+
+	/** Flow deduction hook, called once by LockInPlan() at lock-in. Empty this stage —
+	  * ResourceLoop stage 3 implements the actual deduction (amount = function of threshold stage
+	  * consumed; numbers TBD there). This is the one blessed place for that stage to land its
+	  * logic. Do not call SetMode or otherwise mutate TB phase state from an override of this. */
+	virtual void OnLockInFlowDeduction() {}
+
+	/** Damage hard-exit hook, checked every Executing tick after ScrubTimeline. This stage: stub,
+	  * always returns false and leaves OutVictims untouched — there is no impact data to check
+	  * against until PresagePreview stage 2 exists. Stage 2 fills the body: scans its impact
+	  * ledger for the first not-yet-consumed entry with bConnected && bVictimIsPlayerOrLinked &&
+	  * ImpactTime <= InExecutionClock, appends its victim(s) to OutVictims, and returns true. */
+	bool CheckExecutionDamageExit(float InExecutionClock, TArray<TWeakObjectPtr<AActor>>& OutVictims);
+
+	/** Ending-action recognition, checked every Executing tick after CheckExecutionDamageExit.
+	  * Real this stage: true iff the player's currently-executing baked ability (per the buffer
+	  * frame at InExecutionClock) has an ArchetypeTag matching
+	  * UWolfCombatSettings::TBEndingActionArchetypeTag. The BONUS an ending action grants is
+	  * explicitly TBD per vision ("exact shape TBD") and is not implemented here — ExitTB's
+	  * EndingAction branch only logs recognition; nothing else fires. */
+	bool CheckEndingAction(float InExecutionClock) const;
 
 	private:
 	/** The fixed step size (seconds) used to produce the current PredictionBuffer contents across

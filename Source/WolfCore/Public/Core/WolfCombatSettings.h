@@ -45,4 +45,22 @@ public:
 	/** Map of combat mode GameplayTags to TimeDilation multipliers for temporal prediction scaling. */
 	UPROPERTY(Config, EditAnywhere, Category = "WolfCore|Combat", meta = (Categories = "InputState"))
 	TMap<FGameplayTag, float> ModeTimeDilationMap;
+
+	// ============================================================================================================================
+	// TB Execution Configuration (PresagePreview stage 1)
+	// ============================================================================================================================
+
+	/** Applied to each hard-exit victim when TB is exited due to ETBExitReason::DamageTaken (see
+	  * UCombatModeSubsystem::ExitTB). Unset by default — the debuff asset is authored later;
+	  * ExitTB applies it if set and logs-and-skips if unset. */
+	UPROPERTY(Config, EditAnywhere, Category = "WolfCore|Presage")
+	TSoftClassPtr<UGameplayEffect> TBHardExitDebuffClass;
+
+	/** ArchetypeTag value that marks an ability as an "ending action" for TB execution — checked
+	  * by UCombatModeSubsystem::CheckEndingAction against the player's currently-executing baked
+	  * ability. Leave unset (invalid) to disable ending-action recognition entirely. Author using
+	  * the same Ability.Archetype.* convention as ArchetypeTag elsewhere (e.g.
+	  * Ability.Archetype.Ending) — no native tag registration needed. */
+	UPROPERTY(Config, EditAnywhere, Category = "WolfCore|Presage")
+	FGameplayTag TBEndingActionArchetypeTag;
 };

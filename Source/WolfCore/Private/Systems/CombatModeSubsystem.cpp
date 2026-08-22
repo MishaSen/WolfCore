@@ -5,6 +5,7 @@
 
 #include "AbilitySystemBlueprintLibrary.h"
 #include "AbilitySystemComponent.h"
+#include "Misc/App.h"
 #include "WolfLevelScript.h"
 #include "Core/WolfPresageSimulator.h"
 #include "Core/WolfCombatSettings.h"
@@ -128,6 +129,7 @@ void UCombatModeSubsystem::SetMode(FGameplayTag NewMode)
 	if (NewMode == WolfTag.InputState_TB)
 	{
 		bIsInTB = true;
+		TBPhase = ETBPhase::Planning;
 		MasterStartSnapshot = CaptureCurrentWorldState(World->GetTimeSeconds());
 
 		// Apply new mode tags to all tracked combatants.
@@ -166,6 +168,18 @@ void UCombatModeSubsystem::SetMode(FGameplayTag NewMode)
 	}
     else
     {
+        if (TBPhase == ETBPhase::Planning)
+        {
+            // Manual mode switch during Planning, not via LockInPlan/ExitTB — treated as
+            // abandoning TB. Nothing real has happened yet during Planning, so restoring to
+            // TB-entry state via ScrubTimeline(0.f) leaves no baked state leaking into RT.
+            // Resource consequences of abandoning are undefined until ResourceLoop lands.
+            ScrubTimeline(0.f);
+        }
+        // If TBPhase is already None, ExitTB() set it before calling this SetMode(RT) itself —
+        // this branch must NOT re-scrub in that case, since execution already played out to
+        // wherever it stopped and that state must be left alone.
+        TBPhase = ETBPhase::None;
         MasterStartSnapshot.ActorStates.Empty();
         bIsInTB = false;
     }
@@ -190,6 +204,154 @@ void UCombatModeSubsystem::SwitchCombatMode()
 	WOLF_INFO(TEXT("Current Mode: %s. Switching to %s"), *CurrentMode.ToString(), *NewMode.ToString());
 
 	SetMode(NewMode);
+}
+
+void UCombatModeSubsystem::Tick(float DeltaTime)
+{
+	if (TBPhase != ETBPhase::Executing) return;
+
+	// Unscaled real time — immune to global dilation, which stays 0 throughout all of TB
+	// (including Executing; see the overview's "TB has two phases" model). Execution playback
+	// IS the bake, played forward — exactness is guaranteed by construction.
+	ExecutionClock += FApp::GetDeltaTime();
+
+	ScrubTimeline(ExecutionClock);
+
+	// --- PresagePreviewStage3 SEAM: real ledger-impact application (ApplyHitEffects-equivalent
+	// through the ledger) inserts here, before the damage-exit check below, so the hard exit
+	// fires from real applied state rather than merely presentational buffer data. Stages 1/2 do
+	// not apply anything real — execution playback is a slower auto-scrub until stage 3 lands. ---
+
+	TArray<TWeakObjectPtr<AActor>> DamageVictims;
+	if (CheckExecutionDamageExit(ExecutionClock, DamageVictims))
+	{
+		ExitTB(ETBExitReason::DamageTaken, DamageVictims);
+		return;
+	}
+
+	if (CheckEndingAction(ExecutionClock))
+	{
+		ExitTB(ETBExitReason::EndingAction);
+		return;
+	}
+
+	if (ExecutionClock >= MaxTimelineDuration)
+	{
+		ExitTB(ETBExitReason::PlanCompleted);
+		return;
+	}
+}
+
+void UCombatModeSubsystem::LockInPlan()
+{
+	if (!bIsInTB || TBPhase != ETBPhase::Planning)
+	{
+		WOLF_WARN(TEXT("[PRESAGE] LockInPlan called outside Planning phase — ignored."));
+		return;
+	}
+
+	// UI-layer validation ("every free linked ally has an action queued") happens before this is
+	// called — there is no ally roster to check here yet, and this function deliberately does not
+	// invent one.
+	OnLockInFlowDeduction();
+
+	ScrubTimeline(0.f);
+	ExecutionClock = 0.f;
+	TBPhase = ETBPhase::Executing;
+	WOLF_LOG(Log, TEXT("[PRESAGE] TB locked in — execution playback started."));
+}
+
+void UCombatModeSubsystem::ExitTB(ETBExitReason Reason, const TArray<TWeakObjectPtr<AActor>>& Victims)
+{
+	if (!bIsInTB) return;
+
+	// Set before SetMode(RT) below, so SetMode's Planning-abandon branch does not re-fire and
+	// re-scrub over state that execution already played out to.
+	TBPhase = ETBPhase::None;
+
+	switch (Reason)
+	{
+	case ETBExitReason::DamageTaken:
+	{
+		const auto* Settings = GetDefault<UWolfCombatSettings>();
+		if (Settings && !Settings->TBHardExitDebuffClass.IsNull())
+		{
+			// Synchronous load: this is a rare, one-off event (a hard exit), not a per-tick path,
+			// so a small load hitch here is an acceptable trade-off against the async-loading
+			// machinery InitializeSubsystemDefaults already uses for the (per-mode) drain effect.
+			if (auto* DebuffClass = Settings->TBHardExitDebuffClass.LoadSynchronous())
+			{
+				for (const auto& Victim : Victims)
+				{
+					auto* VictimActor = Victim.Get();
+					if (!IsValid(VictimActor)) continue;
+
+					auto* VictimASC = UAbilitySystemBlueprintLibrary::GetAbilitySystemComponent(VictimActor);
+					if (!VictimASC) continue;
+
+					const auto Context = VictimASC->MakeEffectContext();
+					const auto SpecHandle = VictimASC->MakeOutgoingSpec(DebuffClass, 1.f, Context);
+					if (SpecHandle.IsValid())
+					{
+						VictimASC->ApplyGameplayEffectSpecToSelf(*SpecHandle.Data.Get());
+					}
+				}
+			}
+		}
+		else
+		{
+			WOLF_LOG(Log, TEXT("[PRESAGE] TB hard-exit: no TBHardExitDebuffClass configured — skipping debuff application."));
+		}
+		WOLF_LOG(Log, TEXT("[PRESAGE] TB exiting: DamageTaken (%d victim(s))."), Victims.Num());
+		break;
+	}
+	case ETBExitReason::EndingAction:
+		// Bonus effects are explicitly TBD per vision ("exact shape TBD") — recognized, not
+		// implemented. Log only.
+		WOLF_LOG(Log, TEXT("[PRESAGE] TB exiting: EndingAction (bonus effects not yet implemented)."));
+		break;
+	case ETBExitReason::PlanCompleted:
+		WOLF_LOG(Log, TEXT("[PRESAGE] TB exiting: PlanCompleted."));
+		break;
+	}
+
+	// World state at exit = wherever playback stopped (restored presentational state + whatever
+	// real application has occurred — fully real only after stage 3). SetMode's non-TB branch
+	// sees TBPhase already None (set above) and does not re-scrub.
+	SetMode(WolfTag.InputState_RT);
+}
+
+bool UCombatModeSubsystem::CheckExecutionDamageExit(float InExecutionClock, TArray<TWeakObjectPtr<AActor>>& OutVictims)
+{
+	// Stub this stage — no impact data exists until PresagePreviewStage2_Implementation.md adds
+	// BakeImpactLedger. Stage 2 replaces this entire body; do not add partial logic here.
+	return false;
+}
+
+bool UCombatModeSubsystem::CheckEndingAction(float InExecutionClock) const
+{
+	const auto* Settings = GetDefault<UWolfCombatSettings>();
+	if (!Settings || !Settings->TBEndingActionArchetypeTag.IsValid()) return false;
+
+	for (const auto& Combatant : TrackedCombatants)
+	{
+		auto* Presage = Combatant.GetInterface() ? Combatant.GetInterface()->GetPresageComponent() : nullptr;
+		if (!IsValid(Presage)) continue;
+
+		const auto* Frame = Presage->GetSnapshotAtTime(InExecutionClock);
+		if (!Frame || !Frame->ActiveAbility.IsValid()) continue;
+
+		if (Frame->ActiveAbility->ArchetypeTag == Settings->TBEndingActionArchetypeTag)
+		{
+			const auto* CombatantActor = Cast<AActor>(Combatant.GetObject());
+			WOLF_LOG(Log, TEXT("[PRESAGE] Ending action recognized: %s on %s at t=%.2fs (bonus not yet implemented)."),
+				*Frame->ActiveAbility->GetName(),
+				CombatantActor ? *CombatantActor->GetName() : TEXT("Unknown"),
+				InExecutionClock);
+			return true;
+		}
+	}
+	return false;
 }
 
 void UCombatModeSubsystem::ScrubTimeline(float NewTime)
