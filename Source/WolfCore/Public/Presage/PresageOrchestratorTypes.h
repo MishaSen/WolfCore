@@ -39,6 +39,14 @@ struct WOLFCORE_API FAbilityTimingProfile
 	/** Total duration of the ability's full sequence. */
 	UPROPERTY(BlueprintReadOnly, Category = "WolfCore|Presage")
 	float TotalDuration = 0.f;
+
+	/** Time from ability start to the first actual impact: the first hit-capable period's start
+	  * offset plus that period's impact offset (montage notify trigger time, or HitDelay if no
+	  * montage/no matching notify). This is the single source of truth for "when does the hit
+	  * actually land" — distinct from ActiveWindowStart, which is only the start of the hit-capable
+	  * period and does not account for HitDelay or notify placement within it. */
+	UPROPERTY(BlueprintReadOnly, Category = "WolfCore|Presage")
+	float FirstImpactTime = 0.f;
 };
 
 /** Status of a single combatant's intent within a planning pass. See PresageOrchestratorSpec.md section 2.2. */

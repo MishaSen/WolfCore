@@ -14,6 +14,7 @@
 #include "Kismet/KismetSystemLibrary.h"
 #include "Systems/CombatModeSubsystem.h"
 #include "Character/WolfCharacterBase.h"
+#include "Core/WolfGameplayTags.h"
 
 void URTCombatAbility::ActivateAbility(const FGameplayAbilitySpecHandle Handle,
                                        const FGameplayAbilityActorInfo* ActorInfo,
@@ -62,17 +63,24 @@ void URTCombatAbility::PerformAttackTrace(AActor* Avatar, const FVector& Start, 
 
 bool URTCombatAbility::ProcessAttackHit(const FHitResult& Hit, const FCombatPeriod& ContextPeriod, const AActor* Avatar)
 {
-	auto* TargetChar = Cast<AWolfCharacterBase>(Hit.GetActor());
-	if (!TargetChar || TargetChar == Avatar)
+	AActor* TargetActor = Hit.GetActor();
+	if (!TargetActor || TargetActor == Avatar)
 	{
 		return false;
 	}
 
-	auto* TargetASC = UAbilitySystemBlueprintLibrary::GetAbilitySystemComponent(TargetChar);
+	auto* TargetASC = UAbilitySystemBlueprintLibrary::GetAbilitySystemComponent(TargetActor);
 	if (!TargetASC) return false;
 
-	WOLF_INFO("Hit character: %s", *TargetChar->GetName());
-	ApplyHitEffects(ContextPeriod, TargetChar, &Hit);
+	const auto& WolfTag = FWolfGameplayTags::Get();
+	if (TargetASC->HasMatchingGameplayTag(WolfTag.InputState_Dead) ||
+		TargetASC->HasMatchingGameplayTag(WolfTag.InputState_Invulnerable))
+	{
+		return false;
+	}
+
+	WOLF_INFO("Hit character: %s", *TargetActor->GetName());
+	ApplyHitEffects(ContextPeriod, TargetActor, &Hit);
 
 	return true;
 }

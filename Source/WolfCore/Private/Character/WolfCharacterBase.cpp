@@ -3,6 +3,7 @@
 #include "WolfCore/Public/Character/WolfCharacterBase.h"
 
 #include "Abilities/BaseCombatAbility.h"
+#include "Abilities/Notifies/AnimNotify_Hit.h"
 #include "AbilitySystem/WolfAttributeSet.h"
 #include "AIController.h"
 #include "Animation/AnimInstance.h"
@@ -240,13 +241,18 @@ float AWolfCharacterBase::GetTimeToNextHitImpact() const
 	if (!CurrentMontage || !CachedAnimInst) return -1.f;
 
 	const auto CurrentPosition = CachedAnimInst->Montage_GetPosition(CurrentMontage);
+	const auto* ActiveAbility = GetActiveCombatAbility();
 
 	for (const auto& NotifyEvent : CurrentMontage->Notifies)
 	{
-		if (NotifyEvent.GetTriggerTime() > CurrentPosition)
-		{
-			return NotifyEvent.GetTriggerTime() - CurrentPosition; // Could filter for specific hit notifies.
-		}
+		if (NotifyEvent.GetTriggerTime() <= CurrentPosition) continue;
+
+		const auto* HitNotify = Cast<UAnimNotify_Hit>(NotifyEvent.Notify);
+		if (!HitNotify) continue;
+
+		if (ActiveAbility && HitNotify->EventTag != ActiveAbility->HitEventTag) continue;
+
+		return NotifyEvent.GetTriggerTime() - CurrentPosition;
 	}
 	return -1.f;
 }

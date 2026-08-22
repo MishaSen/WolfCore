@@ -32,12 +32,4 @@ public:
 	virtual void ActivateAbility(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo,
 	                             const FGameplayAbilityActivationInfo ActivationInfo,
 	                             const FGameplayEventData* TriggerEventData) override;
-
-	// ============================================================================================================================
-	// Presage Configuration
-	// ============================================================================================================================
-
-	/** Subclass of GameplayEffect applied to the character when switching combat modes via Presage. */
-	UPROPERTY(EditDefaultsOnly, Category = "WolfCore|Config|Presage")
-	TSubclassOf<UGameplayEffect> PresageModeGEClass;
 };

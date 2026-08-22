@@ -234,7 +234,17 @@ public:
 	 * This is a pure function of the sequence data — it does not read any instance state and does
 	 * not require a valid ability instance to call.
 	 */
-	static FAbilityTimingProfile ComputeAbilityTiming(const TArray<FCombatPeriod>& Sequence);
+	static FAbilityTimingProfile ComputeAbilityTiming(const TArray<FCombatPeriod>& Sequence, const FGameplayTag& HitEventTag);
+
+	/**
+	 * Returns the offset, in seconds, from the start of a single period to the moment its hit
+	 * actually lands: if the period has a montage, the trigger time of the UAnimNotify_Hit whose
+	 * EventTag matches HitEventTag (falling back to Period.HitDelay if no matching notify exists);
+	 * if the period has no montage, Period.HitDelay. This is the single timing source for
+	 * "impact offset within a period" — both CalculateProjectedImpactTime and ComputeAbilityTiming
+	 * consume it, so they cannot disagree with each other.
+	 */
+	static float GetPeriodImpactOffset(const FCombatPeriod& Period, const FGameplayTag& HitEventTag);
 
 	// ============================================================================================================================
 	// Execution State (Protected)

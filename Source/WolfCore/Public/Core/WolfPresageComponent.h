@@ -51,6 +51,12 @@ public:
 	 */
 	const FActorSnapshot* GetSnapshotAtTime(float RelativeTime) const;
 
+	/** Captures a single snapshot of the current (pre-bake-step) state into the prediction buffer
+	  * without advancing any simulation state. Used once, at the start of ExecuteFutureBake, so
+	  * PredictionBuffer[0] is the true t=0 frame — the same snapshot/tag-stamping logic as the
+	  * tail of SimulateTick(), just without the Simulate*Step calls or period advancement. */
+	void CaptureCurrentFrame();
+
 	// ============================================================================================================================
 	// Public API - Ability Injection
 	// ============================================================================================================================

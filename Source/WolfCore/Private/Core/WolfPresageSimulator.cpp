@@ -23,6 +23,17 @@ void FWolfPresageSimulator::ExecuteFutureBake(const TArray<TScriptInterface<IWol
 		SetupCombatantSimulation(Combatant, Duration);
 	}
 
+	// Capture the true t=0 frame for each combatant — one frame per combatant, no stepping yet.
+	// Must happen after setup (so ClearPredictionBuffer has already run) and before the step loop.
+	for (auto& Combatant : Combatants)
+	{
+		auto* Presage = Combatant.GetInterface() ? Combatant.GetInterface()->GetPresageComponent() : nullptr;
+		if (IsValid(Presage))
+		{
+			Presage->CaptureCurrentFrame();
+		}
+	}
+
 	// Phase 2: Bake simulation steps.
 	const int32 TotalSteps = FMath::CeilToInt(Duration / StepSize);
 

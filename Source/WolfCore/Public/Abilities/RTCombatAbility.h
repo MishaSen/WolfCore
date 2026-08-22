@@ -60,8 +60,8 @@ protected:
 	/** Performs a sphere trace query from Start to End, storing results in OutHits. */
 	void PerformAttackTrace(AActor* Avatar, const FVector& Start, const FVector& End, TArray<FHitResult>& OutHits);
 
-	/** Processes a single hit result: validates target, applies combat effects via base class. Returns true if a valid target was processed. */
-	bool ProcessAttackHit(const FHitResult& Hit, const FCombatPeriod& ContextPeriod, const AActor* Avatar);
+	/** Processes a single hit result: validates target, applies combat effects via base class. Returns true if a valid target was processed. Virtual so subclasses can redefine what a hit means without re-implementing the trace. */
+	virtual bool ProcessAttackHit(const FHitResult& Hit, const FCombatPeriod& ContextPeriod, const AActor* Avatar);
 
 	/** Draws a debug cylinder along the trace path — green if any valid target was hit, red otherwise. */
 	static void DrawAttackDebugCylinder(const AActor* Avatar, const FVector& StartPos, const FVector& EndPos, float Radius, bool bValidTargetFound);

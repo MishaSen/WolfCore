@@ -7,7 +7,10 @@
 #include "WolfGameMode.generated.h"
 
 /**
- * No plans to use. Flag for deletion.
+ * No plans to use. Not deleted — referenced by Config/DefaultEngine.ini's GlobalDefaultGameMode
+ * (points at BP_WolfGameMode, a Blueprint subclass of this class) and by the existing
+ * WolfGameModeBase→WolfGameMode CoreRedirect in the same file. Revisit deletion if those
+ * references are removed.
  */
 UCLASS()
 class WOLFCORE_API AWolfGameMode : public AGameModeBase

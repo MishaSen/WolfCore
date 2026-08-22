@@ -144,10 +144,10 @@ void UWolfSnapshotComponent::RestorePhysics(const FActorSnapshot& Snapshot)
 
 	if (IsValid(GetMoveComp()))
 	{
-		/*GetMoveComp()->SetComponentTickEnabled(true);
-		GetMoveComp()->Activate();
-
-		GetMoveComp()->SetMovementMode(Snapshot.MovementMode, Snapshot.CustomMovementMode);*/
+		// Tick-state ownership belongs to the bake lifecycle (SetupCombatantSimulation disables,
+		// CleanupCombatantSimulation re-enables) — a restore that force-enables ticks mid-bake
+		// would fight the simulator's freeze. Only movement mode is restored here.
+		GetMoveComp()->SetMovementMode(Snapshot.MovementMode, Snapshot.CustomMovementMode);
 		GetMoveComp()->Velocity = Snapshot.Velocity;
 		GetMoveComp()->UpdateComponentVelocity();
 	}

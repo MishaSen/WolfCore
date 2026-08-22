@@ -109,11 +109,35 @@ void UWolfPresageComponent::SimulateTick(float Step)
 	PredictionBuffer.Add(FutureFrame); // Remember to clear PredictionBuffer in CombatModeSubsystem
 }
 
+void UWolfPresageComponent::CaptureCurrentFrame()
+{
+	if (!CharacterOwner) return;
+
+	FActorSnapshot Frame;
+	if (auto* SnapshotControl = GetSnapshotControl())
+	{
+		ISnapshot::Execute_CreateSnapshot(SnapshotControl, Frame);
+	}
+
+	if (auto* ActiveAbility = GetActiveSimulationAbility())
+	{
+		Frame.ActiveAbility = ActiveAbility;
+		Frame.CurrentPeriodIndex = ActiveAbility->GetCurrentPeriodIndex();
+	}
+	else
+	{
+		Frame.ActiveAbility = nullptr;
+		Frame.CurrentPeriodIndex = -1;
+	}
+
+	PredictionBuffer.Add(Frame);
+}
+
 void UWolfPresageComponent::ClearPredictionBuffer(float MaxDuration)
 {
 	const float StepSize = GetCMS() ? GetCMS()->GetBakedStepSize() : 0.1f; // Fallback only; GetCMS() should not normally be null.
 	const int32 ExpectedFrames = FMath::CeilToInt(MaxDuration / StepSize);
-	PredictionBuffer.Empty(ExpectedFrames);
+	PredictionBuffer.Empty(ExpectedFrames + 1); // +1 for the t=0 frame captured by CaptureCurrentFrame().
 }
 
 const FActorSnapshot* UWolfPresageComponent::GetSnapshotAtTime(float RelativeTime) const

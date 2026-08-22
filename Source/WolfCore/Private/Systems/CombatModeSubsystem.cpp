@@ -343,7 +343,7 @@ const FAbilityTimingProfile& UCombatModeSubsystem::GetOrComputeTimingProfile(con
 
 	const auto* CDO = AbilityClass->GetDefaultObject<UBaseCombatAbility>();
 	const FAbilityTimingProfile Computed = CDO
-		? UBaseCombatAbility::ComputeAbilityTiming(CDO->GetAbilitySequence())
+		? UBaseCombatAbility::ComputeAbilityTiming(CDO->GetAbilitySequence(), CDO->HitEventTag)
 		: FAbilityTimingProfile();
 
 	return TimingProfileCache.Add(AbilityClass, Computed);

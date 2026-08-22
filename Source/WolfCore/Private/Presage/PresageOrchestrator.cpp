@@ -135,7 +135,8 @@ void FPresageOrchestrator::DistributePlan(
 
 void FPresageOrchestrator::ResolveInterrupts(TArray<FIntentEntry>& Ledger)
 {
-	// Map from victim index -> earliest attacker's AttackWindowStart that hits them. A victim can
+	// Map from victim index -> earliest attacker's landing moment (Attacker.StartTime +
+	// Attacker.Timing.FirstImpactTime) that hits them. A victim can
 	// overlap with more than one attacker; only the earliest one actually lands first and
 	// interrupts them — later ones are moot for this entry (stacking further damage/hitstun
 	// beyond the first hit is a separate, out-of-scope concern). No iteration cap is needed here:
@@ -149,8 +150,11 @@ void FPresageOrchestrator::ResolveInterrupts(TArray<FIntentEntry>& Ledger)
 		const FIntentEntry& Attacker = Ledger[i];
 		if (!Attacker.Target.IsValid()) continue;
 
+		// Window-overlap DETECTION still uses ActiveWindowStart/End (unchanged) — only the
+		// LANDING moment recorded into EarliestAttackTime changes, to FirstImpactTime.
 		const float AttackWindowStart = Attacker.StartTime + Attacker.Timing.ActiveWindowStart;
 		const float AttackWindowEnd = Attacker.StartTime + Attacker.Timing.ActiveWindowEnd;
+		const float AttackLandingTime = Attacker.StartTime + Attacker.Timing.FirstImpactTime;
 
 		for (int32 j = 0; j < Ledger.Num(); ++j)
 		{
@@ -167,14 +171,14 @@ void FPresageOrchestrator::ResolveInterrupts(TArray<FIntentEntry>& Ledger)
 			{
 				if (const float* Existing = EarliestAttackTime.Find(j))
 				{
-					if (AttackWindowStart < *Existing)
+					if (AttackLandingTime < *Existing)
 					{
-						EarliestAttackTime[j] = AttackWindowStart;
+						EarliestAttackTime[j] = AttackLandingTime;
 					}
 				}
 				else
 				{
-					EarliestAttackTime.Add(j, AttackWindowStart);
+					EarliestAttackTime.Add(j, AttackLandingTime);
 				}
 			}
 		}

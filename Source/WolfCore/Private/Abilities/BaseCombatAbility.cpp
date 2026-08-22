@@ -142,11 +142,11 @@ float UBaseCombatAbility::GetPeriodProgress() const
 void UBaseCombatAbility::ExecuteMoveTo(FCombatPeriod& Period)
 {
 	const auto* Target = GetTargetFromBlackboard();
-	WOLF_LOG(Log, TEXT("Executing MoveTo for ability %s from character %s and targeting %s"),
-		*GetName(), *GetAvatarActorFromActorInfo()->GetName(), *Target->GetName());
-	
 	const auto* AvatarActor = GetAvatarActorFromActorInfo();
 	if (!Target || !AvatarActor) { OnPeriodCompleted(); return; }
+
+	WOLF_LOG(Log, TEXT("Executing MoveTo for ability %s from character %s and targeting %s"),
+		*GetName(), *AvatarActor->GetName(), *Target->GetName());
 
 	const auto* AvatarCharacter = Cast<AWolfCharacterBase>(AvatarActor);
 	if (IsValid(AvatarCharacter))
@@ -205,7 +205,24 @@ void UBaseCombatAbility::ResolveMoveToDestinations(TArray<FCombatPeriod>& Sequen
 	}
 }
 
-FAbilityTimingProfile UBaseCombatAbility::ComputeAbilityTiming(const TArray<FCombatPeriod>& Sequence)
+float UBaseCombatAbility::GetPeriodImpactOffset(const FCombatPeriod& Period, const FGameplayTag& HitEventTag)
+{
+	if (Period.Montage)
+	{
+		for (const auto& NotifyEvent : Period.Montage->Notifies)
+		{
+			const auto* HitNotify = Cast<UAnimNotify_Hit>(NotifyEvent.Notify);
+			if (HitNotify && HitNotify->EventTag == HitEventTag)
+			{
+				return NotifyEvent.GetTriggerTime();
+			}
+		}
+		return Period.HitDelay; // No matching notify found on the montage — fall back.
+	}
+	return Period.HitDelay;
+}
+
+FAbilityTimingProfile UBaseCombatAbility::ComputeAbilityTiming(const TArray<FCombatPeriod>& Sequence, const FGameplayTag& HitEventTag)
 {
 	FAbilityTimingProfile Profile;
 
@@ -223,7 +240,11 @@ FAbilityTimingProfile UBaseCombatAbility::ComputeAbilityTiming(const TArray<FCom
 			}
 			LastHitPeriod = i;
 		}
-		TotalDuration += Sequence[i].Duration;
+		// GetPeriodDuration substitutes montage play length when a montage exists — same source
+		// runtime (AbilityPeriodAdvancer) and the CDO-driven planner must agree on. MoveTo periods
+		// still use their authored fallback Duration here (their real duration is distance-dependent
+		// and unknowable from the CDO alone) — that is a known, accepted approximation, not a bug.
+		TotalDuration += GetPeriodDuration(Sequence[i]);
 	}
 
 	Profile.TotalDuration = TotalDuration;
@@ -236,20 +257,22 @@ FAbilityTimingProfile UBaseCombatAbility::ComputeAbilityTiming(const TArray<FCom
 		Profile.ActiveWindowStart = TotalDuration;
 		Profile.ActiveWindowEnd = TotalDuration;
 		Profile.RecoveryDuration = 0.f;
+		Profile.FirstImpactTime = TotalDuration;
 		return Profile;
 	}
 
 	float RunningTime = 0.f;
 	for (int32 i = 0; i < FirstHitPeriod; ++i)
 	{
-		RunningTime += Sequence[i].Duration;
+		RunningTime += GetPeriodDuration(Sequence[i]);
 	}
 	Profile.WindupDuration = RunningTime;
 	Profile.ActiveWindowStart = RunningTime;
+	Profile.FirstImpactTime = RunningTime + GetPeriodImpactOffset(Sequence[FirstHitPeriod], HitEventTag);
 
 	for (int32 i = FirstHitPeriod; i <= LastHitPeriod; ++i)
 	{
-		RunningTime += Sequence[i].Duration;
+		RunningTime += GetPeriodDuration(Sequence[i]);
 	}
 	Profile.ActiveWindowEnd = RunningTime;
 
@@ -364,19 +387,7 @@ float UBaseCombatAbility::CalculateProjectedImpactTime() const
 			continue;
 		}
 
-		if (!Period.Montage)
-		{
-			return TimeAccumulator + Period.HitDelay;
-		}
-		
-		for (const auto& NotifyEvent : Period.Montage->Notifies)
-		{
-			const auto* HitNotify = Cast<UAnimNotify_Hit>(NotifyEvent.Notify);
-			if (HitNotify && HitNotify->EventTag == HitEventTag)
-			{
-				return TimeAccumulator + NotifyEvent.GetTriggerTime();
-			}
-		}
+		return TimeAccumulator + GetPeriodImpactOffset(Period, HitEventTag);
 	}
 	return -1.f;
 }
