@@ -3,8 +3,11 @@
 
 #include "Core/WolfPresageComponent.h"
 
+#include "AbilitySystemBlueprintLibrary.h"
+#include "AbilitySystemComponent.h"
 #include "Abilities/AbilityPeriodAdvancer.h"
 #include "Abilities/BaseCombatAbility.h"
+#include "AbilitySystem/WolfAttributeSet.h"
 #include "AIController.h"
 #include "BehaviorTree/BlackboardComponent.h"
 #include "Character/WolfCharacterBase.h"
@@ -13,9 +16,12 @@
 #include "Core/WolfGameplayTags.h"
 #include "Debug/WolfDebug.h"
 #include "GameFramework/CharacterMovementComponent.h"
+#include "GameFramework/Pawn.h"
+#include "Interfaces/IWolfCombatant.h"
 #include "Navigation/PathFollowingComponent.h"
 #include "DrawDebugHelpers.h"
 #include "Misc/TransactionObjectEvent.h"
+#include "Presage/PresageImpactLedger.h"
 #include "Core/WolfSnapshotComponent.h"
 #include "Systems/CombatModeSubsystem.h"
 
@@ -53,6 +59,11 @@ void UWolfPresageComponent::SimulateTick(float Step)
 	{
 		const int32 PeriodBeforeAdvance = ActiveAbility->GetCurrentPeriodIndex();
 
+		// Captured before the exhaustion/interrupt logic below can advance NextPlannedIntentIndex,
+		// so impact-target resolution further down still sees the entry that was actually active
+		// during this tick's advancement, not whatever comes next.
+		const int32 EntryIndexForThisTick = NextPlannedIntentIndex;
+
 		SimPeriodTime = FAbilityPeriodAdvancer::AdvancePeriod(
 			ActiveAbility,
 			SimPeriodTime,
@@ -83,6 +94,30 @@ void UWolfPresageComponent::SimulateTick(float Step)
 			{
 				bSimulatedAbilityActive = false;
 				++NextPlannedIntentIndex;
+			}
+		}
+
+		// --- Impact detection (PresagePreviewStage2): resolve at most one hit per period per
+		// bake, when SimPeriodTime crosses the period's impact offset. Uses the exact same timing
+		// source CorrectnessPunchList item 3 established — do not re-derive it here. ---
+		if (const int32 CurrentPeriodIndex = ActiveAbility->GetCurrentPeriodIndex();
+			ActiveAbility->GetAbilitySequence().IsValidIndex(CurrentPeriodIndex))
+		{
+			if (CurrentPeriodIndex != LastSimulatedPeriodIndex)
+			{
+				bCurrentPeriodImpactResolved = false;
+				LastSimulatedPeriodIndex = CurrentPeriodIndex;
+			}
+
+			const FCombatPeriod& CurrentPeriodData = ActiveAbility->GetAbilitySequence()[CurrentPeriodIndex];
+			if (!bCurrentPeriodImpactResolved && CurrentPeriodData.Type == EPeriodType::Attack)
+			{
+				const float ImpactOffset = UBaseCombatAbility::GetPeriodImpactOffset(CurrentPeriodData, ActiveAbility->HitEventTag);
+				if (SimPeriodTime >= ImpactOffset)
+				{
+					ResolveSimulatedImpact(ActiveAbility, CurrentPeriodData, EntryIndexForThisTick);
+					bCurrentPeriodImpactResolved = true;
+				}
 			}
 		}
 	}
@@ -282,6 +317,7 @@ void UWolfPresageComponent::BeginSimulation()
 	SimPeriodTime = 0.f;
 	bSimulatedAbilityActive = false;
 	LastSimulatedPeriodIndex = -1;
+	bCurrentPeriodImpactResolved = false;
 	SimulatedAbility = nullptr;
 }
 
@@ -346,6 +382,155 @@ void UWolfPresageComponent::TryActivateNextPlannedIntent()
 	WOLF_LOG(Log, TEXT("[PRESAGE] Activated planned intent %d/%d: %s at t=%.2fs for %s"),
 		NextPlannedIntentIndex + 1, PlannedIntents.Num(),
 		*Entry.AbilityClass->GetName(), SimElapsedTime, *CharacterOwner->GetName());
+}
+
+void UWolfPresageComponent::ResolveSimulatedImpact(UBaseCombatAbility* ActiveAbility, const FCombatPeriod& Period, int32 EntryIndexForThisTick)
+{
+	if (!CharacterOwner) return;
+
+	auto* CMS = GetCMS();
+	if (!CMS) return;
+
+	AActor* Attacker = CharacterOwner;
+
+	// Victim resolution: a planned intent carries its own Target. A carried-over real ability
+	// (not our own SimulatedAbility) has no intent entry, so fall back to GatherPresageTargets —
+	// the same resolution real RT abilities use.
+	AActor* Victim = nullptr;
+	if (ActiveAbility == SimulatedAbility && PlannedIntents.IsValidIndex(EntryIndexForThisTick))
+	{
+		Victim = PlannedIntents[EntryIndexForThisTick].Target.Get();
+	}
+	else
+	{
+		for (const auto& WeakTarget : CharacterOwner->GatherPresageTargets())
+		{
+			if (WeakTarget.IsValid())
+			{
+				Victim = WeakTarget.Get();
+				break;
+			}
+		}
+	}
+
+	FPresageImpactEntry Entry;
+	Entry.Attacker = Attacker;
+	Entry.Victim = Victim;
+	Entry.ImpactTime = SimElapsedTime;
+
+	// Connection rule (deliberately simple this stage): victim valid, within Period.Range, and
+	// not evading (its own active sim period is EPeriodType::Evasion) at this moment.
+	// KNOWN, ACCEPTED APPROXIMATION: combatants advance in fixed TrackedCombatants order within
+	// one step, so an attacker earlier in the array reads victims at the previous step's
+	// position — up to one step (default 0.1s) of skew. This is deterministic (fixed order, fixed
+	// step), which is what the exact-preview contract requires; sub-step precision is a tuning
+	// concern, not a correctness one. Do not "fix" this into nondeterminism.
+	bool bConnected = false;
+	if (Victim)
+	{
+		const float Distance = FVector::Dist(CharacterOwner->GetActorLocation(), Victim->GetActorLocation());
+		bConnected = Distance <= Period.Range;
+
+		if (bConnected)
+		{
+			auto* VictimCombatant = Cast<IWolfCombatant>(Victim);
+			auto* VictimPresage = VictimCombatant ? VictimCombatant->GetPresageComponent() : nullptr;
+			if (VictimPresage)
+			{
+				if (const auto* VictimAbility = VictimPresage->GetActiveSimulationAbility())
+				{
+					const auto& VictimSequence = VictimAbility->GetAbilitySequence();
+					const int32 VictimPeriodIndex = VictimAbility->GetCurrentPeriodIndex();
+					if (VictimSequence.IsValidIndex(VictimPeriodIndex) &&
+						VictimSequence[VictimPeriodIndex].Type == EPeriodType::Evasion)
+					{
+						bConnected = false;
+					}
+				}
+			}
+		}
+	}
+	Entry.bConnected = bConnected;
+
+	if (Victim)
+	{
+		const auto& WolfTag = FWolfGameplayTags::Get();
+		const auto* VictimPawn = Cast<APawn>(Victim);
+		const bool bVictimIsPlayer = VictimPawn && VictimPawn->IsPlayerControlled();
+
+		auto* VictimASC = UAbilitySystemBlueprintLibrary::GetAbilitySystemComponent(Victim);
+		const bool bVictimIsLinked = VictimASC && VictimASC->HasMatchingGameplayTag(WolfTag.Status_Link);
+
+		Entry.bVictimIsPlayerOrLinked = bVictimIsPlayer || bVictimIsLinked;
+	}
+
+	// Planned intents have no live GameplayAbilitySpec (SimulatedAbility is never actually
+	// GAS-activated) — there is no real level to read. Treat as level 1, matching the CDO
+	// default. Revisit if ability levels become dynamic.
+	constexpr float SimulatedAbilityLevel = 1.f;
+
+	for (const auto& Effect : Period.HitEffects)
+	{
+		if (!Effect.EffectClass) continue;
+
+		FPredictedEffectDelta Delta;
+		Delta.EffectClass = Effect.EffectClass;
+		Delta.bSelfTarget = Effect.bSelfTarget;
+
+		if (!Effect.TargetAttributeTag.IsValid())
+		{
+			Delta.bIsPredictable = false;
+			WOLF_WARN(TEXT("[PRESAGE] %s's FCombatHitEffect (%s) has no TargetAttributeTag — magnitude-predictability rule violated, prediction skipped for this entry."),
+				*ActiveAbility->GetName(), *Effect.EffectClass->GetName());
+			Entry.Deltas.Add(Delta);
+			continue;
+		}
+
+		const auto Attribute = UWolfAttributeSet::GetAttributeByTag(Effect.TargetAttributeTag);
+		if (!Attribute.IsValid())
+		{
+			Delta.bIsPredictable = false;
+			WOLF_WARN(TEXT("[PRESAGE] TargetAttributeTag %s did not resolve to a known attribute — prediction skipped."),
+				*Effect.TargetAttributeTag.ToString());
+			Entry.Deltas.Add(Delta);
+			continue;
+		}
+
+		Delta.Attribute = Attribute;
+		Delta.Amount = Effect.Amount.GetValueAtLevel(SimulatedAbilityLevel) * Effect.SignMultiplier;
+		Delta.bIsPredictable = true;
+		Entry.Deltas.Add(Delta);
+
+		// Apply immediately, numerically, via SetNumericAttributeBase — never through real GE
+		// application (no PostGameplayEffectExecute, no Die(); predicted death is health 0 in
+		// data, per stage 1's contract). Subsequent SimulateTick frames snapshot the mutated
+		// attributes automatically — no snapshot-path changes needed.
+		if (Entry.bConnected)
+		{
+			AActor* ApplyTarget = Effect.bSelfTarget ? Attacker : Victim;
+			if (ApplyTarget)
+			{
+				auto* TargetASC = UAbilitySystemBlueprintLibrary::GetAbilitySystemComponent(ApplyTarget);
+				if (TargetASC)
+				{
+					float NewValue = TargetASC->GetNumericAttribute(Attribute) + Delta.Amount;
+
+					// Replicate PreAttributeChange's clamps explicitly: floor 0 always; Health
+					// additionally capped at MaxHealth. SetNumericAttributeBase still invokes
+					// PreAttributeChange, but this is verified here rather than assumed.
+					NewValue = FMath::Max(NewValue, 0.f);
+					if (Attribute == UWolfAttributeSet::GetHealthAttribute())
+					{
+						NewValue = FMath::Min(NewValue, TargetASC->GetNumericAttribute(UWolfAttributeSet::GetMaxHealthAttribute()));
+					}
+
+					TargetASC->SetNumericAttributeBase(Attribute, NewValue);
+				}
+			}
+		}
+	}
+
+	CMS->AppendImpactLedgerEntry(Entry);
 }
 
 void UWolfPresageComponent::SyncSimulationMontage(UBaseCombatAbility* Ability)

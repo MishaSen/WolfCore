@@ -178,6 +178,22 @@ private:
 	/** Activates this combatant's next planned intent once its scheduled StartTime is reached. */
 	void TryActivateNextPlannedIntent();
 
+	/**
+	 * Called from SimulateTick when the active ability's current attack period crosses its impact
+	 * offset for the first time this bake. Resolves the victim (planned-intent target, or
+	 * GatherPresageTargets for a carried-over real ability), the connection rule (range + not
+	 * evading), computes each FCombatHitEffect's predicted delta, applies connected deltas
+	 * numerically via SetNumericAttributeBase, and appends one FPresageImpactEntry to
+	 * GetCMS()->AppendImpactLedgerEntry(). See PresagePreviewStage2.md.
+	 * @param ActiveAbility The ability whose period just crossed its impact offset.
+	 * @param Period The specific FCombatPeriod that resolved (already confirmed EPeriodType::Attack).
+	 * @param EntryIndexForThisTick NextPlannedIntentIndex as it stood BEFORE this tick's
+	 *        exhaustion/interrupt handling could have advanced it — passed explicitly so victim
+	 *        resolution reads the entry that was actually active during this impact, not whatever
+	 *        comes next.
+	 */
+	void ResolveSimulatedImpact(UBaseCombatAbility* ActiveAbility, const FCombatPeriod& Period, int32 EntryIndexForThisTick);
+
 	/** Syncs the animation montage to the current simulated ability period. */
 	void SyncSimulationMontage(UBaseCombatAbility* Ability);
 
@@ -211,8 +227,16 @@ private:
 	UPROPERTY(Transient)
 	FPresageAbilityRequest InjectedAbilityRequest;
 
-	/** Period index from the previous simulation step, used to detect period transitions. */
+	/** Period index from the previous simulation step, used to detect period transitions. Also
+	  * read by the impact-detection block in SimulateTick to reset bCurrentPeriodImpactResolved
+	  * whenever the current period changes — this was previously write-only state; stage 2 gives
+	  * it its first real read use. */
 	int32 LastSimulatedPeriodIndex = -1;
+
+	/** True once the current period (per LastSimulatedPeriodIndex) has already resolved its
+	  * impact this bake — prevents resolving the same attack period's hit more than once. Reset
+	  * to false whenever the period index changes, and in BeginSimulation(). */
+	bool bCurrentPeriodImpactResolved = false;
 
 	/** Array of snapshots capturing the prediction buffer for temporal state queries and visualization. */
 	UPROPERTY(Transient, VisibleInstanceOnly, Category = "WolfCore|Internal")

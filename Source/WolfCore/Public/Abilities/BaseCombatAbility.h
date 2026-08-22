@@ -56,6 +56,31 @@ struct FCombatHitEffect
 	 */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "WolfCore|Hit Effects")
 	FGameplayTag DataAmountTag;
+
+	/**
+	 * PREDICTION-ONLY (PresagePreview stage 2). The attribute this effect actually modifies —
+	 * resolved via UWolfAttributeSet::GetAttributeByTag. This is authoring-side duplication of
+	 * what EffectClass's GE modifier already encodes, accepted deliberately: introspecting
+	 * arbitrary GE modifier definitions at bake time is fragile, and this tag-declared version is
+	 * designer-visible and checkable. MUST match what EffectClass's modifier actually does, or TB
+	 * preview will show a different consequence than execution applies (stage 1's
+	 * magnitude-predictability rule). Leave unset (invalid) if this effect's magnitude cannot be
+	 * predicted at bake time — an unset tag makes this entry prediction-opaque; the bake logs a
+	 * contract warning and does not predict or apply it numerically. Not read by
+	 * UBaseCombatAbility::ApplyHitEffects (real RT/execution application) — that path only ever
+	 * reads EffectClass/Amount/bSelfTarget/DataAmountTag.
+	 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "WolfCore|Hit Effects|Prediction")
+	FGameplayTag TargetAttributeTag;
+
+	/**
+	 * PREDICTION-ONLY (PresagePreview stage 2). Sign applied to Amount when predicting this
+	 * effect's delta: -1 (default) for "damage-like" (subtracts from the attribute), +1 for
+	 * "heal/gain-like" (adds). Only meaningful if TargetAttributeTag is set. Not read by
+	 * UBaseCombatAbility::ApplyHitEffects.
+	 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "WolfCore|Hit Effects|Prediction")
+	float SignMultiplier = -1.f;
 };
 
 /**

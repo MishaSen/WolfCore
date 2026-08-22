@@ -6,6 +6,7 @@
 #include "Core/WolfGameplayTags.h"
 #include "Math/RandomStream.h"
 #include "Presage/ActorSnapshot.h"
+#include "Presage/PresageImpactLedger.h"
 #include "Presage/PresageOrchestratorTypes.h"
 #include "Subsystems/WorldSubsystem.h"
 #include "Interfaces/IWolfCombatant.h"
@@ -251,6 +252,21 @@ public:
 	const FRandomStream& GetPresageRandomStream() const { return PresageRandomStream; }
 
 	// ============================================================================================================================
+	// Public API - Impact Ledger (PresagePreview stage 2)
+	// ============================================================================================================================
+
+	/** The current bake's impact ledger, time-ordered. Cleared at the start of every bake
+	  * (SetMode's TB branch and ReBakeTimeline, immediately before ExecuteFutureBake). Consumed by
+	  * CheckExecutionDamageExit and, from PresagePreviewStage3 onward, by real ledger-impact
+	  * application during execution playback. */
+	const TArray<FPresageImpactEntry>& GetBakeImpactLedger() const { return BakeImpactLedger; }
+
+	/** Appends one resolved impact to the current bake's ledger. Called by
+	  * UWolfPresageComponent::ResolveSimulatedImpact during SimulateTick — the sim component
+	  * resolves the hit (connection, deltas), the subsystem just owns the ledger storage. */
+	void AppendImpactLedgerEntry(const FPresageImpactEntry& Entry) { BakeImpactLedger.Add(Entry); }
+
+	// ============================================================================================================================
 	// Events
 	// ============================================================================================================================
 
@@ -299,6 +315,17 @@ protected:
 	  * explicitly TBD per vision ("exact shape TBD") and is not implemented here — ExitTB's
 	  * EndingAction branch only logs recognition; nothing else fires. */
 	bool CheckEndingAction(float InExecutionClock) const;
+
+	/** Current bake's impact ledger. See GetBakeImpactLedger/AppendImpactLedgerEntry above.
+	  * Cleared (and DamageExitCursor reset to 0) at the start of every bake. */
+	UPROPERTY(Transient)
+	TArray<FPresageImpactEntry> BakeImpactLedger;
+
+	/** Index into BakeImpactLedger of the first not-yet-consumed entry, read by
+	  * CheckExecutionDamageExit. The ledger is time-ordered, so a monotonic cursor is sufficient —
+	  * no rescanning from zero every tick. Reset to 0 whenever BakeImpactLedger is cleared, and
+	  * again by LockInPlan() so a fresh execution playback always starts scanning from the top. */
+	int32 DamageExitCursor = 0;
 
 	private:
 	/** The fixed step size (seconds) used to produce the current PredictionBuffer contents across

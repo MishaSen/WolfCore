@@ -163,6 +163,8 @@ void UCombatModeSubsystem::SetMode(FGameplayTag NewMode)
 		FPresageOrchestrator::ResolveInterrupts(Plan, PresageRandomStream);
 		FPresageOrchestrator::DistributePlan(TrackedCombatants, Plan);
 
+		BakeImpactLedger.Empty();
+		DamageExitCursor = 0;
 		FWolfPresageSimulator::ExecuteFutureBake(TrackedCombatants, MaxTimelineDuration, BakedStepSize);
 		ScrubTimeline(0.f);
 	}
@@ -257,6 +259,7 @@ void UCombatModeSubsystem::LockInPlan()
 
 	ScrubTimeline(0.f);
 	ExecutionClock = 0.f;
+	DamageExitCursor = 0;
 	TBPhase = ETBPhase::Executing;
 	WOLF_LOG(Log, TEXT("[PRESAGE] TB locked in — execution playback started."));
 }
@@ -323,9 +326,33 @@ void UCombatModeSubsystem::ExitTB(ETBExitReason Reason, const TArray<TWeakObject
 
 bool UCombatModeSubsystem::CheckExecutionDamageExit(float InExecutionClock, TArray<TWeakObjectPtr<AActor>>& OutVictims)
 {
-	// Stub this stage — no impact data exists until PresagePreviewStage2_Implementation.md adds
-	// BakeImpactLedger. Stage 2 replaces this entire body; do not add partial logic here.
-	return false;
+	// BakeImpactLedger is time-ordered (append order during the bake is already time-ordered), so
+	// DamageExitCursor only ever advances — no rescanning from zero every tick.
+	float MatchedImpactTime = -1.f;
+
+	while (DamageExitCursor < BakeImpactLedger.Num())
+	{
+		const FPresageImpactEntry& Entry = BakeImpactLedger[DamageExitCursor];
+		if (Entry.ImpactTime > InExecutionClock) break; // not due yet
+
+		// Stop at the first qualifying impact time — don't consume entries past it. Multiple
+		// victims hit at the exact same ImpactTime (e.g. an AoE) are collected together; a later,
+		// separate impact time is left for a future tick to discover.
+		if (MatchedImpactTime >= 0.f && !FMath::IsNearlyEqual(Entry.ImpactTime, MatchedImpactTime))
+		{
+			break;
+		}
+
+		++DamageExitCursor;
+
+		if (Entry.bConnected && Entry.bVictimIsPlayerOrLinked)
+		{
+			MatchedImpactTime = Entry.ImpactTime;
+			OutVictims.Add(Entry.Victim);
+		}
+	}
+
+	return OutVictims.Num() > 0;
 }
 
 bool UCombatModeSubsystem::CheckEndingAction(float InExecutionClock) const
@@ -407,6 +434,8 @@ void UCombatModeSubsystem::ReBakeTimeline()
 	FPresageOrchestrator::ResolveInterrupts(Plan, PresageRandomStream);
 	FPresageOrchestrator::DistributePlan(TrackedCombatants, Plan);
 
+	BakeImpactLedger.Empty();
+	DamageExitCursor = 0;
 	FWolfPresageSimulator::ExecuteFutureBake(TrackedCombatants, MaxTimelineDuration, BakedStepSize);
 
 	CurrentTimelineTime = -1.f;
