@@ -18,6 +18,12 @@ TArray<FIntentEntry> FPresageOrchestrator::RunPlanning(
 	TArray<FIntentEntry> Ledger;
 	if (!CMS) return Ledger;
 
+	// Reproducibility here also depends on Combatants' iteration order being stable across
+	// re-bakes within a session. It is (TrackedCombatants is a registration-ordered array with no
+	// re-registration mid-TB) — but if a future change sorts or re-registers combatants mid-TB,
+	// this contract silently breaks. See PresageDeterminism.md.
+	const FRandomStream& Stream = CMS->GetPresageRandomStream();
+
 	// Deferred AI combatants carry their resolved stub target forward to round 2 so it isn't
 	// recomputed there — target resolution itself is unchanged from stage 4/5.
 	struct FDeferredCombatant
@@ -87,13 +93,13 @@ TArray<FIntentEntry> FPresageOrchestrator::RunPlanning(
 		if (!Interface) continue;
 		const float DispositionWeight = Combatant.GetInterface()->GetReactiveDispositionweight();
 
-		if (FMath::FRand() < DispositionWeight)
+		if (Stream.FRand() < DispositionWeight)
 		{
 			Deferred.Add({ Combatant, StubTarget });
 			continue; // no ledger entry yet — "waiting" is internal to planning, not a declared intent.
 		}
 
-		DeclareChainedIntents(CMS, Combatant, StubTarget, Duration, Ledger);
+		DeclareChainedIntents(CMS, Combatant, StubTarget, Duration, Ledger, Stream);
 	}
 
 	// Round 2 — hard-capped: every deferred combatant commits here, no further deferring.
@@ -101,7 +107,7 @@ TArray<FIntentEntry> FPresageOrchestrator::RunPlanning(
 	// combatants are genuinely reacting to what's already been declared.
 	for (const auto& DeferredEntry : Deferred)
 	{
-		DeclareChainedIntents(CMS, DeferredEntry.Combatant, DeferredEntry.Target, Duration, Ledger);
+		DeclareChainedIntents(CMS, DeferredEntry.Combatant, DeferredEntry.Target, Duration, Ledger, Stream);
 	}
 
 	// Negotiation is over — finalize every entry produced this pass. Interrupt resolution
@@ -133,7 +139,7 @@ void FPresageOrchestrator::DistributePlan(
 	}
 }
 
-void FPresageOrchestrator::ResolveInterrupts(TArray<FIntentEntry>& Ledger)
+void FPresageOrchestrator::ResolveInterrupts(TArray<FIntentEntry>& Ledger, const FRandomStream& Stream)
 {
 	// Map from victim index -> earliest attacker's landing moment (Attacker.StartTime +
 	// Attacker.Timing.FirstImpactTime) that hits them. A victim can
@@ -193,7 +199,7 @@ void FPresageOrchestrator::ResolveInterrupts(TArray<FIntentEntry>& Ledger)
 		FIntentEntry& Entry = Ledger[VictimIndex];
 
 		const TArray<FInterruptResponseOption> Options = GetAvailableResponses(Entry);
-		const FInterruptResponseOption* Chosen = PickWeightedResponse(Options);
+		const FInterruptResponseOption* Chosen = PickWeightedResponse(Options, Stream);
 
 		if (Chosen)
 		{
@@ -242,7 +248,7 @@ TArray<FInterruptResponseOption> FPresageOrchestrator::GetAvailableResponses(con
 	return Result;
 }
 
-const FInterruptResponseOption* FPresageOrchestrator::PickWeightedResponse(const TArray<FInterruptResponseOption>& Options)
+const FInterruptResponseOption* FPresageOrchestrator::PickWeightedResponse(const TArray<FInterruptResponseOption>& Options, const FRandomStream& Stream)
 {
 	if (Options.Num() == 0) return nullptr;
 
@@ -250,7 +256,7 @@ const FInterruptResponseOption* FPresageOrchestrator::PickWeightedResponse(const
 	for (const auto& Option : Options) TotalWeight += FMath::Max(Option.Weight, 0.f);
 	if (TotalWeight <= 0.f) return &Options[0];
 
-	float Roll = FMath::FRandRange(0.f, TotalWeight);
+	float Roll = Stream.FRandRange(0.f, TotalWeight);
 	for (const auto& Option : Options)
 	{
 		Roll -= FMath::Max(Option.Weight, 0.f);
@@ -262,7 +268,8 @@ const FInterruptResponseOption* FPresageOrchestrator::PickWeightedResponse(const
 TSubclassOf<UBaseCombatAbility> FPresageOrchestrator::DecideIntent(
 	const TScriptInterface<IWolfCombatant>& Combatant,
 	const AActor* Target,
-	const TArray<FIntentEntry>& Ledger)
+	const TArray<FIntentEntry>& Ledger,
+	const FRandomStream& Stream)
 {
 	const auto* Actor = Cast<AActor>(Combatant.GetObject());
 	if (!IsValid(Actor)) return nullptr;
@@ -299,7 +306,7 @@ TSubclassOf<UBaseCombatAbility> FPresageOrchestrator::DecideIntent(
 	}
 
 	const TArray<TSubclassOf<UBaseCombatAbility>>& Pool = PreferredCandidates.Num() > 0 ? PreferredCandidates : ValidCandidates;
-	return Pool[FMath::RandRange(0, Pool.Num() - 1)];
+	return Pool[Stream.RandRange(0, Pool.Num() - 1)];
 }
 
 void FPresageOrchestrator::DeclareChainedIntents(
@@ -307,12 +314,13 @@ void FPresageOrchestrator::DeclareChainedIntents(
 	const TScriptInterface<IWolfCombatant>& Combatant,
 	AActor* Target,
 	float Duration,
-	TArray<FIntentEntry>& Ledger)
+	TArray<FIntentEntry>& Ledger,
+	const FRandomStream& Stream)
 {
 	float TimeCursor = 0.f;
 	while (TimeCursor < Duration)
 	{
-		const auto AbilityClass = DecideIntent(Combatant, Target, Ledger);
+		const auto AbilityClass = DecideIntent(Combatant, Target, Ledger, Stream);
 		if (!AbilityClass) break;
 
 		FIntentEntry Entry;

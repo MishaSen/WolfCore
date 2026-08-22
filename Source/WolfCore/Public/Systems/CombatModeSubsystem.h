@@ -4,6 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "Core/WolfGameplayTags.h"
+#include "Math/RandomStream.h"
 #include "Presage/ActorSnapshot.h"
 #include "Presage/PresageOrchestratorTypes.h"
 #include "Subsystems/WorldSubsystem.h"
@@ -134,6 +135,15 @@ public:
 	 */
 	const FAbilityTimingProfile& GetOrComputeTimingProfile(const TSubclassOf<UBaseCombatAbility>& AbilityClass);
 
+	/**
+	 * Returns the presage planning RNG stream for this session. Re-initialized to
+	 * PresageSessionSeed at the start of every planning pass (SetMode's TB branch and every
+	 * ReBakeTimeline) — see PresageDeterminism.md. FRandomStream's roll methods (FRand,
+	 * RandRange, FRandRange) are const, so a const reference is sufficient for every caller that
+	 * only rolls; only SetMode/ReBakeTimeline call Initialize() on the non-const member directly.
+	 */
+	const FRandomStream& GetPresageRandomStream() const { return PresageRandomStream; }
+
 	// ============================================================================================================================
 	// Events
 	// ============================================================================================================================
@@ -218,4 +228,16 @@ protected:
 	/** Array of weak script interfaces to combatants currently tracked by this subsystem for mode updates and prediction processing. */
 	UPROPERTY()
 	TArray<TScriptInterface<IWolfCombatant>> TrackedCombatants;
+
+	/** Seeded once per TB entry (SetMode's TB branch, before the first RunPlanning) via
+	  * FMath::Rand(), logged so a bad plan is reproducible from the log. Re-used (not
+	  * re-randomized) by every ReBakeTimeline within the same TB session — PresageRandomStream is
+	  * re-initialized to this same value at the start of every planning pass, which is what makes
+	  * "same inputs -> same plan" hold across re-bakes. See PresageDeterminism.md. */
+	int32 PresageSessionSeed = 0;
+
+	/** Planning-phase RNG stream, re-initialized to PresageSessionSeed at the start of every
+	  * planning pass. Never persists rolls across passes — a stream that merely persisted would
+	  * still diverge on the second pass because it would have consumed values from the first. */
+	FRandomStream PresageRandomStream;
 };

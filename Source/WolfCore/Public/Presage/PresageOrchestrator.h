@@ -3,6 +3,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Math/RandomStream.h"
 #include "Presage/PresageOrchestratorTypes.h"
 #include "Interfaces/IWolfCombatant.h"
 
@@ -36,8 +37,11 @@ public:
 	/** Detects interrupts (one combatant's planned attack landing during another's windup) and
 	  * resolves them. Only "take the hit" is mechanically functional this stage — any other
 	  * authored FInterruptResponseOption is logged and falls back to the same behavior. Mutates
-	  * Ledger in place; call after RunPlanning and before DistributePlan. */
-	static void ResolveInterrupts(TArray<FIntentEntry>& Ledger);
+	  * Ledger in place; call after RunPlanning and before DistributePlan.
+	  * @param Stream Seeded planning RNG stream (UCombatModeSubsystem::GetPresageRandomStream()),
+	  *        threaded down to PickWeightedResponse. Not owned here — caller re-initializes it
+	  *        per planning pass; see PresageDeterminism.md. */
+	static void ResolveInterrupts(TArray<FIntentEntry>& Ledger, const FRandomStream& Stream);
 
 private:
 	/** Returns the interrupt response table to use for the given entry: its ability's own
@@ -50,7 +54,7 @@ private:
 	static TArray<FInterruptResponseOption> GetAvailableResponses(const FIntentEntry& InterruptedEntry);
 
 	/** Weighted random pick among Options. Returns nullptr if Options is empty. */
-	static const FInterruptResponseOption* PickWeightedResponse(const TArray<FInterruptResponseOption>& Options);
+	static const FInterruptResponseOption* PickWeightedResponse(const TArray<FInterruptResponseOption>& Options, const FRandomStream& Stream);
 
 	/**
 	 * Selects an ability for the given AI-controlled combatant from its actual granted kit,
@@ -67,7 +71,8 @@ private:
 	static TSubclassOf<UBaseCombatAbility> DecideIntent(
 		const TScriptInterface<IWolfCombatant>& Combatant,
 		const AActor* Target,
-		const TArray<FIntentEntry>& Ledger);
+		const TArray<FIntentEntry>& Ledger,
+		const FRandomStream& Stream);
 
 	/**
 	 * Runs the chain-to-duration loop for one AI combatant: repeatedly calls DecideIntent and
@@ -80,7 +85,8 @@ private:
 		const TScriptInterface<IWolfCombatant>& Combatant,
 		AActor* Target,
 		float Duration,
-		TArray<FIntentEntry>& Ledger);
+		TArray<FIntentEntry>& Ledger,
+		const FRandomStream& Stream);
 
 	/**
 	 * True if any entry in Ledger already targets Target with the same ArchetypeTag as

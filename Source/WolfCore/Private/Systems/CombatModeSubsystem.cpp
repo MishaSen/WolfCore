@@ -150,8 +150,15 @@ void UCombatModeSubsystem::SetMode(FGameplayTag NewMode)
 			BakedStepSize = FMath::Max(Settings->PresageSimulationStep, 0.01f);
 		}
 
+		// Seeded once per TB entry, logged so a bad plan is reproducible. Re-initialized (not
+		// re-randomized) at the top of every planning pass, including this one and every
+		// subsequent ReBakeTimeline this session — see PresageDeterminism.md.
+		PresageSessionSeed = FMath::Rand();
+		WOLF_LOG(Log, TEXT("[PRESAGE] Session seed: %d"), PresageSessionSeed);
+		PresageRandomStream.Initialize(PresageSessionSeed);
+
 		auto Plan = FPresageOrchestrator::RunPlanning(this, TrackedCombatants, MaxTimelineDuration);
-		FPresageOrchestrator::ResolveInterrupts(Plan);
+		FPresageOrchestrator::ResolveInterrupts(Plan, PresageRandomStream);
 		FPresageOrchestrator::DistributePlan(TrackedCombatants, Plan);
 
 		FWolfPresageSimulator::ExecuteFutureBake(TrackedCombatants, MaxTimelineDuration, BakedStepSize);
@@ -228,8 +235,14 @@ void UCombatModeSubsystem::ReBakeTimeline()
 
 	const float ScrubTime = CurrentTimelineTime;
 
+	// Re-initialize to the SAME session seed (not a new random one) — this is the load-bearing
+	// subtlety: resetting to PresageSessionSeed means identical inputs re-roll identically on
+	// this re-bake; a stream that merely persisted across re-bakes would still diverge because it
+	// would have already consumed values from the previous pass. See PresageDeterminism.md.
+	PresageRandomStream.Initialize(PresageSessionSeed);
+
 	auto Plan = FPresageOrchestrator::RunPlanning(this, TrackedCombatants, MaxTimelineDuration);
-	FPresageOrchestrator::ResolveInterrupts(Plan);
+	FPresageOrchestrator::ResolveInterrupts(Plan, PresageRandomStream);
 	FPresageOrchestrator::DistributePlan(TrackedCombatants, Plan);
 
 	FWolfPresageSimulator::ExecuteFutureBake(TrackedCombatants, MaxTimelineDuration, BakedStepSize);
