@@ -33,7 +33,7 @@ TArray<FIntentEntry> FPresageOrchestrator::RunPlanning(
 		const auto* Actor = Cast<AActor>(Combatant.GetObject());
 		if (!IsValid(Actor)) continue;
 
-		auto* Presage = Combatant.GetInterface() ? Combatant.GetInterface()->GetPresageComponent() : nullptr;
+		const auto* Presage = Combatant.GetInterface() ? Combatant.GetInterface()->GetPresageComponent() : nullptr;
 		if (!IsValid(Presage)) continue;
 
 		const auto* Pawn = Cast<APawn>(Actor);
@@ -265,31 +265,28 @@ TSubclassOf<UBaseCombatAbility> FPresageOrchestrator::DecideIntent(
 
 	const auto* ASI = Cast<IAbilitySystemInterface>(Actor);
 	UAbilitySystemComponent* ASC = ASI ? ASI->GetAbilitySystemComponent() : nullptr;
-	if (!ASC) return nullptr;
+	if (!IsValid(ASC)) return nullptr;
 
 	TArray<TSubclassOf<UBaseCombatAbility>> ValidCandidates;
 
 	FScopedAbilityListLock ActiveScopeLock(*ASC);
 	for (const auto& Spec : ASC->GetActivatableAbilities())
 	{
-		UBaseCombatAbility* CombatAbility = Cast<UBaseCombatAbility>(Spec.Ability);
-		if (!CombatAbility) continue;
-
-		if (!CombatAbility->CanActivateAbility(Spec.Handle, ASC->AbilityActorInfo.Get()))
-		{
-			continue;
-		}
-
+		const auto* CombatAbility = Cast<UBaseCombatAbility>(Spec.Ability);
+		if (!IsValid(CombatAbility)) continue;
+		
+		if (!CombatAbility->CanActivateAbility(Spec.Handle, ASC->AbilityActorInfo.Get())) continue;
+		
 		ValidCandidates.Add(CombatAbility->GetClass());
 	}
-
+	
 	if (ValidCandidates.Num() == 0) return nullptr;
 
 	// Prefer candidates that don't repeat an archetype already declared against this same target —
 	// this is the only new behavior stage 6 adds to selection itself; everything else about
 	// candidate gathering is unchanged from stage 5.
 	TArray<TSubclassOf<UBaseCombatAbility>> PreferredCandidates;
-	for (const auto& Candidate : ValidCandidates)
+	for (const TSubclassOf<UBaseCombatAbility>& Candidate : ValidCandidates)
 	{
 		if (!IsArchetypeRedundantAgainstTarget(Candidate, Target, Ledger))
 		{
@@ -328,25 +325,24 @@ void FPresageOrchestrator::DeclareChainedIntents(
 }
 
 bool FPresageOrchestrator::IsArchetypeRedundantAgainstTarget(
-	TSubclassOf<UBaseCombatAbility> CandidateClass,
+	const TSubclassOf<UBaseCombatAbility>& CandidateClass,
 	const AActor* Target,
 	const TArray<FIntentEntry>& Ledger)
 {
-	if (!Target || !CandidateClass) return false;
+	if (!IsValid(Target) || !IsValid(CandidateClass)) return false;
 
 	const auto* CandidateCDO = CandidateClass->GetDefaultObject<UBaseCombatAbility>();
-	if (!CandidateCDO || !CandidateCDO->ArchetypeTag.IsValid()) return false; // unset tag never matches
+	if (!IsValid(CandidateCDO) || !CandidateCDO->ArchetypeTag.IsValid()) return false; // unset tag never matches
 
 	for (const FIntentEntry& Entry : Ledger)
 	{
 		if (Entry.Target.Get() != Target) continue;
-		if (!Entry.AbilityClass) continue;
+		if (!IsValid(Entry.AbilityClass)) continue;
 
 		const auto* EntryCDO = Entry.AbilityClass->GetDefaultObject<UBaseCombatAbility>();
-		if (EntryCDO && EntryCDO->ArchetypeTag.IsValid() && EntryCDO->ArchetypeTag == CandidateCDO->ArchetypeTag)
-		{
-			return true;
-		}
+		if (IsValid(EntryCDO)
+			&& EntryCDO->ArchetypeTag.IsValid()
+			&& EntryCDO->ArchetypeTag == CandidateCDO->ArchetypeTag) return true;
 	}
 
 	return false;

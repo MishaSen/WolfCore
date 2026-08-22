@@ -335,18 +335,11 @@ float UCombatModeSubsystem::GetDilationForMode(const FGameplayTag& Mode)
 	return 1.f;
 }
 
-const FAbilityTimingProfile& UCombatModeSubsystem::GetOrComputeTimingProfile(TSubclassOf<UBaseCombatAbility> AbilityClass)
+const FAbilityTimingProfile& UCombatModeSubsystem::GetOrComputeTimingProfile(const TSubclassOf<UBaseCombatAbility>& AbilityClass)
 {
-	static const FAbilityTimingProfile DefaultProfile;
-	if (!AbilityClass)
-	{
-		return DefaultProfile;
-	}
-
-	if (const FAbilityTimingProfile* Existing = TimingProfileCache.Find(AbilityClass))
-	{
-		return *Existing;
-	}
+	static constexpr FAbilityTimingProfile DefaultProfile;
+	if (!AbilityClass) return DefaultProfile;
+	if (const FAbilityTimingProfile* Existing = TimingProfileCache.Find(AbilityClass)) return *Existing;
 
 	const auto* CDO = AbilityClass->GetDefaultObject<UBaseCombatAbility>();
 	const FAbilityTimingProfile Computed = CDO

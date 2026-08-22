@@ -89,7 +89,7 @@ private:
 	 * redundant with each other.
 	 */
 	static bool IsArchetypeRedundantAgainstTarget(
-		TSubclassOf<UBaseCombatAbility> CandidateClass,
+		const TSubclassOf<UBaseCombatAbility>& CandidateClass,
 		const AActor* Target,
 		const TArray<FIntentEntry>& Ledger);
 };

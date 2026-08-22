@@ -132,7 +132,7 @@ public:
 	 * Returns a default-constructed (all-zero) FAbilityTimingProfile if AbilityClass is null.
 	 * Not called from anywhere yet in this stage.
 	 */
-	const FAbilityTimingProfile& GetOrComputeTimingProfile(TSubclassOf<UBaseCombatAbility> AbilityClass);
+	const FAbilityTimingProfile& GetOrComputeTimingProfile(const TSubclassOf<UBaseCombatAbility>& AbilityClass);
 
 	// ============================================================================================================================
 	// Events

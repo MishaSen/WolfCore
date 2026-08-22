@@ -224,7 +224,7 @@ public:
 	void InitializeForSimulation(const TArray<FCombatPeriod>& InSequence);
 
 	/** Resolves MoveTo destinations in a sequence using a source location and target actor. */
-	static void ResolveMoveToDestinations(TArray<FCombatPeriod>& Sequence, const FVector& SourceLocation, AActor* Target);
+	static void ResolveMoveToDestinations(TArray<FCombatPeriod>& Sequence, const FVector& SourceLocation, const AActor* Target);
 
 	/**
 	 * Computes a derived timing breakdown (windup / active window / recovery) for the given

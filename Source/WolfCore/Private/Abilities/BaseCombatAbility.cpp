@@ -191,7 +191,7 @@ void UBaseCombatAbility::InitializeForSimulation(const TArray<FCombatPeriod>& In
 	CurrentPeriodStartTime = 0.f;
 }
 
-void UBaseCombatAbility::ResolveMoveToDestinations(TArray<FCombatPeriod>& Sequence, const FVector& SourceLocation, AActor* Target)
+void UBaseCombatAbility::ResolveMoveToDestinations(TArray<FCombatPeriod>& Sequence, const FVector& SourceLocation, const AActor* Target)
 {
 	if (!Target) return;
 
