@@ -59,6 +59,26 @@ struct FCombatHitEffect
 };
 
 /**
+ * A hit effect that only applies if the target's ASC currently carries every tag in
+ * RequiredTargetTags. The reaction window IS the duration of whatever GE granted those tags —
+ * there is no separate timer or event broadcast here (AssistCanary design doc).
+ */
+USTRUCT(BlueprintType)
+struct FConditionalHitEffect
+{
+	GENERATED_BODY()
+
+	/** Target ASC must have ALL of these tags for Effect to apply. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "WolfCore|Hit Effects")
+	FGameplayTagContainer RequiredTargetTags;
+
+	/** The effect to apply if RequiredTargetTags is satisfied. Reuses FCombatHitEffect wholesale —
+	  * same EffectClass/Amount/bSelfTarget/DataAmountTag shape as an unconditional hit effect. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "WolfCore|Hit Effects")
+	FCombatHitEffect Effect;
+};
+
+/**
  * Describes a single period within a combat ability sequence (montage, duration, attribute effects).
  */
 USTRUCT(BlueprintType)
@@ -87,6 +107,14 @@ struct FCombatPeriod
 	/** All GameplayEffects applied when this period's hit resolves (damage, resource gain, etc). */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "WolfCore|Attribute Effects")
 	TArray<FCombatHitEffect> HitEffects;
+
+	/** Additional effects applied only if the target ASC carries the required tags at the moment
+	  * of this hit (e.g. a bonus-damage effect that only fires against an airborne target).
+	  * Evaluated after the unconditional HitEffects loop, in UBaseCombatAbility::ApplyHitEffects.
+	  * Not evaluated by TB prediction (PresagePreview stage 2) — see the note at that stage's
+	  * delta-computation site once it exists; this is a named, accepted gap. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "WolfCore|Attribute Effects")
+	TArray<FConditionalHitEffect> ConditionalHitEffects;
 
 	/** Attack range in centimeters for hit detection and collision prediction. */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "WolfCore|Movement")
@@ -328,4 +356,13 @@ protected:
 	 *         be simplified to void later.
 	 */
 	virtual bool ApplyHitEffects(const FCombatPeriod& Period, AActor* TargetActor, const FHitResult* HitResult = nullptr);
+
+private:
+	/** Applies a single FCombatHitEffect through SourceASC, targeting either SourceASC itself
+	  * (bSelfTarget) or TargetASC. Shared by both the unconditional HitEffects loop and the
+	  * conditional ConditionalHitEffects loop in ApplyHitEffects — the SetByCaller magnitude
+	  * block must not be duplicated between them. Returns true if the effect was applied
+	  * (EffectClass was set and the spec was valid). */
+	bool ApplySingleHitEffect(const FCombatHitEffect& Effect, UAbilitySystemComponent* SourceASC,
+		UAbilitySystemComponent* TargetASC, const FGameplayEffectContextHandle& EffectContext, float AbilityLevel) const;
 };

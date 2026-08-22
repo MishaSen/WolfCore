@@ -136,6 +136,11 @@ struct FWolfGameplayTags
 	/** GameplayTag representing the link status for character connection and synchronization state. */
 	FGameplayTag Status_Link;
 
+	/** GameplayTag representing a target being airborne — the reaction window for
+	  * airborne-extension conditional hit effects (AssistCanary). Granted by a launch ability's
+	  * GE_Launched, checked by any ability's ConditionalHitEffects. */
+	FGameplayTag Status_Airborne;
+
 	private:
 	/** Static singleton instance storing all initialized gameplay tags for framework-wide access. */
 	static FWolfGameplayTags GameplayTags;

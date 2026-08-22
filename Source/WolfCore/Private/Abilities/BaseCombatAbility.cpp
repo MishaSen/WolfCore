@@ -332,6 +332,26 @@ void UBaseCombatAbility::HandleAttackHitEvent(const FCombatPeriod& CurrentAttack
 	// Override in children
 }
 
+bool UBaseCombatAbility::ApplySingleHitEffect(const FCombatHitEffect& Effect, UAbilitySystemComponent* SourceASC,
+	UAbilitySystemComponent* TargetASC, const FGameplayEffectContextHandle& EffectContext, float AbilityLevel) const
+{
+	if (!Effect.EffectClass) return false;
+
+	const auto EffectSpecHandle = SourceASC->MakeOutgoingSpec(Effect.EffectClass, AbilityLevel, EffectContext);
+	if (!EffectSpecHandle.IsValid()) return false;
+
+	const FGameplayTag AmountTag = Effect.DataAmountTag.IsValid()
+		? Effect.DataAmountTag
+		: FWolfGameplayTags::Get().Data_Amount;
+
+	EffectSpecHandle.Data->SetSetByCallerMagnitude(AmountTag, Effect.Amount.GetValueAtLevel(AbilityLevel));
+
+	if (Effect.bSelfTarget) SourceASC->ApplyGameplayEffectSpecToSelf(*EffectSpecHandle.Data.Get());
+	else                    SourceASC->ApplyGameplayEffectSpecToTarget(*EffectSpecHandle.Data.Get(), TargetASC);
+
+	return true;
+}
+
 bool UBaseCombatAbility::ApplyHitEffects(const FCombatPeriod& Period, AActor* TargetActor, const FHitResult* HitResult)
 {
 	if (!TargetActor) return false;
@@ -350,21 +370,23 @@ bool UBaseCombatAbility::ApplyHitEffects(const FCombatPeriod& Period, AActor* Ta
 
 	for (const FCombatHitEffect& Effect : Period.HitEffects)
 	{
-		if (!Effect.EffectClass) continue;
+		if (ApplySingleHitEffect(Effect, SourceASC, TargetASC, EffectContext, AbilityLevel))
+		{
+			bAppliedAny = true;
+		}
+	}
 
-		const auto EffectSpecHandle = SourceASC->MakeOutgoingSpec(Effect.EffectClass, AbilityLevel, EffectContext);
-		if (!EffectSpecHandle.IsValid()) continue;
+	// Conditional extensions: only apply if the target ASC currently carries every required tag.
+	// The reaction window is the duration of whatever GE granted those tags — no separate timer.
+	for (const FConditionalHitEffect& Conditional : Period.ConditionalHitEffects)
+	{
+		if (!TargetASC->HasAllMatchingGameplayTags(Conditional.RequiredTargetTags)) continue;
 
-		const FGameplayTag AmountTag = Effect.DataAmountTag.IsValid()
-			? Effect.DataAmountTag
-			: FWolfGameplayTags::Get().Data_Amount;
-
-		EffectSpecHandle.Data->SetSetByCallerMagnitude(AmountTag, Effect.Amount.GetValueAtLevel(AbilityLevel));
-
-		if (Effect.bSelfTarget) SourceASC->ApplyGameplayEffectSpecToSelf(*EffectSpecHandle.Data.Get());
-		else                    SourceASC->ApplyGameplayEffectSpecToTarget(*EffectSpecHandle.Data.Get(), TargetASC);
-
-		bAppliedAny = true;
+		if (ApplySingleHitEffect(Conditional.Effect, SourceASC, TargetASC, EffectContext, AbilityLevel))
+		{
+			WOLF_INFO("Conditional hit effect applied (target had required tags): %s", *TargetActor->GetName());
+			bAppliedAny = true;
+		}
 	}
 
 	return bAppliedAny;

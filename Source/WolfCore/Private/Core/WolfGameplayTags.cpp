@@ -54,4 +54,5 @@ void FWolfGameplayTags::InitializeNativeGameplayTags()
 
 	// --- Status ---
 	AddNativeTag(GameplayTags.Status_Link, FName("Status.Link"), TEXT("Status tag for link."));
+	AddNativeTag(GameplayTags.Status_Airborne, FName("Status.Airborne"), TEXT("Status tag for airborne — reaction window for conditional hit effects."));
 }
