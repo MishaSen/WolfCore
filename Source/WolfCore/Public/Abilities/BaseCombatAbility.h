@@ -299,6 +299,19 @@ public:
 	 */
 	static float GetPeriodImpactOffset(const FCombatPeriod& Period, const FGameplayTag& HitEventTag);
 
+	/**
+	 * Applies a single FCombatHitEffect through SourceASC, targeting either SourceASC itself
+	 * (bSelfTarget) or TargetASC. Shared by: (1) the unconditional HitEffects loop and (2) the
+	 * conditional ConditionalHitEffects loop, both in ApplyHitEffects; and (3)
+	 * UCombatModeSubsystem's real ledger-impact application during TB execution playback
+	 * (PresagePreviewStage3) — hence public + static, so it can be called without a live
+	 * UGameplayAbility instance. The SetByCaller magnitude block must not be duplicated between
+	 * any of these callers — this is the one application path all three share. Returns true if
+	 * the effect was applied (EffectClass was set and the spec was valid).
+	 */
+	static bool ApplySingleHitEffect(const FCombatHitEffect& Effect, UAbilitySystemComponent* SourceASC,
+		UAbilitySystemComponent* TargetASC, const FGameplayEffectContextHandle& EffectContext, float AbilityLevel);
+	
 	// ============================================================================================================================
 	// Execution State (Protected)
 	// ============================================================================================================================
@@ -381,13 +394,4 @@ protected:
 	 *         be simplified to void later.
 	 */
 	virtual bool ApplyHitEffects(const FCombatPeriod& Period, AActor* TargetActor, const FHitResult* HitResult = nullptr);
-
-private:
-	/** Applies a single FCombatHitEffect through SourceASC, targeting either SourceASC itself
-	  * (bSelfTarget) or TargetASC. Shared by both the unconditional HitEffects loop and the
-	  * conditional ConditionalHitEffects loop in ApplyHitEffects — the SetByCaller magnitude
-	  * block must not be duplicated between them. Returns true if the effect was applied
-	  * (EffectClass was set and the spec was valid). */
-	bool ApplySingleHitEffect(const FCombatHitEffect& Effect, UAbilitySystemComponent* SourceASC,
-		UAbilitySystemComponent* TargetASC, const FGameplayEffectContextHandle& EffectContext, float AbilityLevel) const;
 };

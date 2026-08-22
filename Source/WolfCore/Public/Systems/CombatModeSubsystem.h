@@ -327,6 +327,21 @@ protected:
 	  * again by LockInPlan() so a fresh execution playback always starts scanning from the top. */
 	int32 DamageExitCursor = 0;
 
+	/** Separate cursor into BakeImpactLedger for real-application (ApplyDueLedgerImpacts), tracked
+	  * independently from DamageExitCursor since the two consume the ledger under different
+	  * criteria (application applies every connected entry; damage-exit only cares about
+	  * player/linked victims). Reset alongside DamageExitCursor. */
+	int32 LedgerApplicationCursor = 0;
+
+	/** Applies every not-yet-applied BakeImpactLedger entry whose ImpactTime <= InExecutionClock
+	  * through UBaseCombatAbility::ApplySingleHitEffect — the same construction ApplyHitEffects
+	  * uses. Called once per Executing tick, before CheckExecutionDamageExit, so the hard exit (if
+	  * any) fires from real applied state. Logs a WOLF_ERROR divergence warning (does not correct
+	  * anything) if a real post-application attribute value doesn't match the buffer frame's
+	  * predicted value at the same time — per stage 1's magnitude-predictability rule this should
+	  * never fire. */
+	void ApplyDueLedgerImpacts(float InExecutionClock);
+
 	private:
 	/** The fixed step size (seconds) used to produce the current PredictionBuffer contents across
 	  * every combatant in the active bake. Set once at the start of ExecuteFutureBake() from
@@ -358,11 +373,11 @@ protected:
 	/** Applies the default combat mode from level settings when no player selection is available or valid. */
 	void ApplyDefaultLevelMode();
 
-	/** Handles presage drain effect application to an actor's ability system based on their current combat mode state. */
-	/**
-	 * @param ASC Pointer to the UAbilitySystemComponent receiving the drain effect modification.
-	 * @param CurrentActorMode The FGameplayTag representing the actor's current combat mode being evaluated.
-	 */
+	/** DEPRECATED (PresagePreviewStage3): no longer called from ApplyModeToActor. Left in place,
+	  * along with FWolfPresageSimulator::ApplyPresageDrainEffect, UPresageMode, PresageEffectClass,
+	  * and its async load in InitializeSubsystemDefaults, until ResourceLoop stage 3 confirms
+	  * nothing else needs this seam — then all of it is deleted together in one pass, not
+	  * piecemeal. Do not delete just this function now. */
 	void HandlePresageDrainEffect(UAbilitySystemComponent* ASC, FGameplayTag CurrentActorMode);
 
 	/** Retrieves the player controller's Ability System Component (ASC) for gameplay effect application and state management. */

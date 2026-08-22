@@ -333,7 +333,7 @@ void UBaseCombatAbility::HandleAttackHitEvent(const FCombatPeriod& CurrentAttack
 }
 
 bool UBaseCombatAbility::ApplySingleHitEffect(const FCombatHitEffect& Effect, UAbilitySystemComponent* SourceASC,
-	UAbilitySystemComponent* TargetASC, const FGameplayEffectContextHandle& EffectContext, float AbilityLevel) const
+	UAbilitySystemComponent* TargetASC, const FGameplayEffectContextHandle& EffectContext, float AbilityLevel)
 {
 	if (!Effect.EffectClass) return false;
 

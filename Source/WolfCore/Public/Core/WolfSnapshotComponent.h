@@ -16,6 +16,23 @@ class UAnimInstance;
 class UAnimMontage;
 class UCombatModeSubsystem;
 
+/** Controls how much state UWolfSnapshotComponent::RestoreSnapshot_Implementation restores. See
+  * UWolfSnapshotComponent::SetRestoreDetail. (PresagePreview stage 3.) */
+UENUM(BlueprintType)
+enum class ERestoreDetail : uint8
+{
+	/** Everything: transform/velocity/montage/period-index + attributes + dead-tag reset. Used
+	  * during TB Planning-phase scrubbing — this IS the preview. */
+	Full,
+	/** transform/velocity/montage/period-index only — attributes and the dead-tag reset are
+	  * skipped. Used during TB Executing playback, where real GameplayEffect application (driven
+	  * by UCombatModeSubsystem, not this component) is the source of truth for attributes
+	  * instead of the predicted snapshot. Prevents double-application: buffer frames hold
+	  * predicted post-hit values, and execution also applies real GEs — restoring attributes from
+	  * the snapshot AND applying the real GE would land every hit twice. */
+	Presentational
+};
+
 UCLASS(ClassGroup=(WolfCore), meta=(BlueprintSpawnableComponent))
 class WOLFCORE_API UWolfSnapshotComponent : public UActorComponent, public ISnapshot
 {
@@ -49,6 +66,15 @@ public:
 
 	/** Returns the cached Ability System Component for direct GAS interactions during snapshot operations. */
 	FORCEINLINE UWolfAbilitySystemComponent* GetASC() const { return CachedASC; }
+
+	/** Sets how much state the next RestoreSnapshot_Implementation call restores. Set by
+	  * UCombatModeSubsystem::ScrubTimeline based on TBPhase — Full during Planning, Presentational
+	  * during Executing. Defaults to Full, so any caller that never sets this explicitly keeps
+	  * today's existing (pre-stage-3) restore behavior. */
+	void SetRestoreDetail(ERestoreDetail NewDetail) { RestoreDetail = NewDetail; }
+
+	/** Returns the restore detail that will be used on the next RestoreSnapshot_Implementation call. */
+	ERestoreDetail GetRestoreDetail() const { return RestoreDetail; }
 
 	// ============================================================================================================================
 	// Private - Snapshot Operations (Physics / Animation / GAS)
@@ -103,6 +129,9 @@ private:
 	
 	/** Flag indicating whether the component is currently in a snapshot restoration sequence. */
 	bool bIsRestoringSnapshot = false;
+
+	/** See SetRestoreDetail/GetRestoreDetail above. Defaults to Full. */
+	ERestoreDetail RestoreDetail = ERestoreDetail::Full;
 
 	/** Strong reference to the owner character actor that owns this snapshot component. */
 	UPROPERTY(Transient, VisibleInstanceOnly, Category = "WolfCore|Internal")

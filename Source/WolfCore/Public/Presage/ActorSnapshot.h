@@ -19,6 +19,12 @@ class UGameplayEffect;
 
 /**
  * Container for a Gameplay Effect to be applied during presage simulation.
+ *
+ * DEPRECATED as of PresagePreviewStage3: no code writes or reads instances of this struct
+ * anymore (UWolfSnapshotComponent::SnapshotGAS stopped populating FActorSnapshot::ActiveEffects,
+ * and RestoreGAS's corresponding reapplication loop was deleted). Kept as a type — not deleted —
+ * because struct layout churn would touch serialization of any Blueprint that still references
+ * it; delete in a later cleanup pass once nothing compiles/serializes against it.
  */
 USTRUCT(BlueprintType)
 struct FStoredEffect
@@ -117,7 +123,9 @@ struct FActorSnapshot
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "WolfCore|Actor State")
 	TArray<float> AttributeValues; // Use Attributes from StatConfig
 
-	/** Array of stored gameplay effects to be applied during presage simulation with their parameters. */
+	/** DEPRECATED as of PresagePreviewStage3 — always empty; no code writes to this anymore. See
+  * FStoredEffect's deprecation comment. Kept as a field, not deleted, for the same
+  * serialization-churn reason. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "WolfCore|Actor State")
 	TArray<FStoredEffect> ActiveEffects;
 

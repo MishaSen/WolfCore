@@ -192,26 +192,10 @@ void UWolfSnapshotComponent::SnapshotGAS(FActorSnapshot& Snapshot) const
 		Snapshot.AttributeValues.Add(CachedASC->GetNumericAttribute(Attribute));
 	}
 
-	Snapshot.ActiveEffects.Reset();
-	const FGameplayEffectQuery Query;
-	const auto ActiveHandles = CachedASC->GetActiveEffects(Query);
-	Snapshot.ActiveEffects.Reserve(ActiveHandles.Num());
-
-	for (const auto& Handle : ActiveHandles)
-	{
-		if (const auto* Effect = CachedASC->GetActiveGameplayEffect(Handle))
-		{
-			FStoredEffect StoredEffect;
-			StoredEffect.EffectClass = Effect->Spec.Def.GetClass();
-			StoredEffect.Level = Effect->Spec.GetLevel();
-			StoredEffect.Stacks = Effect->Spec.GetStackCount();
-			StoredEffect.RemainingDuration = Effect->GetDuration() > 0.f
-				                                 ? Effect->GetTimeRemaining(GetWorld()->GetTimeSeconds())
-				                                 : -1.f;
-
-			Snapshot.ActiveEffects.Add(StoredEffect);
-		}
-	}
+	// ActiveEffects is no longer populated (PresagePreviewStage3): preview never applies real GEs,
+	// so there is nothing to round-trip, and a restore-by-reapplication path can never be provably
+	// exact (durations, periodic-tick phase, and stack state don't survive reconstruction). See
+	// FActorSnapshot::ActiveEffects's deprecation comment.
 
 	auto* ActiveAbility = OwnerCharacter->GetActiveCombatAbility();
 	const auto CurrentIndex = ActiveAbility ? ActiveAbility->GetCurrentPeriodIndex() : -1;
@@ -226,43 +210,33 @@ void UWolfSnapshotComponent::RestoreGAS(const FActorSnapshot& Snapshot)
 {
 	if (!IsValid(CachedASC) || !IsValid(AbilityControl) || !AbilityControl->GetStatConfig()) return;
 
-	const auto& Attributes = AbilityControl->GetCachedAttributes();
-	CachedASC->SetTagMapCount(FWolfGameplayTags::Get().InputState_Dead, 0);
-
-	for (int32 StatIndex = 0; StatIndex < Attributes.Num(); ++StatIndex)
+	// Effect-removal/reapplication (the Effect_Combat filter + Snapshot.ActiveEffects loop) is
+	// gone as of PresagePreviewStage3 — SnapshotGAS no longer populates ActiveEffects, and preview
+	// never applies real GEs at all, so there was nothing correct left for this block to restore.
+	// This resolves the old capture/restore asymmetry by removing the asymmetric machinery, not
+	// by symmetrizing its filter — see PresagePreviewStage1's contract for the rationale.
+	if (RestoreDetail == ERestoreDetail::Full)
 	{
-		if (!Snapshot.AttributeValues.IsValidIndex(StatIndex)) break;
+		const auto& Attributes = AbilityControl->GetCachedAttributes();
+		CachedASC->SetTagMapCount(FWolfGameplayTags::Get().InputState_Dead, 0);
 
-		const auto& Attribute = Attributes[StatIndex];
-		const auto SavedValue = Snapshot.AttributeValues[StatIndex];
-
-		if (!FMath::IsNearlyEqual(CachedASC->GetNumericAttribute(Attribute), SavedValue))
+		for (int32 StatIndex = 0; StatIndex < Attributes.Num(); ++StatIndex)
 		{
-			CachedASC->SetNumericAttributeBase(Attribute, SavedValue);
+			if (!Snapshot.AttributeValues.IsValidIndex(StatIndex)) break;
+
+			const auto& Attribute = Attributes[StatIndex];
+			const auto SavedValue = Snapshot.AttributeValues[StatIndex];
+
+			if (!FMath::IsNearlyEqual(CachedASC->GetNumericAttribute(Attribute), SavedValue))
+			{
+				CachedASC->SetNumericAttributeBase(Attribute, SavedValue);
+			}
 		}
 	}
-
-	FGameplayEffectQuery Query;
-	FGameplayTagContainer TagContainer;
-	TagContainer.AddTag(FWolfGameplayTags::Get().Effect_Combat);
-	Query.OwningTagQuery = FGameplayTagQuery::MakeQuery_MatchAnyTags(TagContainer);
-	CachedASC->RemoveActiveEffects(Query);
-
-	for (const auto& Effect : Snapshot.ActiveEffects)
-	{
-		if (!Effect.EffectClass) continue;
-
-		auto SpecHandle = CachedASC->MakeOutgoingSpec(Effect.EffectClass, Effect.Level, CachedASC->MakeEffectContext());
-		if (!SpecHandle.IsValid()) continue;
-
-		SpecHandle.Data->SetStackCount(Effect.Stacks);
-
-		if (Effect.RemainingDuration > 0.f)
-		{
-			SpecHandle.Data->Duration = Effect.RemainingDuration;
-		}
-		CachedASC->ApplyGameplayEffectSpecToSelf(*SpecHandle.Data.Get());
-	}
+	// Presentational restore (TB Executing playback) skips attributes and the dead-tag reset
+	// entirely — real GameplayEffect application (UCombatModeSubsystem::ApplyDueLedgerImpacts) is
+	// the source of truth for attributes during Executing, applied separately, once, through the
+	// real GAS path. Ability/period-index/montage restore below always runs regardless of detail.
 
 	if (Snapshot.ActiveAbility.IsValid())
 	{

@@ -5,6 +5,9 @@
 
 #include "AbilitySystemBlueprintLibrary.h"
 #include "AbilitySystemComponent.h"
+#include "Character/WolfCharacterBase.h"
+#include "Core/WolfAbilityComponent.h"
+#include "Core/WolfSnapshotComponent.h"
 #include "Misc/App.h"
 #include "WolfLevelScript.h"
 #include "Core/WolfPresageSimulator.h"
@@ -165,6 +168,7 @@ void UCombatModeSubsystem::SetMode(FGameplayTag NewMode)
 
 		BakeImpactLedger.Empty();
 		DamageExitCursor = 0;
+		LedgerApplicationCursor = 0;
 		FWolfPresageSimulator::ExecuteFutureBake(TrackedCombatants, MaxTimelineDuration, BakedStepSize);
 		ScrubTimeline(0.f);
 	}
@@ -219,10 +223,9 @@ void UCombatModeSubsystem::Tick(float DeltaTime)
 
 	ScrubTimeline(ExecutionClock);
 
-	// --- PresagePreviewStage3 SEAM: real ledger-impact application (ApplyHitEffects-equivalent
-	// through the ledger) inserts here, before the damage-exit check below, so the hard exit
-	// fires from real applied state rather than merely presentational buffer data. Stages 1/2 do
-	// not apply anything real — execution playback is a slower auto-scrub until stage 3 lands. ---
+	// Real application runs before the damage-exit check below, so a hard exit (if any) fires
+	// from real applied state rather than merely presentational buffer data.
+	ApplyDueLedgerImpacts(ExecutionClock);
 
 	TArray<TWeakObjectPtr<AActor>> DamageVictims;
 	if (CheckExecutionDamageExit(ExecutionClock, DamageVictims))
@@ -260,6 +263,7 @@ void UCombatModeSubsystem::LockInPlan()
 	ScrubTimeline(0.f);
 	ExecutionClock = 0.f;
 	DamageExitCursor = 0;
+	LedgerApplicationCursor = 0;
 	TBPhase = ETBPhase::Executing;
 	WOLF_LOG(Log, TEXT("[PRESAGE] TB locked in — execution playback started."));
 }
@@ -322,6 +326,85 @@ void UCombatModeSubsystem::ExitTB(ETBExitReason Reason, const TArray<TWeakObject
 	// real application has occurred — fully real only after stage 3). SetMode's non-TB branch
 	// sees TBPhase already None (set above) and does not re-scrub.
 	SetMode(WolfTag.InputState_RT);
+}
+
+void UCombatModeSubsystem::ApplyDueLedgerImpacts(float InExecutionClock)
+{
+	while (LedgerApplicationCursor < BakeImpactLedger.Num())
+	{
+		const FPresageImpactEntry& Entry = BakeImpactLedger[LedgerApplicationCursor];
+		if (Entry.ImpactTime > InExecutionClock) break; // ledger is time-ordered
+
+		++LedgerApplicationCursor;
+
+		if (!Entry.bConnected) continue;
+
+		AActor* Attacker = Entry.Attacker.Get();
+		AActor* Victim = Entry.Victim.Get();
+		if (!IsValid(Attacker)) continue;
+
+		auto* SourceASC = UAbilitySystemBlueprintLibrary::GetAbilitySystemComponent(Attacker);
+		auto* TargetASC = IsValid(Victim) ? UAbilitySystemBlueprintLibrary::GetAbilitySystemComponent(Victim) : nullptr;
+		if (!SourceASC) continue;
+
+		const auto EffectContext = SourceASC->MakeEffectContext();
+
+		for (const auto& Delta : Entry.Deltas)
+		{
+			if (!Delta.bIsPredictable || !Delta.EffectClass) continue;
+
+			auto* ApplyTargetASC = Delta.bSelfTarget ? SourceASC : TargetASC;
+			if (!ApplyTargetASC) continue;
+
+			// Reconstruct a matching FCombatHitEffect so this goes through the exact same
+			// construction UBaseCombatAbility::ApplySingleHitEffect (and therefore
+			// ApplyHitEffects) uses — one application path, multiple callers, zero drift.
+			// Delta.Amount is already the final signed predicted value (Amount * SignMultiplier
+			// at level 1, per WolfPresageComponent::ResolveSimulatedImpact), so wrapping it in a
+			// flat FScalableFloat and applying at level 1 reproduces it exactly.
+			FCombatHitEffect ReAppliedEffect;
+			ReAppliedEffect.EffectClass = Delta.EffectClass;
+			ReAppliedEffect.bSelfTarget = Delta.bSelfTarget;
+			ReAppliedEffect.Amount = FScalableFloat(Delta.Amount);
+
+			const bool bApplied = UBaseCombatAbility::ApplySingleHitEffect(
+				ReAppliedEffect, SourceASC, ApplyTargetASC, EffectContext, 1.f);
+
+			if (!bApplied) continue;
+
+			// Divergence guard: compare the real post-application value against the corresponding
+			// buffer frame's predicted value at Entry.ImpactTime. Per stage 1's
+			// magnitude-predictability rule this should never fire; this is a log, not a
+			// correction — do not "fix up" real state to match prediction silently.
+			AActor* PredictedStateActor = Delta.bSelfTarget ? Attacker : Victim;
+			const auto* PredictedCombatant = Cast<IWolfCombatant>(PredictedStateActor);
+			const auto* PredictedPresage = PredictedCombatant ? PredictedCombatant->GetPresageComponent() : nullptr;
+			const auto* PredictedFrame = PredictedPresage ? PredictedPresage->GetSnapshotAtTime(Entry.ImpactTime) : nullptr;
+			const auto* PredictedCharacter = Cast<AWolfCharacterBase>(PredictedStateActor);
+			auto* PredictedAbilityControl = PredictedCharacter ? PredictedCharacter->FindComponentByClass<UWolfAbilityComponent>() : nullptr;
+
+			if (PredictedFrame && PredictedAbilityControl)
+			{
+				const auto& CachedAttributes = PredictedAbilityControl->GetCachedAttributes();
+				const int32 AttrIndex = CachedAttributes.IndexOfByPredicate(
+					[&Delta](const FGameplayAttribute& Attr) { return Attr == Delta.Attribute; });
+
+				if (CachedAttributes.IsValidIndex(AttrIndex) && PredictedFrame->AttributeValues.IsValidIndex(AttrIndex))
+				{
+					const float RealValue = ApplyTargetASC->GetNumericAttribute(Delta.Attribute);
+					const float PredictedValue = PredictedFrame->AttributeValues[AttrIndex];
+
+					if (!FMath::IsNearlyEqual(RealValue, PredictedValue, 0.5f))
+					{
+						WOLF_ERROR(TEXT("[PRESAGE] Divergence: %s real=%.2f predicted=%.2f for effect %s on %s at t=%.2fs"),
+							*Delta.Attribute.GetName(), RealValue, PredictedValue,
+							*Delta.EffectClass->GetName(),
+							*PredictedStateActor->GetName(), Entry.ImpactTime);
+					}
+				}
+			}
+		}
+	}
 }
 
 bool UCombatModeSubsystem::CheckExecutionDamageExit(float InExecutionClock, TArray<TWeakObjectPtr<AActor>>& OutVictims)
@@ -387,6 +470,12 @@ void UCombatModeSubsystem::ScrubTimeline(float NewTime)
 	if (FMath::IsNearlyEqual(ClampedTime, CurrentTimelineTime)) return; // No time change; no snapshot change
 	CurrentTimelineTime = ClampedTime;
 
+	// Presentational during Executing (real GE application is the source of truth for attributes
+	// then); Full everywhere else (this IS the Planning-phase preview). See ERestoreDetail.
+	const auto DetailForThisScrub = TBPhase == ETBPhase::Executing
+		? ERestoreDetail::Presentational
+		: ERestoreDetail::Full;
+
 	for (auto& Combatant : TrackedCombatants)
 	{
 		auto* Obj = Combatant.GetObject();
@@ -394,6 +483,14 @@ void UCombatModeSubsystem::ScrubTimeline(float NewTime)
 
 		const auto* Presage = Combatant.GetInterface()->GetPresageComponent();
 		if (!Presage) continue;
+
+		if (auto* Character = Cast<AWolfCharacterBase>(Obj))
+		{
+			if (auto* SnapshotComp = Character->GetSnapshotComponent())
+			{
+				SnapshotComp->SetRestoreDetail(DetailForThisScrub);
+			}
+		}
 
 		const auto* BakedFrame = Presage->GetSnapshotAtTime(CurrentTimelineTime);
 		if (BakedFrame) ISnapshot::Execute_RestoreSnapshot(Obj, *BakedFrame);
@@ -436,6 +533,7 @@ void UCombatModeSubsystem::ReBakeTimeline()
 
 	BakeImpactLedger.Empty();
 	DamageExitCursor = 0;
+	LedgerApplicationCursor = 0;
 	FWolfPresageSimulator::ExecuteFutureBake(TrackedCombatants, MaxTimelineDuration, BakedStepSize);
 
 	CurrentTimelineTime = -1.f;
@@ -479,7 +577,12 @@ void UCombatModeSubsystem::ApplyModeToActor(const TScriptInterface<IWolfCombatan
 
 	if (bIsPlayer)
 	{
-		HandlePresageDrainEffect(ASC, ActualModeForActor);
+		// Drain GE retired (PresagePreviewStage3): the periodic drain never ticked at dilation 0
+		// (verified code fact) and is conceptually vestigial under the budget model — TB duration is
+		// granted at entry and consumed by the execution clock, not drained by a live effect.
+		// HandlePresageDrainEffect / FWolfPresageSimulator::ApplyPresageDrainEffect / UPresageMode /
+		// PresageEffectClass are left in place (deprecated) until ResourceLoop stage 3 confirms
+		// nothing else needs the seam — see HandlePresageDrainEffect's declaration.
 	}
 
 	// Safest way to call UINTERFACE functions that might be implemented in C++ or BP.
