@@ -46,6 +46,14 @@ public:
 	FGameplayAttributeData Adrenaline;
 	ATTRIBUTE_ACCESSORS_BASIC(UWolfAttributeSet, Adrenaline)
 
+	/** Maximum flow gauge attribute defining the soft cap on the character's Flow resource
+	  * (ResourceLoop stage 2). Deliberately an attribute (not a config float): progression upgrades
+	  * it over a session, and GAS-modifiability means any upgrade is just a permanent
+	  * GameplayEffect. Clamped to UWolfCombatSettings::FlowHardCeiling in PreAttributeChange. */
+	UPROPERTY(BlueprintReadOnly, Category = "WolfCore|Attributes")
+	FGameplayAttributeData MaxFlowGauge;
+	ATTRIBUTE_ACCESSORS_BASIC(UWolfAttributeSet, MaxFlowGauge)
+
 	// ============================================================================================================================
 	// Attribute System Hooks
 	// ============================================================================================================================

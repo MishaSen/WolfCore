@@ -35,6 +35,7 @@ void FWolfGameplayTags::InitializeNativeGameplayTags()
 	// --- Attributes ---
 	AddNativeTag(GameplayTags.Attribute_Health, FName("Attribute.Health"), TEXT("Health attribute."));
 	AddNativeTag(GameplayTags.Attribute_MaxHealth, FName("Attribute.MaxHealth"), TEXT("Max health attribute."));
+	AddNativeTag(GameplayTags.Attribute_MaxFlowGauge, FName("Attribute.MaxFlowGauge"), TEXT("Max flow gauge attribute (soft cap on FlowGauge)."));
 	AddNativeTag(GameplayTags.Attribute_FlowGauge, FName("Attribute.FlowGauge"), TEXT("Flow gauge attribute."));
 	AddNativeTag(GameplayTags.Attribute_Adrenaline, FName("Attribute.Adrenaline"), TEXT("Adrenaline attribute."));
 

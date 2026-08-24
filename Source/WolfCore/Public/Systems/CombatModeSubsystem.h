@@ -35,6 +35,14 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnCombatModeChanged, FGameplayTag, 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnFlowGaugeChanged, float, NewValue, float, Delta);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnAdrenalineChanged, float, NewValue, float, Delta);
 
+/** ResourceLoop stage 2 — broadcast when the PLAYER's Flow Gauge crosses a threshold stage
+ * boundary (NewStage != OldStage). Both parameters are stage indexes (see
+ * FWolfResourceRules::GetThresholdStage; stage N == N x FlowThresholdInterval seconds of
+ * budget). Calculated in OnPlayerFlowGaugeChanged from the player's current MaxFlowGauge soft
+ * cap + the FlowThresholdInterval config; NOT broadcast mid-stage (every value change).
+ * Downhill crossings (e.g. 2 -> 1) also fire — depleting past a threshold is equally material. */
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnFlowThresholdStageChanged, int32, NewStage, int32, OldStage);
+
 /**
  * THE EXACT-PREVIEW CONTRACT (normative — binding on PresagePreview stages 2–3 and all future
  * TB-adjacent work; see PresagePreviewStage1.md for full rationale).
@@ -313,6 +321,12 @@ public:
 	UPROPERTY(BlueprintAssignable, Category = "WolfCore|Resources")
 	FOnAdrenalineChanged OnAdrenalineChanged;
 
+	/** Broadcast when the player's Flow Gauge crosses a threshold stage boundary (ResourceLoop
+	 * stage 2). Fed by OnPlayerFlowGaugeChanged; fires only on an actual crossing, not on every
+	 * Flow value change. */
+	UPROPERTY(BlueprintAssignable, Category = "WolfCore|Resources")
+	FOnFlowThresholdStageChanged OnFlowThresholdStageChanged;
+
 protected:
 	/** Temporal states container holding the master snapshot captured at simulation start for state restoration. */
 	FTemporalStates MasterStartSnapshot;
@@ -468,8 +482,9 @@ protected:
 	void EnsureResourceTelemetryBound();
 
 	/** FlowGauge-changed handler (bound in EnsureResourceTelemetryBound): broadcasts
-	  * OnFlowGaugeChanged(NewValue, Delta) and, under WOLF_DEBUG_ENABLED, refreshes the fixed-key
-	  * on-screen debug line (key 101). */
+	  * OnFlowGaugeChanged(NewValue, Delta), computes the current threshold stage and broadcasts
+	  * OnFlowThresholdStageChanged on a stage crossing (ResourceLoop stage 2), and — under
+	  * WOLF_DEBUG_ENABLED — refreshes the fixed-key on-screen debug lines (101 Flow, 103 Stage). */
 	void OnPlayerFlowGaugeChanged(const FOnAttributeChangeData& Data);
 
 	/** Adrenaline-changed handler (bound in EnsureResourceTelemetryBound): broadcasts

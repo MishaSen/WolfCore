@@ -87,6 +87,24 @@ public:
 	float TBAdrenalineGainMultiplier = 1.0f;
 
 	// ============================================================================================================================
+	// Flow Gauge Thresholds (ResourceLoop stage 2)
+	// ============================================================================================================================
+
+	/** Distance between threshold stages, in Flow units — stage N is reached at N x this value
+	  * (the "3s increments (3, 6, 9)" from vision's settled shape). Consumed by
+	  * FWolfResourceRules::GetThresholdStage/GetStageCount and the CMS's stage-crossing
+	  * telemetry. Placeholder — vision marks these numbers open. */
+	UPROPERTY(Config, EditAnywhere, Category = "WolfCore|Resources", meta = (ClampMin = "0.0"))
+	float FlowThresholdInterval = 3.f;
+
+	/** Hard ceiling on the soft cap itself. Clamped in
+	  * UWolfAttributeSet::PreAttributeChange (and mirrored in PostGameplayEffectExecute) so no
+	  * StatConfig default or progression GE can raise MaxFlowGauge above it. Placeholder —
+	  * vision's floated ceiling. */
+	UPROPERTY(Config, EditAnywhere, Category = "WolfCore|Resources", meta = (ClampMin = "0.0"))
+	float FlowHardCeiling = 15.f;
+
+	// ============================================================================================================================
 	// TB Execution Configuration (PresagePreview stage 1)
 	// ============================================================================================================================
 

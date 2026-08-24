@@ -89,6 +89,10 @@ struct FWolfGameplayTags
 	/** GameplayTag identifying the MaxHealth attribute for upper bound vitality definition. */
 	FGameplayTag Attribute_MaxHealth;
 
+	/** GameplayTag identifying the MaxFlowGauge attribute — the soft cap on FlowGauge, seeded by
+	  * StatConfig and upgradeable by progression (ResourceLoop stage 2). */
+	FGameplayTag Attribute_MaxFlowGauge;
+
 	/** GameplayTag identifying the FlowGauge attribute for combat flow resource tracking. */
 	FGameplayTag Attribute_FlowGauge;
 

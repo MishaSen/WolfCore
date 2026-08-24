@@ -74,4 +74,33 @@ public:
 	 */
 	static FResourceGainResult ComputeResourceGain(
 		bool bPlayerDealtHit, bool bPlayerTookHit, float DamageAmount, const FGameplayTag& CurrentMode);
+
+	/**
+	 * Number of threshold stages the given soft cap unlocks — floor(MaxFlow / Interval).
+	 *
+	 * @param MaxFlow  The current soft cap (MaxFlowGauge). Values <= 0 yield 0 stages.
+	 * @param Interval The stage width in Flow units (UWolfCombatSettings::FlowThresholdInterval).
+	 * @return The stage count; 0 if either argument is non-positive.
+	 *
+	 * Pure (ResourceLoop stage 2) — reads only its parameters, exactly like ComputeResourceGain.
+	 */
+	static int32 GetStageCount(float MaxFlow, float Interval);
+
+	/**
+	 * The threshold stage a given Flow value is at, under a soft cap.
+	 *
+	 * Stage N is reached when FlowValue reaches N * Interval (floor(FlowValue / Interval)) — the
+	 * "3s increments (3, 6, 9)" from vision's settled shape. The result is additionally clamped to
+	 * GetStageCount(MaxFlow, Interval): banked Flow can't reach a stage the current soft cap hasn't
+	 * unlocked. It can't exceed MaxFlow anyway post-clamping (PreAttributeChange), but the explicit
+	 * clamp keeps the rule correct — and visibly so — if interval and cap ever drift apart.
+	 *
+	 * @param FlowValue The current (post-clamp) Flow value.
+	 * @param MaxFlow    The current soft cap (MaxFlowGauge).
+	 * @param Interval  The stage width (FlowThresholdInterval). Non-positive -> stage 0 always.
+	 * @return The stage index, in [0, GetStageCount(MaxFlow, Interval)].
+	 *
+	 * Pure (ResourceLoop stage 2): reads only the caller's parameters.
+	 */
+	static int32 GetThresholdStage(float FlowValue, float MaxFlow, float Interval);
 };

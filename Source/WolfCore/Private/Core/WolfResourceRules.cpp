@@ -47,3 +47,18 @@ FResourceGainResult FWolfResourceRules::ComputeResourceGain(
 	Result.AdrenalineDelta = RawAdrenaline * AdrenalineMultiplier;
 	return Result;
 }
+
+int32 FWolfResourceRules::GetStageCount(float MaxFlow, float Interval)
+{
+	if (MaxFlow <= 0.f || Interval <= 0.f) return 0;
+	return FMath::FloorToInt(MaxFlow / Interval);
+}
+
+int32 FWolfResourceRules::GetThresholdStage(float FlowValue, float MaxFlow, float Interval)
+{
+	const int32 CapStage = GetStageCount(MaxFlow, Interval);
+	if (CapStage <= 0) return 0;
+
+	const int32 FlowStage = FMath::Max(0, FMath::FloorToInt(FlowValue / Interval));
+	return FMath::Min(FlowStage, CapStage);
+}

@@ -16,6 +16,7 @@
 #include "Core/WolfGameplayTags.h"
 #include "Core/WolfPresageComponent.h"
 #include "Core/WolfPlayerController.h"
+#include "Core/WolfResourceRules.h"
 #include "Presage/PresageOrchestrator.h"
 #include "Abilities/BaseCombatAbility.h"
 #include "Abilities/Effects/ResourceGainEffect.h"
@@ -723,11 +724,37 @@ void UCombatModeSubsystem::OnPlayerFlowGaugeChanged(const FOnAttributeChangeData
 	const float Delta = Data.NewValue - Data.OldValue;
 	OnFlowGaugeChanged.Broadcast(Data.NewValue, Delta);
 
+	// [ResourceLoopStage2] Threshold-stage crossing detection. This delegate exists only on the
+	// PLAYER's FlowGauge attribute (see EnsureResourceTelemetryBound), so the correct soft cap is
+	// the player ASC's MaxFlowGauge — read live, since progression may have upgraded it mid-session.
+	// Interval comes from project config (designer constant); MaxFlow from ASC state.
+	int32 OldStage = 0;
+	int32 NewStage = 0;
+	if (const auto* Settings = GetDefault<UWolfCombatSettings>())
+	{
+		const auto* PlayerASC = GetPlayerASC();
+		const float MaxFlow = PlayerASC
+			? PlayerASC->GetNumericAttribute(UWolfAttributeSet::GetMaxFlowGaugeAttribute())
+			: 0.f;
+		OldStage = FWolfResourceRules::GetThresholdStage(Data.OldValue, MaxFlow, Settings->FlowThresholdInterval);
+		NewStage = FWolfResourceRules::GetThresholdStage(Data.NewValue, MaxFlow, Settings->FlowThresholdInterval);
+	}
+
+	// Broadcast ONLY on an actual stage crossing (in both directions). Mid-stage value changes are
+	// already covered by OnFlowGaugeChanged; threshold crossings are the economically meaningful
+	// moments this stage makes felt during playtesting.
+	if (NewStage != OldStage)
+	{
+		OnFlowThresholdStageChanged.Broadcast(NewStage, OldStage);
+	}
+
 #if WOLF_DEBUG_ENABLED
 	if (GEngine)
 	{
 		GEngine->AddOnScreenDebugMessage(101, 3.f, FColor::Cyan,
 			FString::Printf(TEXT("Flow Gauge: %.1f (%+.1f)"), Data.NewValue, Delta));
+		GEngine->AddOnScreenDebugMessage(103, 3.f, FColor::Green,
+			FString::Printf(TEXT("Flow Stage: %d"), NewStage));
 	}
 #endif
 }
