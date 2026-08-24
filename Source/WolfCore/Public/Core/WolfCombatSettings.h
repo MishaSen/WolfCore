@@ -3,6 +3,7 @@
 #include "CoreMinimal.h"
 #include "Engine/DeveloperSettings.h"
 #include "GameplayTagContainer.h"
+#include "Core/WolfResourceRules.h"
 #include "Presage/PresageOrchestratorTypes.h"
 #include "WolfCombatSettings.generated.h"
 
@@ -45,6 +46,45 @@ public:
 	/** Map of combat mode GameplayTags to TimeDilation multipliers for temporal prediction scaling. */
 	UPROPERTY(Config, EditAnywhere, Category = "WolfCore|Combat", meta = (Categories = "InputState"))
 	TMap<FGameplayTag, float> ModeTimeDilationMap;
+
+	// ============================================================================================================================
+	// Resource Gain Configuration (ResourceLoop stage 1)
+	// ============================================================================================================================
+
+	/** Flow Gauge gained per real hit DEALT by the player (flat + per-damage coefficient).
+	  * All placeholder values — vision marks every number in the resource economy open. */
+	UPROPERTY(Config, EditAnywhere, Category = "WolfCore|Resources")
+	FResourceGainRule FlowGain_DamageDealt;
+
+	/** Flow Gauge gained per real hit TAKEN by the player (flat + per-damage coefficient). */
+	UPROPERTY(Config, EditAnywhere, Category = "WolfCore|Resources")
+	FResourceGainRule FlowGain_DamageTaken;
+
+	/** Adrenaline gained per real hit DEALT by the player (flat + per-damage coefficient). */
+	UPROPERTY(Config, EditAnywhere, Category = "WolfCore|Resources")
+	FResourceGainRule AdrenalineGain_DamageDealt;
+
+	/** Adrenaline gained per real hit TAKEN by the player (flat + per-damage coefficient). */
+	UPROPERTY(Config, EditAnywhere, Category = "WolfCore|Resources")
+	FResourceGainRule AdrenalineGain_DamageTaken;
+
+	/** Real time: Flow Gauge is the MAJOR gain channel (vision's bidirectional hook — RT builds
+	  *  the resource TB spends). */
+	UPROPERTY(Config, EditAnywhere, Category = "WolfCore|Resources")
+	float RTFlowGainMultiplier = 1.0f;
+
+	/** Real time: Adrenaline gain is the MINOR channel. */
+	UPROPERTY(Config, EditAnywhere, Category = "WolfCore|Resources")
+	float RTAdrenalineGainMultiplier = 0.25f;
+
+	/** Turn based: Flow Gauge gain is the MINOR channel. */
+	UPROPERTY(Config, EditAnywhere, Category = "WolfCore|Resources")
+	float TBFlowGainMultiplier = 0.25f;
+
+	/** Turn based: Adrenaline gain is the MAJOR channel (vision's bidirectional hook — TB builds
+	 *  the resource RT spends). */
+	UPROPERTY(Config, EditAnywhere, Category = "WolfCore|Resources")
+	float TBAdrenalineGainMultiplier = 1.0f;
 
 	// ============================================================================================================================
 	// TB Execution Configuration (PresagePreview stage 1)

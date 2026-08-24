@@ -23,6 +23,7 @@
 #include "Misc/TransactionObjectEvent.h"
 #include "Presage/PresageImpactLedger.h"
 #include "Core/WolfSnapshotComponent.h"
+#include "Core/WolfResourceRules.h"
 #include "Systems/CombatModeSubsystem.h"
 
 UWolfPresageComponent::UWolfPresageComponent()
@@ -526,6 +527,61 @@ void UWolfPresageComponent::ResolveSimulatedImpact(UBaseCombatAbility* ActiveAbi
 
 					TargetASC->SetNumericAttributeBase(Attribute, NewValue);
 				}
+			}
+		}
+	}
+
+	// [ResourceLoopStage1] Resource gains — BAKED (prediction) path.
+	//
+	// Same pure FWolfResourceRules::ComputeResourceGain as the live paths. The mode is
+	// hard-coded to TB because the bake only ever simulates a TB session — passing it as a
+	// parameter rather than reading the live CMS is exactly the pure-function contract from
+	// ResourceLoopStage1.md, and it is what keeps predicted gains identical to the real ones
+	// execution applies.
+	if (Entry.bConnected)
+	{
+		const auto* AttackerPawn = Cast<APawn>(Attacker);
+		const auto* VictimPawn = Cast<APawn>(Victim);
+		// TODO(teams): "player-side dealt/taken" replaces "player dealt/taken" here when a team
+		// filter exists (see ResourceLoopStage1.md).
+		const bool bPlayerDealtHit = AttackerPawn && AttackerPawn->IsPlayerControlled();
+		const bool bPlayerTookHit = VictimPawn && VictimPawn->IsPlayerControlled();
+
+		// Primary damage magnitude — the first predictable delta's absolute value, mirroring the
+		// RT site (period's first hit effect's magnitude).
+		float DamageAmount = 0.f;
+		for (const auto& Delta : Entry.Deltas)
+		{
+			if (Delta.bIsPredictable)
+			{
+				DamageAmount = FMath::Abs(Delta.Amount);
+				break;
+			}
+		}
+
+		const auto ResourceGain = FWolfResourceRules::ComputeResourceGain(
+			bPlayerDealtHit, bPlayerTookHit, DamageAmount, FWolfGameplayTags::Get().InputState_TB);
+
+		// Record for exact replay: execution applies these recorded values (ApplyDueLedgerImpacts).
+		Entry.FlowGain = ResourceGain.FlowDelta;
+		Entry.AdrenalineGain = ResourceGain.AdrenalineDelta;
+
+		// Preview integration: mirror the gains into the player's attributes NUMERICALLY via
+		// SetNumericAttributeBase — never through a real GE (no PostGameplayEffectExecute, no
+		// telemetry spam, per the exact-preview contract) — so scrubbing the plan shows the
+		// player's resource building as it will really happen. Real application is deferred to
+		// execution playback via the recorded values above.
+		if (UAbilitySystemComponent* PlayerASC = CMS->GetPlayerASC())
+		{
+			if (!FMath::IsNearlyZero(ResourceGain.FlowDelta))
+			{
+				float NewFlow = PlayerASC->GetNumericAttribute(UWolfAttributeSet::GetFlowGaugeAttribute()) + ResourceGain.FlowDelta;
+				PlayerASC->SetNumericAttributeBase(UWolfAttributeSet::GetFlowGaugeAttribute(), FMath::Max(NewFlow, 0.f));
+			}
+			if (!FMath::IsNearlyZero(ResourceGain.AdrenalineDelta))
+			{
+				float NewAdrenaline = PlayerASC->GetNumericAttribute(UWolfAttributeSet::GetAdrenalineAttribute()) + ResourceGain.AdrenalineDelta;
+				PlayerASC->SetNumericAttributeBase(UWolfAttributeSet::GetAdrenalineAttribute(), FMath::Max(NewAdrenaline, 0.f));
 			}
 		}
 	}

@@ -51,6 +51,8 @@ void FWolfGameplayTags::InitializeNativeGameplayTags()
 
 	// --- Data ---
 	AddNativeTag(GameplayTags.Data_Amount, FName("Data.Amount"), TEXT("Data tag for amount."));
+	AddNativeTag(GameplayTags.Data_FlowAmount, FName("Data.FlowAmount"), TEXT("Data tag for Flow Gauge gain amount."));
+	AddNativeTag(GameplayTags.Data_AdrenalineAmount, FName("Data.AdrenalineAmount"), TEXT("Data tag for Adrenaline gain amount."));
 
 	// --- Status ---
 	AddNativeTag(GameplayTags.Status_Link, FName("Status.Link"), TEXT("Status tag for link."));

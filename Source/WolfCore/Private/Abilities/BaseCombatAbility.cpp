@@ -13,9 +13,12 @@
 #include "BehaviorTree/BlackboardComponent.h"
 #include "Character/WolfCharacterBase.h"
 #include "Core/WolfGameplayTags.h"
+#include "Core/WolfResourceRules.h"
 #include "Debug/WolfDebug.h"
 #include "GameFramework/CharacterMovementComponent.h"
+#include "GameFramework/Pawn.h"
 #include "Abilities/Tasks/AbilityTask_MoveToLocation.h"
+#include "Systems/CombatModeSubsystem.h"
 
 UBaseCombatAbility::UBaseCombatAbility()
 {
@@ -386,6 +389,43 @@ bool UBaseCombatAbility::ApplyHitEffects(const FCombatPeriod& Period, AActor* Ta
 		{
 			WOLF_INFO("Conditional hit effect applied (target had required tags): %s", *TargetActor->GetName());
 			bAppliedAny = true;
+		}
+	}
+
+	// ==============================================================================================================
+	// Resource gain hook (ResourceLoop stage 1) — REAL-TIME application path.
+	//
+	// Gains are a property of the economy, not of individual abilities, so they are computed
+	// centrally on every real hit instead of authored per-ability. This site runs once per real
+	// period hit (per target); it is mirrored — NOT in ApplySingleHitEffect, which is per-effect
+	// and would double-count on multi-effect periods — by the TB execution site
+	// (UCombatModeSubsystem::ApplyDueLedgerImpacts, which applies the bake's recorded values)
+	// and the prediction site (UWolfPresageComponent::ResolveSimulatedImpact). If PresagePreview
+	// stage 3's ledger path is ever routed through this function instead of the subsystem's own
+	// loop, this hook is already in the right shape to migrate behind it.
+	// ==============================================================================================================
+	if (UWorld* AbilityWorld = GetWorld())
+	{
+		if (auto* CMS = AbilityWorld->GetSubsystem<UCombatModeSubsystem>())
+		{
+			const auto* SourcePawn = Cast<APawn>(GetAvatarActorFromActorInfo());
+			const auto* TargetPawn = Cast<APawn>(TargetActor);
+			// TODO(teams): when a team system exists, "player-side dealt/taken hit" replaces "player
+			// dealt/taken" here — and at the two mirrored sites — per ResourceLoopStage1.md.
+			const bool bPlayerDealtHit = SourcePawn && SourcePawn->IsPlayerControlled();
+			const bool bPlayerTookHit = TargetPawn && TargetPawn->IsPlayerControlled();
+
+			// "DamageAmount" = the period's primary (first) hit effect magnitude. Damage is authored
+			// positive; the absolute value keeps the rule sign-robust either way.
+			float DamageAmount = 0.f;
+			if (Period.HitEffects.Num() > 0)
+			{
+				DamageAmount = FMath::Abs(Period.HitEffects[0].Amount.GetValueAtLevel(AbilityLevel));
+			}
+
+			const auto ResourceGain = FWolfResourceRules::ComputeResourceGain(
+				bPlayerDealtHit, bPlayerTookHit, DamageAmount, CMS->GetCurrentMode());
+			CMS->ApplyResourceGainToPlayer(ResourceGain.FlowDelta, ResourceGain.AdrenalineDelta);
 		}
 	}
 

@@ -129,6 +129,14 @@ struct FWolfGameplayTags
 	/** GameplayTag representing the amount data category for numerical value tracking and scaling. */
 	FGameplayTag Data_Amount;
 
+	/** GameplayTag representing the SetByCaller magnitude key for a hit's gain applied to the
+	 *  Flow Gauge (ResourceLoop stage 1): UResourceGainEffect::FlowGauge modifier reads it. */
+	FGameplayTag Data_FlowAmount;
+
+	/** GameplayTag representing the SetByCaller magnitude key for a hit's gain applied to
+	 *  Adrenaline (ResourceLoop stage 1): UResourceGainEffect::Adrenaline modifier reads it. */
+	FGameplayTag Data_AdrenalineAmount;
+
 	// ============================================================================================================================
 	// Status
 	// ============================================================================================================================

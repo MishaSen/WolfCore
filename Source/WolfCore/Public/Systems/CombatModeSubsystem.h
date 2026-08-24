@@ -14,6 +14,7 @@
 #include "CombatModeSubsystem.generated.h"
 
 struct FStreamableHandle;
+struct FOnAttributeChangeData;
 class UAbilitySystemComponent;
 class UWolfCombatant;
 class UBaseCombatAbility;
@@ -22,6 +23,17 @@ class UBaseCombatAbility;
  * Delegate broadcast when the global combat mode changes.
  */
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnCombatModeChanged, FGameplayTag, NewMode);
+
+/**
+ * Resource telemetry delegates (ResourceLoop stage 1) — broadcast on real changes to the PLAYER's
+ * Flow Gauge / Adrenaline, fed by GetGameplayAttributeValueChangeDelegate bindings (which fire on
+ * GE-driven attribute changes — real RT application and TB execution playback). The bake's numeric
+ * preview writes use SetNumericAttributeBase, which broadcasts the base-change delegate instead,
+ * so preview scrubbing deliberately does NOT spam these. NewValue is the attribute's value AFTER
+ * the change; Delta is (NewValue - OldValue).
+ */
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnFlowGaugeChanged, float, NewValue, float, Delta);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnAdrenalineChanged, float, NewValue, float, Delta);
 
 /**
  * THE EXACT-PREVIEW CONTRACT (normative — binding on PresagePreview stages 2–3 and all future
@@ -158,6 +170,22 @@ public:
 	 */
 	void ApplyModeToActor(const TScriptInterface<IWolfCombatant>& Combatant, FGameplayTag NewMode);
 
+	/**
+	 * Applies a resource gain to the PLAYER's ASC through the normal GAS pipeline: one instant
+	 * UResourceGainEffect spec with both SetByCaller magnitudes set (Flow on Data.FlowAmount,
+	 * Adrenaline on Data.AdrenalineAmount). No-op (with a warn on non-trivial deltas) when no
+	 * player ASC is available yet. Nonzero deltas only — a hit that produced no gain in either
+	 * resource does not create an effect instance.
+	 *
+	 * Shared by every application path (ResourceLoop stage 1): the RT hook
+	 * (UBaseCombatAbility::ApplyHitEffects), the TB execution replay
+	 * (ApplyDueLedgerImpacts, applying the bake's RECORDED values), and — numerically, via
+	 * SetNumericAttributeBase, NOT through this function — the bake's preview path
+	 * (UWolfPresageComponent::ResolveSimulatedImpact). This is the one live-applying GE path for
+	 * gains, keeping clamping/logging inside GAS (PreAttributeChange / PostGameplayEffectExecute).
+	 */
+	void ApplyResourceGainToPlayer(float FlowDelta, float AdrenalineDelta);
+
 	/** Returns the current global combat mode as a GameplayTag for Blueprint queries and runtime checks. */
 	UFUNCTION(BlueprintPure, Meta = (DisplayName = "Get Current Mode"), Category = "WolfCore|Combat")
 	FGameplayTag GetCurrentMode() const { return CurrentMode; }
@@ -251,6 +279,9 @@ public:
 	 */
 	const FRandomStream& GetPresageRandomStream() const { return PresageRandomStream; }
 
+	/** Retrieves the player controller's Ability System Component (ASC) for gameplay effect application and state management. */
+	UAbilitySystemComponent* GetPlayerASC() const;
+
 	// ============================================================================================================================
 	// Public API - Impact Ledger (PresagePreview stage 2)
 	// ============================================================================================================================
@@ -273,6 +304,14 @@ public:
 	/** Multicast delegate broadcast whenever the global combat mode changes, notifying all registered listeners. */
 	UPROPERTY(BlueprintAssignable, Category = "WolfCore|Combat")
 	FOnCombatModeChanged OnCombatModeChanged;
+
+	/** Broadcast whenever the player's Flow Gauge changes (ResourceLoop stage 1 telemetry). */
+	UPROPERTY(BlueprintAssignable, Category = "WolfCore|Resources")
+	FOnFlowGaugeChanged OnFlowGaugeChanged;
+
+	/** Broadcast whenever the player's Adrenaline changes (ResourceLoop stage 1 telemetry). */
+	UPROPERTY(BlueprintAssignable, Category = "WolfCore|Resources")
+	FOnAdrenalineChanged OnAdrenalineChanged;
 
 protected:
 	/** Temporal states container holding the master snapshot captured at simulation start for state restoration. */
@@ -380,9 +419,6 @@ protected:
 	  * piecemeal. Do not delete just this function now. */
 	void HandlePresageDrainEffect(UAbilitySystemComponent* ASC, FGameplayTag CurrentActorMode);
 
-	/** Retrieves the player controller's Ability System Component (ASC) for gameplay effect application and state management. */
-	UAbilitySystemComponent* GetPlayerASC() const;
-
 	/** Returns the time dilation multiplier configured for a specific combat mode to control temporal prediction scaling. */
 	/**
 	 * @param Mode The FGameplayTag representing the combat mode whose dilation value is being queried.
@@ -418,4 +454,29 @@ protected:
 	  * planning pass. Never persists rolls across passes — a stream that merely persisted would
 	  * still diverge on the second pass because it would have consumed values from the first. */
 	FRandomStream PresageRandomStream;
+
+	// ============================================================================================================================
+	// Resource Telemetry (ResourceLoop stage 1)
+	// ============================================================================================================================
+
+	/** Lazy-binds OnFlowGaugeChanged/OnAdrenalineChanged to the player ASC's
+	  * GetGameplayAttributeValueChangeDelegate for both FlowGauge and Adrenaline, exactly once.
+	  * Called from Tick() and ApplyResourceGainToPlayer(); no-op once bResourceTelemetryBound is
+	  * true, or while GetPlayerASC() still returns null (player possession order isn't guaranteed
+	  * relative to subsystem init — re-called until it succeeds). Ensures no double-binding: the
+	  * flag is only set after BOTH bindings succeeded. */
+	void EnsureResourceTelemetryBound();
+
+	/** FlowGauge-changed handler (bound in EnsureResourceTelemetryBound): broadcasts
+	  * OnFlowGaugeChanged(NewValue, Delta) and, under WOLF_DEBUG_ENABLED, refreshes the fixed-key
+	  * on-screen debug line (key 101). */
+	void OnPlayerFlowGaugeChanged(const FOnAttributeChangeData& Data);
+
+	/** Adrenaline-changed handler (bound in EnsureResourceTelemetryBound): broadcasts
+	  * OnAdrenalineChanged(NewValue, Delta) and, under WOLF_DEBUG_ENABLED, refreshes the fixed-key
+	  * on-screen debug line (key 102). */
+	void OnPlayerAdrenalineChanged(const FOnAttributeChangeData& Data);
+
+	/** Guards lazy telemetry binding — set true only after both attribute delegates are bound. */
+	bool bResourceTelemetryBound = false;
 };

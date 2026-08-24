@@ -18,9 +18,12 @@
 #include "Core/WolfPlayerController.h"
 #include "Presage/PresageOrchestrator.h"
 #include "Abilities/BaseCombatAbility.h"
+#include "Abilities/Effects/ResourceGainEffect.h"
+#include "AbilitySystem/WolfAttributeSet.h"
 #include "Debug/WolfDebug.h"
 #include "Engine/AssetManager.h"
 #include "GameFramework/Pawn.h"
+#include "GameplayEffectTypes.h"
 #include "Interfaces/IWolfCombatant.h"
 #include "Kismet/GameplayStatics.h"
 
@@ -37,6 +40,11 @@ void UCombatModeSubsystem::OnWorldBeginPlay(UWorld& InWorld)
 
 	if (TryLoadPlayerSelectedMode()) return;
 	ApplyDefaultLevelMode();
+
+	// Resource telemetry (ResourceLoop stage 1): try the lazy bind immediately — no-ops until the
+	// player pawn exists (possession order isn't guaranteed); Tick/ApplyResourceGainToPlayer
+	// retry it until it succeeds.
+	EnsureResourceTelemetryBound();
 }
 
 void UCombatModeSubsystem::InitializeSubsystemDefaults()
@@ -215,6 +223,8 @@ void UCombatModeSubsystem::SwitchCombatMode()
 void UCombatModeSubsystem::Tick(float DeltaTime)
 {
 	if (TBPhase != ETBPhase::Executing) return;
+
+	EnsureResourceTelemetryBound();
 
 	// Unscaled real time — immune to global dilation, which stays 0 throughout all of TB
 	// (including Executing; see the overview's "TB has two phases" model). Execution playback
@@ -403,6 +413,15 @@ void UCombatModeSubsystem::ApplyDueLedgerImpacts(float InExecutionClock)
 					}
 				}
 			}
+		}
+
+		// ResourceLoop stage 1: apply the bake's RECORDED resource gains to the player through the
+		// same live GE path (ApplyResourceGainToPlayer). Execution applies the exact values the
+		// bake recorded (which the preview showed numerically) — exactness by construction, the
+		// same rule as the damage deltas above.
+		if (!FMath::IsNearlyZero(Entry.FlowGain) || !FMath::IsNearlyZero(Entry.AdrenalineGain))
+		{
+			ApplyResourceGainToPlayer(Entry.FlowGain, Entry.AdrenalineGain);
 		}
 	}
 }
@@ -654,4 +673,75 @@ const FAbilityTimingProfile& UCombatModeSubsystem::GetOrComputeTimingProfile(con
 		: FAbilityTimingProfile();
 
 	return TimingProfileCache.Add(AbilityClass, Computed);
+}
+
+void UCombatModeSubsystem::ApplyResourceGainToPlayer(float FlowDelta, float AdrenalineDelta)
+{
+	EnsureResourceTelemetryBound();
+
+	if (FMath::IsNearlyZero(FlowDelta) && FMath::IsNearlyZero(AdrenalineDelta)) return;
+
+	UAbilitySystemComponent* PlayerASC = GetPlayerASC();
+	if (!PlayerASC)
+	{
+		WOLF_WARN(TEXT("[RESOURCES] Cannot apply resource gain (Flow %f, Adrenaline %f) — no player ASC yet."),
+			FlowDelta, AdrenalineDelta);
+		return;
+	}
+
+	const auto SpecHandle = PlayerASC->MakeOutgoingSpec(
+		UResourceGainEffect::StaticClass(), 1.f, PlayerASC->MakeEffectContext());
+	if (!SpecHandle.IsValid())
+	{
+		WOLF_WARN(TEXT("[RESOURCES] Failed to create UResourceGainEffect spec — gain not applied."));
+		return;
+	}
+
+	SpecHandle.Data->SetSetByCallerMagnitude(FWolfGameplayTags::Get().Data_FlowAmount, FlowDelta);
+	SpecHandle.Data->SetSetByCallerMagnitude(FWolfGameplayTags::Get().Data_AdrenalineAmount, AdrenalineDelta);
+	PlayerASC->ApplyGameplayEffectSpecToSelf(*SpecHandle.Data.Get());
+}
+
+void UCombatModeSubsystem::EnsureResourceTelemetryBound()
+{
+	if (bResourceTelemetryBound) return;
+
+	UAbilitySystemComponent* PlayerASC = GetPlayerASC();
+	if (!PlayerASC) return;
+
+	PlayerASC->GetGameplayAttributeValueChangeDelegate(UWolfAttributeSet::GetFlowGaugeAttribute())
+		.AddUObject(this, &UCombatModeSubsystem::OnPlayerFlowGaugeChanged);
+	PlayerASC->GetGameplayAttributeValueChangeDelegate(UWolfAttributeSet::GetAdrenalineAttribute())
+		.AddUObject(this, &UCombatModeSubsystem::OnPlayerAdrenalineChanged);
+
+	bResourceTelemetryBound = true;
+	WOLF_LOG(Log, TEXT("[RESOURCES] Player resource telemetry bound (Flow Gauge / Adrenaline)."));
+}
+
+void UCombatModeSubsystem::OnPlayerFlowGaugeChanged(const FOnAttributeChangeData& Data)
+{
+	const float Delta = Data.NewValue - Data.OldValue;
+	OnFlowGaugeChanged.Broadcast(Data.NewValue, Delta);
+
+#if WOLF_DEBUG_ENABLED
+	if (GEngine)
+	{
+		GEngine->AddOnScreenDebugMessage(101, 3.f, FColor::Cyan,
+			FString::Printf(TEXT("Flow Gauge: %.1f (%+.1f)"), Data.NewValue, Delta));
+	}
+#endif
+}
+
+void UCombatModeSubsystem::OnPlayerAdrenalineChanged(const FOnAttributeChangeData& Data)
+{
+	const float Delta = Data.NewValue - Data.OldValue;
+	OnAdrenalineChanged.Broadcast(Data.NewValue, Delta);
+
+#if WOLF_DEBUG_ENABLED
+	if (GEngine)
+	{
+		GEngine->AddOnScreenDebugMessage(102, 3.f, FColor::Yellow,
+			FString::Printf(TEXT("Adrenaline: %.1f (%+.1f)"), Data.NewValue, Delta));
+	}
+#endif
 }

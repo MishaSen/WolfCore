@@ -83,4 +83,15 @@ struct WOLFCORE_API FPresageImpactEntry
 	  * AssistCanary.md's own note on this same gap). */
 	UPROPERTY(BlueprintReadOnly, Category = "WolfCore|Presage")
 	TArray<FPredictedEffectDelta> Deltas;
+
+	/** ResourceLoop stage 1: resource gains applied to the PLAYER for this hit, computed at bake
+	  * time with the pure FWolfResourceRules::ComputeResourceGain (passing InputState_TB
+	  * explicitly). Zero for entries that are not connected hits. Execution playback applies the
+	  * RECORDED values (UCombatModeSubsystem::ApplyDueLedgerImpacts) so real gains equal the
+	  * preview by construction — the same exactness rule as the predicted damage deltas. */
+	UPROPERTY(BlueprintReadOnly, Category = "WolfCore|Presage")
+	float FlowGain = 0.f;
+
+	UPROPERTY(BlueprintReadOnly, Category = "WolfCore|Presage")
+	float AdrenalineGain = 0.f;
 };
