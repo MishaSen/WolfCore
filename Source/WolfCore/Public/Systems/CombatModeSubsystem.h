@@ -335,9 +335,15 @@ protected:
 	UPROPERTY(BlueprintReadOnly, Category = "WolfCore|Timeline")
 	float CurrentTimelineTime = 0.f;
 
-	/** Maximum allowed duration in seconds for the prediction timeline before requiring regeneration or reset. */
-	UPROPERTY(EditDefaultsOnly, Category = "WolfCore|Timeline")
-	float MaxTimelineDuration = 5.f;
+	/** The Turn-Based execution budget, in seconds, granted at TB entry (ResourceLoop Stage 3).
+	  * Consumed everywhere the retired MaxTimelineDuration was read: RunPlanning's duration in
+	  * SetMode/ReBakeTimeline, ExecuteFutureBake's bake duration, ScrubTimeline's clamp + log, and
+	  * Tick's PlanCompleted end condition. Fixed at entry for the whole TB session (ReBakeTimeline
+	  * and injections re-plan WITHIN it). Computed in ResolveTBEntryBudget as
+	  * Stage x FlowThresholdInterval (unit identity: 1 Flow unit == 1s of budget, per stage 2 — if
+	  * a conversion multiplier is ever needed, ResolveTBEntryBudget is the one place it lives).
+	 * Not a UPROPERTY: it is derived, not designer-authored; and no Blueprint reads it. */
+	float BudgetedTBDuration = 0.f;
 
 	/** None outside TB; Planning immediately on TB entry; Executing once LockInPlan() runs. */
 	UPROPERTY(BlueprintReadOnly, Category = "WolfCore|Timeline")
@@ -348,11 +354,13 @@ protected:
 	  * CheckEndingAction every Executing tick. */
 	float ExecutionClock = 0.f;
 
-	/** Flow deduction hook, called once by LockInPlan() at lock-in. Empty this stage —
-	  * ResourceLoop stage 3 implements the actual deduction (amount = function of threshold stage
-	  * consumed; numbers TBD there). This is the one blessed place for that stage to land its
-	  * logic. Do not call SetMode or otherwise mutate TB phase state from an override of this. */
-	virtual void OnLockInFlowDeduction() {}
+	/** Flow deduction hook, called once by LockInPlan() at lock-in. Implemented by ResourceLoop
+	  * stage 3: deducts the threshold-quantized TB budget actually converted into execution time
+	  * (BudgetedTBDuration = Stage x FlowThresholdInterval) from the player's Flow Gauge, keeping
+	  * the excess banked above the consumed stage boundary. Deliberately happens at LOCK-IN, not
+	  * entry, so abandoning TB during Planning costs nothing. Do not call SetMode or otherwise
+	  * mutate TB phase state from this. */
+	virtual void OnLockInFlowDeduction();
 
 	/** Damage hard-exit hook, checked every Executing tick after ScrubTimeline. This stage: stub,
 	  * always returns false and leaves OutVictims untouched — there is no impact data to check
@@ -396,6 +404,15 @@ protected:
 	void ApplyDueLedgerImpacts(float InExecutionClock);
 
 	private:
+	/** (ResourceLoop Stage 3) Computes BudgetedTBDuration for a TB entry from the player's banked
+	  * Flow Gauge and writes it to the BudgetedTBDuration member. Returns false (and leaves the
+	  * subsystem unswitched) when there is no player ASC (a TB with no player is meaningless) or the
+	  * banked Flow is at Threshold Stage 0 and bAllowZeroStageTBEntry is false (a zero-stage TB has a
+	  * zero-length timeline — nothing to plan). With the dev floor enabled, stage 0 is granted a
+	  * stage-1-equivalent duration (FlowThresholdInterval) so un-resourced test maps still enter.
+	  * Called once per TB entry by SetMode before it mutates any mode state. */
+	bool ResolveTBEntryBudget();
+
 	/** The fixed step size (seconds) used to produce the current PredictionBuffer contents across
 	  * every combatant in the active bake. Set once at the start of ExecuteFutureBake() from
 	  * UWolfCombatSettings::PresageSimulationStep; every UWolfPresageComponent::GetSnapshotAtTime()

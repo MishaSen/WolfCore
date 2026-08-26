@@ -91,11 +91,26 @@ public:
 	// ============================================================================================================================
 
 	/** Distance between threshold stages, in Flow units — stage N is reached at N x this value
-	  * (the "3s increments (3, 6, 9)" from vision's settled shape). Consumed by
+	  * (the "3s increments" from vision's settled shape). Consumed by
 	  * FWolfResourceRules::GetThresholdStage/GetStageCount and the CMS's stage-crossing
 	  * telemetry. Placeholder — vision marks these numbers open. */
 	UPROPERTY(Config, EditAnywhere, Category = "WolfCore|Resources", meta = (ClampMin = "0.0"))
 	float FlowThresholdInterval = 3.f;
+
+	/** ResourceLoop Stage 3 — the stage-quantized TB budget is Stage x FlowThresholdInterval
+	  * seconds (unit identity: 1 Flow unit == 1s of prospective TB budget, per stage 2). If
+	  * tuning ever wants to decouple Flow from seconds, the single conversion-multiplier seam is
+	  * UCombatModeSubsystem::ResolveTBEntryBudget (see there) — do not add a multiplier
+	  * speculatively. */
+
+	/** Dev-convenience escape hatch for the stage-0 TB-entry gate (UCombatModeSubsystem::SetMode):
+	  * when true, a player with banked Flow below the first threshold may STILL enter TB and is
+	  * granted a stage-1-equivalent duration instead of being refused. Ship-intent default is
+	  * false (banking-before-entering is a real decision). This gate's refusal of the player's
+	  * switch input needs eventual feedback (UI/SFX), out of scope in ResourceLoopStage3 — flagged
+	  * as a designer decision Shane may want to revisit once switch-feel is playtestable. */
+	UPROPERTY(Config, EditAnywhere, Category = "WolfCore|Resources")
+	bool bAllowZeroStageTBEntry = false;
 
 	/** Hard ceiling on the soft cap itself. Clamped in
 	  * UWolfAttributeSet::PreAttributeChange (and mirrored in PostGameplayEffectExecute) so no

@@ -133,6 +133,22 @@ FTemporalStates UCombatModeSubsystem::CaptureCurrentWorldState(float Timestamp)
 void UCombatModeSubsystem::SetMode(FGameplayTag NewMode)
 {
 	if (CurrentMode == NewMode) return;
+
+	// [ResourceLoopStage3] TB-entry budget gate. Compute the budget BEFORE mutating CurrentMode:
+	// refusing entry must leave the subsystem in its pre-call state (no mode switch — the caller
+	// of SwitchCombatMode sees no mode change). Declined when there's no player ASC (a TB with no
+	// player is meaningless) or the player's banked Flow is at Budget Stage 0 under the budget
+	// model (a zero-length timeline — nothing to plan; banking-before-entering becomes a real
+	// decision). Dev-convenience escape hatch: bAllowZeroStageTBEntry grants a stage-1-equivalent
+	// floor so un-resourced test maps still enter. This gate's refusal of the player's switch
+	// input needs eventual feedback (UI/SFX), which is OUT OF SCOPE beyond this log — FLAGGED as a
+	// designer decision Shane may want to revisit once switch-feel is playtestable.
+	if (NewMode == WolfTag.InputState_TB && !bIsInTB && !ResolveTBEntryBudget())
+	{
+		WOLF_LOG(Log, TEXT("[RESOURCES] TB entry refused (no budget granted) — staying in %s."), *CurrentMode.ToString());
+		return;
+	}
+
 	CurrentMode = NewMode;
 
 	const auto* World = GetWorld();
@@ -171,14 +187,14 @@ void UCombatModeSubsystem::SetMode(FGameplayTag NewMode)
 		WOLF_LOG(Log, TEXT("[PRESAGE] Session seed: %d"), PresageSessionSeed);
 		PresageRandomStream.Initialize(PresageSessionSeed);
 
-		auto Plan = FPresageOrchestrator::RunPlanning(this, TrackedCombatants, MaxTimelineDuration);
+		auto Plan = FPresageOrchestrator::RunPlanning(this, TrackedCombatants, BudgetedTBDuration);
 		FPresageOrchestrator::ResolveInterrupts(Plan, PresageRandomStream);
 		FPresageOrchestrator::DistributePlan(TrackedCombatants, Plan);
 
 		BakeImpactLedger.Empty();
 		DamageExitCursor = 0;
 		LedgerApplicationCursor = 0;
-		FWolfPresageSimulator::ExecuteFutureBake(TrackedCombatants, MaxTimelineDuration, BakedStepSize);
+		FWolfPresageSimulator::ExecuteFutureBake(TrackedCombatants, BudgetedTBDuration, BakedStepSize);
 		ScrubTimeline(0.f);
 	}
     else
@@ -188,7 +204,11 @@ void UCombatModeSubsystem::SetMode(FGameplayTag NewMode)
             // Manual mode switch during Planning, not via LockInPlan/ExitTB — treated as
             // abandoning TB. Nothing real has happened yet during Planning, so restoring to
             // TB-entry state via ScrubTimeline(0.f) leaves no baked state leaking into RT.
-            // Resource consequences of abandoning are undefined until ResourceLoop lands.
+            // ResourceLoopStage3: the Flow deduction happens ONLY in OnLockInFlowDeduction
+            // (called by LockInPlan), so abandoning here costs nothing — "nothing real happens
+            // during planning." Known design consequence: this makes FREE TB-entry-scouting
+            // possible (enter, look at the baked future, leave). FLAGGED for Shane to weigh
+            // later; not something to prevent now (see ResourceLoopStage3.md).
             ScrubTimeline(0.f);
         }
         // If TBPhase is already None, ExitTB() set it before calling this SetMode(RT) itself —
@@ -251,7 +271,7 @@ void UCombatModeSubsystem::Tick(float DeltaTime)
 		return;
 	}
 
-	if (ExecutionClock >= MaxTimelineDuration)
+	if (ExecutionClock >= BudgetedTBDuration)
 	{
 		ExitTB(ETBExitReason::PlanCompleted);
 		return;
@@ -486,7 +506,7 @@ bool UCombatModeSubsystem::CheckEndingAction(float InExecutionClock) const
 
 void UCombatModeSubsystem::ScrubTimeline(float NewTime)
 {
-	const auto ClampedTime = FMath::Clamp(NewTime, 0.f, MaxTimelineDuration);
+	const auto ClampedTime = FMath::Clamp(NewTime, 0.f, BudgetedTBDuration);
 	if (FMath::IsNearlyEqual(ClampedTime, CurrentTimelineTime)) return; // No time change; no snapshot change
 	CurrentTimelineTime = ClampedTime;
 
@@ -517,7 +537,7 @@ void UCombatModeSubsystem::ScrubTimeline(float NewTime)
 		else WOLF_WARN(TEXT("No snapshot found for %s at %.2fs"), *Obj->GetName(), CurrentTimelineTime);
 	}
 
-	WOLF_LOG(Log, TEXT("Timeline Scrubbed to : %.2fs /  %.2fs"), CurrentTimelineTime, MaxTimelineDuration);
+	WOLF_LOG(Log, TEXT("Timeline Scrubbed to : %.2fs /  %.2fs"), CurrentTimelineTime, BudgetedTBDuration);
 }
 
 void UCombatModeSubsystem::ReBakeTimeline()
@@ -547,14 +567,17 @@ void UCombatModeSubsystem::ReBakeTimeline()
 	// would have already consumed values from the previous pass. See PresageDeterminism.md.
 	PresageRandomStream.Initialize(PresageSessionSeed);
 
-	auto Plan = FPresageOrchestrator::RunPlanning(this, TrackedCombatants, MaxTimelineDuration);
+	// ReBakeTimeline reuses the entry-time budget unchanged (ResourceLoopStage3): the budget is
+	// fixed at entry for the whole TB session; injections re-plan WITHIN it, so we pass
+	// BudgetedTBDuration, never re-derive it from current Flow.
+	auto Plan = FPresageOrchestrator::RunPlanning(this, TrackedCombatants, BudgetedTBDuration);
 	FPresageOrchestrator::ResolveInterrupts(Plan, PresageRandomStream);
 	FPresageOrchestrator::DistributePlan(TrackedCombatants, Plan);
 
 	BakeImpactLedger.Empty();
 	DamageExitCursor = 0;
 	LedgerApplicationCursor = 0;
-	FWolfPresageSimulator::ExecuteFutureBake(TrackedCombatants, MaxTimelineDuration, BakedStepSize);
+	FWolfPresageSimulator::ExecuteFutureBake(TrackedCombatants, BudgetedTBDuration, BakedStepSize);
 
 	CurrentTimelineTime = -1.f;
 	ScrubTimeline(ScrubTime);
@@ -701,6 +724,76 @@ void UCombatModeSubsystem::ApplyResourceGainToPlayer(float FlowDelta, float Adre
 	SpecHandle.Data->SetSetByCallerMagnitude(FWolfGameplayTags::Get().Data_FlowAmount, FlowDelta);
 	SpecHandle.Data->SetSetByCallerMagnitude(FWolfGameplayTags::Get().Data_AdrenalineAmount, AdrenalineDelta);
 	PlayerASC->ApplyGameplayEffectSpecToSelf(*SpecHandle.Data.Get());
+}
+
+bool UCombatModeSubsystem::ResolveTBEntryBudget()
+{
+	UAbilitySystemComponent* PlayerASC = GetPlayerASC();
+	if (!PlayerASC)
+	{
+		// A TB with no player is meaningless — refuse and let the stage-0/no-budget gate stop entry.
+		WOLF_WARN(TEXT("[RESOURCES] TB entry budget: no player ASC yet — anything a TB would grant is moot; refusing TB entry."));
+		return false;
+	}
+
+	const auto* Settings = GetDefault<UWolfCombatSettings>();
+	if (!Settings)
+	{
+		WOLF_WARN(TEXT("[RESOURCES] TB entry budget: no UWolfCombatSettings — refusing TB entry."));
+		return false;
+	}
+
+	const float Flow = PlayerASC->GetNumericAttribute(UWolfAttributeSet::GetFlowGaugeAttribute());
+	const float MaxFlow = PlayerASC->GetNumericAttribute(UWolfAttributeSet::GetMaxFlowGaugeAttribute());
+	const float Interval = Settings->FlowThresholdInterval;
+	const int32 Stage = FWolfResourceRules::GetThresholdStage(Flow, MaxFlow, Interval);
+
+	if (Stage <= 0)
+	{
+		// Stage 0 gate (ResourceLoopStage3). With the budget model, a stage-0 TB has a zero-length
+		// timeline — nothing to plan. Banking-before-entering is a real decision from day one.
+		// Dev-convenience escape hatch: grant a stage-1-equivalent duration so un-resourced test
+		// maps still enter; ship-intent default (bAllowZeroStageTBEntry == false) refuses.
+		if (!Settings->bAllowZeroStageTBEntry)
+		{
+			WOLF_LOG(Log, TEXT("[RESOURCES] TB entry refused: banked Flow is at Threshold Stage 0 (Flow=%.2f, MaxFlow=%.2f, Interval=%.2f)."),
+				Flow, MaxFlow, Interval);
+			return false;
+		}
+
+		BudgetedTBDuration = Interval;
+		WOLF_LOG(Log, TEXT("[RESOURCES] TB entry (dev floor bAllowZeroStageTBEntry): Stage 0 granted a stage-1-equivalent budget of %.2fs."),
+			BudgetedTBDuration);
+		return true;
+	}
+
+	// Stage N x Interval seconds. THIS is the unit-identity seam (ResourceLoopStage3 / stage 2's
+	// "1 Flow unit == 1s of prospective TB budget"): if a conversion multiplier between Flow and
+	// seconds is ever needed, it lives on this single line.
+	BudgetedTBDuration = static_cast<float>(Stage) * Interval;
+	WOLF_LOG(Log, TEXT("[RESOURCES] TB entry granted: Threshold Stage %d -> budget of %.2fs."), Stage, BudgetedTBDuration);
+	return true;
+}
+
+void UCombatModeSubsystem::OnLockInFlowDeduction()
+{
+	// Deduct only the STAGE-QUANTIZED budget actually converted into execution time
+	// (BudgetedTBDuration = Stage x FlowThresholdInterval) from the player's Flow Gauge. The
+	// remainder banked above the consumed stage boundary STAYS banked: deduct-everything would
+	// punish overbanking twice (you got no duration for the excess AND lost it), fighting vision's
+	// "several meaningfully different switch points" — with the remainder kept, banking 5.5 vs 3.0
+	// is a real difference (you exit TB with the leftover already toward the next entry). This is a
+	// tuning-sensitive call; encoded as the default here, commented, and flagged as revisitable in
+	// the config-adjacent notes — but intentionally NOT promoted to a speculative config enum.
+	//
+	// The negative Flow goes through ApplyResourceGainToPlayer's UResourceGainEffect (same instant
+	// GAS pipeline: clamping via PreAttributeChange, logging via PostGameplayEffectExecute), so it
+	// behaves exactly like a gain in reverse. Deduction happens at LOCK-IN (here), not entry, so
+	// abandoning TB during planning costs nothing.
+	if (FMath::IsNearlyZero(BudgetedTBDuration)) return;
+
+	ApplyResourceGainToPlayer(-BudgetedTBDuration, 0.f);
+	WOLF_LOG(Log, TEXT("[RESOURCES] Lock-in Flow deduction: -%.2f Flow (quantized budget converted to duration)."), BudgetedTBDuration);
 }
 
 void UCombatModeSubsystem::EnsureResourceTelemetryBound()
