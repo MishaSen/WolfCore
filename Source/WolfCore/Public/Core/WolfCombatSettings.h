@@ -120,6 +120,31 @@ public:
 	float FlowHardCeiling = 15.f;
 
 	// ============================================================================================================================
+	// Adrenaline Spend Configuration (ResourceLoop stage 4)
+	// ============================================================================================================================
+
+	/** Adrenaline drained per second from the PLAYER while in RT (ResourceLoop stage 4). Read at
+	  * URTAdrenalineDrain construction time (GE modifier magnitudes are baked at construction), so
+	  * a config change requires a restart — acceptable for a passive drain rate; revisit with a
+	  * SetByCaller magnitude if live tuning demands it. Present iff the player's mode is RT;
+	  * PreAttributeChange floors Adrenaline at 0 already, so the drain just runs against the floor. */
+	UPROPERTY(Config, EditAnywhere, Category = "WolfCore|Resources", meta = (ClampMin = "0.0"))
+	float RTAdrenalineDrainPerSecond = 1.f;
+
+	/** Per-unit Adrenaline coefficient in the scalar formula
+	  * GetAdrenalineScalar(Current) = 1.0 + Current x AdrenalineScalarCoeff, clamped to
+	  * MaxAdrenalineScalar (FWolfResourceRules). One scalar feeds all three spend channels this
+	  * stage — attack-animation speed, damage, and Flow-gain rate. All placeholders — per-channel
+	  * coefficients are a tuning refinement to add when playtesting demands it. */
+	UPROPERTY(Config, EditAnywhere, Category = "WolfCore|Resources", meta = (ClampMin = "0.0"))
+	float AdrenalineScalarCoeff = 0.01f;
+
+	/** Hard clamp on the Adrenaline scalar computed by FWolfResourceRules::GetAdrenalineScalar —
+	  * Adrenaline cannot push attack speed / damage / Flow-gain beyond this multiplier. */
+	UPROPERTY(Config, EditAnywhere, Category = "WolfCore|Resources", meta = (ClampMin = "1.0"))
+	float MaxAdrenalineScalar = 1.5f;
+
+	// ============================================================================================================================
 	// TB Execution Configuration (PresagePreview stage 1)
 	// ============================================================================================================================
 

@@ -7,7 +7,8 @@
 #include "Core/WolfGameplayTags.h"
 
 FResourceGainResult FWolfResourceRules::ComputeResourceGain(
-	bool bPlayerDealtHit, bool bPlayerTookHit, float DamageAmount, const FGameplayTag& CurrentMode)
+	bool bPlayerDealtHit, bool bPlayerTookHit, float DamageAmount, const FGameplayTag& CurrentMode,
+	float FlowGainScalar)
 {
 	const auto* Settings = GetDefault<UWolfCombatSettings>();
 	FResourceGainResult Result;
@@ -43,9 +44,18 @@ FResourceGainResult FWolfResourceRules::ComputeResourceGain(
 	const float FlowMultiplier      = bTurnBased ? Settings->TBFlowGainMultiplier      : Settings->RTFlowGainMultiplier;
 	const float AdrenalineMultiplier = bTurnBased ? Settings->TBAdrenalineGainMultiplier : Settings->RTAdrenalineGainMultiplier;
 
-	Result.FlowDelta = RawFlow * FlowMultiplier;
+	Result.FlowDelta = RawFlow * FlowMultiplier * FlowGainScalar;
 	Result.AdrenalineDelta = RawAdrenaline * AdrenalineMultiplier;
 	return Result;
+}
+
+float FWolfResourceRules::GetAdrenalineScalar(float CurrentAdrenaline)
+{
+	const auto* Settings = GetDefault<UWolfCombatSettings>();
+	const float Coeff     = Settings ? Settings->AdrenalineScalarCoeff : 0.f;
+	const float MaxScalar = Settings ? Settings->MaxAdrenalineScalar  : 1.f;
+
+	return FMath::Min(1.0f + FMath::Max(CurrentAdrenaline, 0.f) * Coeff, MaxScalar);
 }
 
 int32 FWolfResourceRules::GetStageCount(float MaxFlow, float Interval)

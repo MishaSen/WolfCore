@@ -20,6 +20,7 @@
 #include "Presage/PresageOrchestrator.h"
 #include "Abilities/BaseCombatAbility.h"
 #include "Abilities/Effects/ResourceGainEffect.h"
+#include "Abilities/Effects/RTAdrenalineDrain.h"
 #include "AbilitySystem/WolfAttributeSet.h"
 #include "Debug/WolfDebug.h"
 #include "Engine/AssetManager.h"
@@ -587,7 +588,12 @@ void UCombatModeSubsystem::ReBakeTimeline()
 
 void UCombatModeSubsystem::HandlePresageDrainEffect(UAbilitySystemComponent* ASC, FGameplayTag CurrentActorMode)
 {
-	FWolfPresageSimulator::ApplyPresageDrainEffect(ASC, CurrentActorMode, PresageEffectClass);
+	// DEPRECATED (PresagePreviewStage3): no longer called from ApplyModeToActor. Still routed
+	// through the generalized ApplyModeDrainEffect to preserve behavior while it awaits its
+	// coordinated deletion — see this function's declaration. The TB presage drain is inactive
+	// here (active mode = TB), but nothing calls this anymore, so the real RT path below is the
+	// pattern's only live user.
+	FWolfPresageSimulator::ApplyModeDrainEffect(ASC, CurrentActorMode, FWolfGameplayTags::Get().InputState_TB, PresageEffectClass);
 }
 
 void UCombatModeSubsystem::ApplyModeToActor(const TScriptInterface<IWolfCombatant>& Combatant, FGameplayTag NewMode)
@@ -620,6 +626,15 @@ void UCombatModeSubsystem::ApplyModeToActor(const TScriptInterface<IWolfCombatan
 
 	if (bIsPlayer)
 	{
+		// [ResourceLoopStage4] Adrenaline drain — PLAYER only, present iff the player's mode is RT.
+		// Mirrors exactly how the retired TB presage drain toggled: a query-checked add/remove
+		// through the generalized FWolfPresageSimulator::ApplyModeDrainEffect (it no-ops on
+		// double-application and removes by source class). The drain ticks fine because RT dilation
+		// is 1.0 — the frozen-periodic-GE problem was TB-specific (see the retired comment below).
+		// PreAttributeChange floors Adrenaline at 0 already, so no effect-removal at zero is needed.
+		FWolfPresageSimulator::ApplyModeDrainEffect(
+			ASC, ActualModeForActor, FWolfGameplayTags::Get().InputState_RT, URTAdrenalineDrain::StaticClass());
+
 		// Drain GE retired (PresagePreviewStage3): the periodic drain never ticked at dilation 0
 		// (verified code fact) and is conceptually vestigial under the budget model — TB duration is
 		// granted at entry and consumed by the execution clock, not drained by a live effect.

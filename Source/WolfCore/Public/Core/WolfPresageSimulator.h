@@ -35,16 +35,24 @@ struct WOLFCORE_API FWolfPresageSimulator
 	static void ExecuteFutureBake(const TArray<TScriptInterface<IWolfCombatant>>& Combatants, float Duration, float StepSize);
 
 	/**
-	 * Applies presage drain effect to an actor based on their current combat mode state.
-	 * 
-	 * This helper manages the GameplayEffect lifecycle for turn-based mode transitions,
-	 * adding or removing the drain effect as needed without requiring subsystem knowledge.
-	 * 
-	 * @param ASC Pointer to the AbilitySystemComponent
-	 * @param CurrentActorMode The combat mode being evaluated
-	 * @param PresageEffectClass The class of GameplayEffect to apply/remove
+	 * GENERALIZED mode-conditional drain applier (ResourceLoop stage 4). Adds the given drain
+	 * GameplayEffect to an ASC when the actor's mode matches DrainActiveInMode, and removes it
+	 * otherwise — the exact add/remove structure the (now retired) TB presage drain used, made
+	 * generic over the mode so any "drain while in mode X" effect shares one query-check path.
+	 * This is the pattern's only live user: the RT Adrenaline drain (URTAdrenalineDrain, active in
+	 * InputState.RT) is applied/removed from UCombatModeSubsystem::ApplyModeToActor for the player.
+	 *
+	 * Handles double-application by querying for an existing active instance of the effect first
+	 * (no-op when present state already matches). Removes by source effect class so every instance
+	 * is cleared.
+	 *
+	 * @param ASC              The AbilitySystemComponent to add/remove the drain on.
+	 * @param CurrentActorMode The actor's current combat mode being evaluated.
+	 * @param DrainActiveInMode The mode the drain should be PRESENT in (effect applied iff this
+	 *        equals CurrentActorMode).
+	 * @param DrainEffectClass The GameplayEffect class to apply/remove.
 	 */
-	static void ApplyPresageDrainEffect(UAbilitySystemComponent* ASC, FGameplayTag CurrentActorMode, TSubclassOf<UGameplayEffect> PresageEffectClass);
+	static void ApplyModeDrainEffect(UAbilitySystemComponent* ASC, FGameplayTag CurrentActorMode, FGameplayTag DrainActiveInMode, TSubclassOf<UGameplayEffect> DrainEffectClass);
 
 private:
 	// Internal helper for simulation setup per combatant

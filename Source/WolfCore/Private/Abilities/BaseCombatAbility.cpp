@@ -3,6 +3,7 @@
 
 #include "WolfCore/Public/Abilities/BaseCombatAbility.h"
 
+#include "AbilitySystem/WolfAttributeSet.h"
 #include "AIController.h"
 #include "Engine.h"
 #include "AbilitySystemBlueprintLibrary.h"
@@ -69,8 +70,14 @@ void UBaseCombatAbility::ExecuteAnimatedPeriod(const FCombatPeriod& Period)
 {
 	if (IsValid(Period.Montage)) // Currently does not support non attack period montages.
 	{
+		// [ResourceLoopStage4] Attack-animation speed: play the montage at the RT Adrenaline spend
+		// scalar when the gate passes (player avatar + RT), else 1.f. A faster montage shifts
+		// hit-notify times earlier in REAL time — that is the intended effect in RT, and it is
+		// harmless to the planner because TB planning never involves RT-scaled playback.
+		const float PlayRate = GetRTAdrenalineScalar();
+
 		auto* MontageTask = UAbilityTask_PlayMontageAndWait::CreatePlayMontageAndWaitProxy(
-			this, NAME_None, Period.Montage, 1.f, NAME_None, false,
+			this, NAME_None, Period.Montage, PlayRate, NAME_None, false,
 				1.f, 0.f, false);
 
 		if (Period.Type == EPeriodType::Attack && HitEventTag.IsValid())
@@ -336,7 +343,8 @@ void UBaseCombatAbility::HandleAttackHitEvent(const FCombatPeriod& CurrentAttack
 }
 
 bool UBaseCombatAbility::ApplySingleHitEffect(const FCombatHitEffect& Effect, UAbilitySystemComponent* SourceASC,
-	UAbilitySystemComponent* TargetASC, const FGameplayEffectContextHandle& EffectContext, float AbilityLevel)
+	UAbilitySystemComponent* TargetASC, const FGameplayEffectContextHandle& EffectContext, float AbilityLevel,
+	float MagnitudeScalar)
 {
 	if (!Effect.EffectClass) return false;
 
@@ -347,12 +355,45 @@ bool UBaseCombatAbility::ApplySingleHitEffect(const FCombatHitEffect& Effect, UA
 		? Effect.DataAmountTag
 		: FWolfGameplayTags::Get().Data_Amount;
 
-	EffectSpecHandle.Data->SetSetByCallerMagnitude(AmountTag, Effect.Amount.GetValueAtLevel(AbilityLevel));
+	// [ResourceLoopStage4] Damage scalar: fold the RT Adrenaline spend scalar into the outgoing
+	// SetByCaller magnitude BEFORE SetSetByCallerMagnitude (never post-modify the GE). The default
+	// 1.f keeps the TB execution path (which calls this with 5 args) unscaled — the scalar is an
+	// RT live-path-only spend.
+	EffectSpecHandle.Data->SetSetByCallerMagnitude(AmountTag, Effect.Amount.GetValueAtLevel(AbilityLevel) * MagnitudeScalar);
 
 	if (Effect.bSelfTarget) SourceASC->ApplyGameplayEffectSpecToSelf(*EffectSpecHandle.Data.Get());
 	else                    SourceASC->ApplyGameplayEffectSpecToTarget(*EffectSpecHandle.Data.Get(), TargetASC);
 
 	return true;
+}
+
+float UBaseCombatAbility::GetRTAdrenalineScalar() const
+{
+	// [ResourceLoopStage4] Gate 1 — the spend scalar is a PLAYER-only effect: AI-driven and enemy
+	// sources (even in RT) are never adrenaline-scaled.
+	const auto* Avatar = GetAvatarActorFromActorInfo();
+	const auto* Pawn = Cast<APawn>(Avatar);
+	if (!Pawn || !Pawn->IsPlayerControlled()) return 1.f;
+
+	// Gate 2 — the spend scalar only applies in RT. Getting the CMS from the avatar's world keeps
+	// this consistent with how ApplyHitEffects resolves it. TB execution playback runs with mode ==
+	// TB, so the gate fails here naturally — TB planning/execution must never read the scalar, or
+	// the exact-preview contract breaks.
+	UCombatModeSubsystem* CMS = nullptr;
+	if (UWorld* World = Avatar ? Avatar->GetWorld() : GetWorld())
+	{
+		CMS = World->GetSubsystem<UCombatModeSubsystem>();
+	}
+	if (!CMS || CMS->GetCurrentMode() != FWolfGameplayTags::Get().InputState_RT) return 1.f;
+
+	// Read the source avatar's current Adrenaline and map it through the pure spend-scalar rule. A
+	// source with no ASC (or unconfigured adrenaline) yields no spend — scalar 1.0 (baseline).
+	if (auto* SourceASC = GetAbilitySystemComponentFromActorInfo())
+	{
+		return FWolfResourceRules::GetAdrenalineScalar(
+			SourceASC->GetNumericAttribute(UWolfAttributeSet::GetAdrenalineAttribute()));
+	}
+	return 1.f;
 }
 
 bool UBaseCombatAbility::ApplyHitEffects(const FCombatPeriod& Period, AActor* TargetActor, const FHitResult* HitResult)
@@ -371,9 +412,14 @@ bool UBaseCombatAbility::ApplyHitEffects(const FCombatPeriod& Period, AActor* Ta
 	const auto AbilityLevel = GetAbilityLevel();
 	bool bAppliedAny = false;
 
+	// [ResourceLoopStage4] The RT Adrenaline spend scalar for this hit's SOURCE, computed once per
+	// hit. Gated inside GetRTAdrenalineScalar (player avatar + RT) so TB predictive/execution paths
+	// and enemy/AI sources are never scaled. Folds into damage (below) and Flow-gain rate.
+	const float RTAdrenalineScalar = GetRTAdrenalineScalar();
+
 	for (const FCombatHitEffect& Effect : Period.HitEffects)
 	{
-		if (ApplySingleHitEffect(Effect, SourceASC, TargetASC, EffectContext, AbilityLevel))
+		if (ApplySingleHitEffect(Effect, SourceASC, TargetASC, EffectContext, AbilityLevel, RTAdrenalineScalar))
 		{
 			bAppliedAny = true;
 		}
@@ -385,7 +431,7 @@ bool UBaseCombatAbility::ApplyHitEffects(const FCombatPeriod& Period, AActor* Ta
 	{
 		if (!TargetASC->HasAllMatchingGameplayTags(Conditional.RequiredTargetTags)) continue;
 
-		if (ApplySingleHitEffect(Conditional.Effect, SourceASC, TargetASC, EffectContext, AbilityLevel))
+		if (ApplySingleHitEffect(Conditional.Effect, SourceASC, TargetASC, EffectContext, AbilityLevel, RTAdrenalineScalar))
 		{
 			WOLF_INFO("Conditional hit effect applied (target had required tags): %s", *TargetActor->GetName());
 			bAppliedAny = true;
@@ -424,7 +470,7 @@ bool UBaseCombatAbility::ApplyHitEffects(const FCombatPeriod& Period, AActor* Ta
 			}
 
 			const auto ResourceGain = FWolfResourceRules::ComputeResourceGain(
-				bPlayerDealtHit, bPlayerTookHit, DamageAmount, CMS->GetCurrentMode());
+				bPlayerDealtHit, bPlayerTookHit, DamageAmount, CMS->GetCurrentMode(), RTAdrenalineScalar);
 			CMS->ApplyResourceGainToPlayer(ResourceGain.FlowDelta, ResourceGain.AdrenalineDelta);
 		}
 	}

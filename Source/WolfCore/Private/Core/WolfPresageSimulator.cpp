@@ -130,14 +130,17 @@ void FWolfPresageSimulator::CleanupCombatantSimulation(const TScriptInterface<IW
 	}
 }
 
-void FWolfPresageSimulator::ApplyPresageDrainEffect(UAbilitySystemComponent* ASC, FGameplayTag CurrentActorMode, TSubclassOf<UGameplayEffect> PresageEffectClass)
+void FWolfPresageSimulator::ApplyModeDrainEffect(UAbilitySystemComponent* ASC, FGameplayTag CurrentActorMode, FGameplayTag DrainActiveInMode, TSubclassOf<UGameplayEffect> DrainEffectClass)
 {
-	if (!ASC || !PresageEffectClass) return;
+	if (!ASC || !DrainEffectClass) return;
 
-	const bool bShouldHaveEffect = CurrentActorMode == FWolfGameplayTags::Get().InputState_TB;
+	// Present iff the actor's current mode is the drain's active mode — the only mode-dependent bit
+	// of the retired presage drain, parameterized so RT Adrenaline drain and any future mode-gated
+	// drain share one add/remove structure (ResourceLoop stage 4 generalization).
+	const bool bShouldHaveEffect = CurrentActorMode == DrainActiveInMode;
 
 	FGameplayEffectQuery Query;
-	Query.EffectDefinition = PresageEffectClass;
+	Query.EffectDefinition = DrainEffectClass;
 
 	const TArray<FActiveGameplayEffectHandle> ActiveHandles = ASC->GetActiveEffects(Query);
 	const bool bEffectAlreadyApplied = ActiveHandles.Num() > 0;
@@ -149,8 +152,8 @@ void FWolfPresageSimulator::ApplyPresageDrainEffect(UAbilitySystemComponent* ASC
 		FGameplayEffectContextHandle Context = ASC->MakeEffectContext();
 		Context.AddInstigator(ASC->GetAvatarActor(), ASC->GetAvatarActor());
 
-		const FGameplayEffectSpecHandle SpecHandle = ASC->MakeOutgoingSpec(PresageEffectClass, 1.f, Context);
+		const FGameplayEffectSpecHandle SpecHandle = ASC->MakeOutgoingSpec(DrainEffectClass, 1.f, Context);
 		if (SpecHandle.IsValid()) ASC->ApplyGameplayEffectSpecToSelf(*SpecHandle.Data.Get());
 	}
-	else ASC->RemoveActiveGameplayEffectBySourceEffect(PresageEffectClass, nullptr);
+	else ASC->RemoveActiveGameplayEffectBySourceEffect(DrainEffectClass, nullptr);
 }

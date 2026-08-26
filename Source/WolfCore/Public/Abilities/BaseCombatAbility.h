@@ -310,7 +310,23 @@ public:
 	 * the effect was applied (EffectClass was set and the spec was valid).
 	 */
 	static bool ApplySingleHitEffect(const FCombatHitEffect& Effect, UAbilitySystemComponent* SourceASC,
-		UAbilitySystemComponent* TargetASC, const FGameplayEffectContextHandle& EffectContext, float AbilityLevel);
+		UAbilitySystemComponent* TargetASC, const FGameplayEffectContextHandle& EffectContext, float AbilityLevel,
+		float MagnitudeScalar = 1.f);
+
+	/**
+	 * The RT Adrenaline spend scalar for THIS ability's source, gated to the RT live path
+	 * (ResourceLoop stage 4). Returns FWolfResourceRules::GetAdrenalineScalar(current Adrenaline)
+	 * only when the source avatar is player-controlled AND the current mode is RT; otherwise 1.f
+	 * (TB execution playback and enemy/AI sources must never read the spend scalar, or the
+	 * exact-preview/TB-exactness contract breaks).
+	 *
+	 * One scalar feeds all three spend channels this stage: attack-animation speed
+	 * (ExecuteAnimatedPeriod's montage play rate), damage (ApplySingleHitEffect's SetByCaller
+	 * magnitude), and Flow-gain rate (ComputeResourceGain's FlowGainScalar).
+	 *
+	 * @return The gated scalar, or 1.f if the gate fails.
+	 */
+	float GetRTAdrenalineScalar() const;
 	
 	// ============================================================================================================================
 	// Execution State (Protected)

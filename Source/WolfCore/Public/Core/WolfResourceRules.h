@@ -70,10 +70,15 @@ public:
 	 * @param CurrentMode  The mode to weight gains for (InputState.RT or InputState.TB). Passed as
 	 *   a parameter — never read from the CMS here — precisely so the bake can pass InputState_TB
 	 *   while simulating and RT code can pass the live mode.
+	 * @param FlowGainScalar Optional multiplier folded into the Flow delta ONLY (not Adrenaline) —
+	 *   ResourceLoop stage 4's Adrenaline spend scalar. The RT live path passes
+	 *   GetAdrenalineScalar(...); the bake's prediction path and TB execution playback pass 1.f
+	 *   (default) because Adrenaline spend is RT-only by definition — never let it leak into TB.
 	 * @return The combined per-channel deltas after the mode's major/minor weighting.
 	 */
 	static FResourceGainResult ComputeResourceGain(
-		bool bPlayerDealtHit, bool bPlayerTookHit, float DamageAmount, const FGameplayTag& CurrentMode);
+		bool bPlayerDealtHit, bool bPlayerTookHit, float DamageAmount, const FGameplayTag& CurrentMode,
+		float FlowGainScalar = 1.f);
 
 	/**
 	 * Number of threshold stages the given soft cap unlocks — floor(MaxFlow / Interval).
@@ -103,4 +108,21 @@ public:
 	 * Pure (ResourceLoop stage 2): reads only the caller's parameters.
 	 */
 	static int32 GetThresholdStage(float FlowValue, float MaxFlow, float Interval);
+
+	/**
+	 * The single Adrenaline spend scalar (ResourceLoop stage 4) — how much current Adrenaline buys
+	 * across the three channels this stage shares (attack-animation speed, damage, Flow-gain rate):
+	 *
+	 *     scalar = min(1.0 + CurrentAdrenaline * AdrenalineScalarCoeff, MaxAdrenalineScalar)
+	 *
+	 * Coefficients come from UWolfCombatSettings (designer constants — the same default object both
+	 * apply paths consult, consistent with ComputeResourceGain). At CurrentAdrenaline <= 0 the
+	 * scalar is 1.0 (baseline — spend effects are naturally skipped at zero; the drain just runs
+	 * against the 0 floor). Pure: reads only its parameter and UWolfCombatSettings — no ASC/World
+	 * access, so it is safe to call on every hit / every montage play.
+	 *
+	 * @param CurrentAdrenaline The current Adrenaline attribute value.
+	 * @return The scalar in [1.0, MaxAdrenalineScalar].
+	 */
+	static float GetAdrenalineScalar(float CurrentAdrenaline);
 };
