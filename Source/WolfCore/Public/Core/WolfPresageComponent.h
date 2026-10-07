@@ -80,6 +80,10 @@ public:
 	  * FPresageOrchestrator::DistributePlan, before ExecuteFutureBake runs. */
 	void SetPlannedIntents(const TArray<FIntentEntry>& Intents);
 
+	/** QA/debug read access to this combatant's current planned-intent slice. Added for
+	  * WolfCoreQACommands' QA_DumpPlan; not used by any gameplay logic. */
+	const TArray<FIntentEntry>& GetPlannedIntents() const { return PlannedIntents; }
+
 	/** Called at the start of a bake to reset per-simulation state. */
 	void BeginSimulation();
 

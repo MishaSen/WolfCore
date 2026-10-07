@@ -7,6 +7,7 @@
 #include "Core/WolfFunctionLibrary.h"
 #include "Core/WolfGameplayTags.h"
 #include "Debug/WolfDebug.h"
+#include "Debug/WolfQACheatManager.h"
 #include "Engine/LocalPlayer.h"
 #include "Engine/Engine.h"
 #include "EnhancedInputSubsystems.h"
@@ -17,6 +18,12 @@
 
 AWolfPlayerController::AWolfPlayerController()
 {
+#if !UE_BUILD_SHIPPING
+	// QA instrumentation layer (docs/specs/WolfCoreQACommands_Implementation.md). Engine only
+	// instantiates CheatManager where AGameModeBase::AllowCheats() is true (never in shipping);
+	// the explicit #if is belt-and-suspenders, matching the WOLF_DEBUG_ENABLED pattern.
+	CheatClass = UWolfQACheatManager::StaticClass();
+#endif
 }
 
 void AWolfPlayerController::PlayerTick(float DeltaTime)

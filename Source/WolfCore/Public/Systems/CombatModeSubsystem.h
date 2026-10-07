@@ -202,6 +202,11 @@ public:
 	UFUNCTION(BlueprintPure, Meta = (DisplayName = "Get Timeline Time"), Category = "WolfCore|Combat")
 	float GetCurrentTimelineTime() const { return CurrentTimelineTime; }
 
+	/** Returns the Turn-Based execution budget in seconds granted at TB entry (ResourceLoop stage 3).
+	  * Read-only QA/debug accessor added for WolfCoreQACommands' QA_DumpCombatState; no gameplay
+	  * logic mutates the budget after entry (it is fixed for the whole TB session). */
+	float GetBudgetedTBDuration() const { return BudgetedTBDuration; }
+
 	/** Boolean flag indicating whether the current combat mode is set to turn-based (TB) rather than real-time (RT). */
 	bool bIsInTB;
 
