@@ -88,6 +88,9 @@ public:
 	UFUNCTION(Exec, BlueprintCallable, Category = "WolfCore|QA")
 	void QA_ResetCombat();
 
+	UFUNCTION(Exec, BlueprintCallable, Category = "WolfCore|QA")
+	void QA_ActivateAbility(FString TargetName, FString InputTagName);
+
 	// ============================================================================================================================
 	// Layer 2 — Scenario Construction
 	// ============================================================================================================================

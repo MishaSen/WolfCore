@@ -295,6 +295,19 @@ void UWolfQACheatManager::QA_ResetCombat()
 	WOLF_INFO(TEXT("[QA] QA_ResetCombat: Flow/Adrenaline zeroed, all combatants restored, mode -> RT."));
 }
 
+void UWolfQACheatManager::QA_ActivateAbility(FString TargetName, FString InputTagName)
+{
+	auto* Target = ResolveQATarget(TargetName);
+	auto* ASC = Cast<UWolfAbilitySystemComponent>(GetTargetASC(Target));
+	const auto Tag = UGameplayTagsManager::Get().RequestGameplayTag(FName(*InputTagName), false);
+	if (!ASC || !Tag.IsValid())
+	{
+		WOLF_WARN(TEXT("[QA} QA_ActivateAbility: bad target (%s) or tag (%s)."), *TargetName, *InputTagName);
+		return;
+	}
+	ASC->AbilityInputTagPressed(Tag);
+}
+
 // ============================================================================================================================
 // Layer 2 — Scenario Construction
 // ============================================================================================================================

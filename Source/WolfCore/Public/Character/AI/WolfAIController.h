@@ -5,6 +5,7 @@
 #include "CoreMinimal.h"
 #include "AIController.h"
 #include "GameplayTagContainer.h"
+#include "TimerManager.h"
 #include "WolfAIController.generated.h"
 
 struct FAIStimulus;
@@ -32,4 +33,11 @@ protected:
 
 	UFUNCTION()
 	void OnPerceptionUpdated(AActor* Actor, FAIStimulus Stimulus);
+
+#if !UE_BUILD_SHIPPING
+	// QA hack: one-shot timer that nulls TargetActor 1s after the first detection of a cycle.
+	FTimerHandle ClearTargetTimerHandle;
+
+	void ClearTargetActor();
+#endif
 };

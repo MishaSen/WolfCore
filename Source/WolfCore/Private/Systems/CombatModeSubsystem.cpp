@@ -746,15 +746,14 @@ bool UCombatModeSubsystem::ResolveTBEntryBudget()
 	UAbilitySystemComponent* PlayerASC = GetPlayerASC();
 	if (!PlayerASC)
 	{
-		// A TB with no player is meaningless — refuse and let the stage-0/no-budget gate stop entry.
-		WOLF_WARN(TEXT("[RESOURCES] TB entry budget: no player ASC yet — anything a TB would grant is moot; refusing TB entry."));
+		WOLF_WARN(TEXT("TB ENTRY DENIED: no player ASC yet."));
 		return false;
 	}
 
 	const auto* Settings = GetDefault<UWolfCombatSettings>();
 	if (!Settings)
 	{
-		WOLF_WARN(TEXT("[RESOURCES] TB entry budget: no UWolfCombatSettings — refusing TB entry."));
+		WOLF_WARN(TEXT("[RESOURCES] TB ENTRY DENIED: no UWolfCombatSettings."));
 		return false;
 	}
 

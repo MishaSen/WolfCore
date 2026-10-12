@@ -88,6 +88,7 @@ void UWolfAttributeSet::PostGameplayEffectExecute(const FGameplayEffectModCallba
 
 	if (Attribute == GetMaxFlowGaugeAttribute())
 	{
+		WOLF_INFO(TEXT("MaxFlowGauge is: %f"), GetMaxFlowGauge());
 		// Mirror the hard-ceiling clamp (see PreAttributeChange) for GE-driven cap changes — an
 		// upgrade effect can move the cap up, but never past the configured ceiling.
 		const auto* Settings = GetDefault<UWolfCombatSettings>();
