@@ -728,17 +728,22 @@ void UCombatModeSubsystem::ApplyResourceGainToPlayer(float FlowDelta, float Adre
 		return;
 	}
 
-	const auto SpecHandle = PlayerASC->MakeOutgoingSpec(
-		UResourceGainEffect::StaticClass(), 1.f, PlayerASC->MakeEffectContext());
-	if (!SpecHandle.IsValid())
-	{
-		WOLF_WARN(TEXT("[RESOURCES] Failed to create UResourceGainEffect spec — gain not applied."));
-		return;
-	}
+	auto* GainEffect = NewObject<UGameplayEffect>(GetTransientPackage(), FName(TEXT("RuntimeResourceGain")));
+	GainEffect->DurationPolicy = EGameplayEffectDurationType::Instant;
 
-	SpecHandle.Data->SetSetByCallerMagnitude(FWolfGameplayTags::Get().Data_FlowAmount, FlowDelta);
-	SpecHandle.Data->SetSetByCallerMagnitude(FWolfGameplayTags::Get().Data_AdrenalineAmount, AdrenalineDelta);
-	PlayerASC->ApplyGameplayEffectSpecToSelf(*SpecHandle.Data.Get());
+	const auto AddMod = [GainEffect](const FGameplayAttribute& Attribute, float Amount)
+	{
+		if (FMath::IsNearlyZero(Amount)) return;
+		FGameplayModifierInfo Info;
+		Info.Attribute = Attribute;
+		Info.ModifierOp = EGameplayModOp::Additive;
+		Info.ModifierMagnitude = FScalableFloat(Amount);
+		GainEffect->Modifiers.Add(Info);
+	};
+	AddMod(UWolfAttributeSet::GetFlowGaugeAttribute(), FlowDelta);
+	AddMod(UWolfAttributeSet::GetAdrenalineAttribute(), AdrenalineDelta);
+
+	PlayerASC->ApplyGameplayEffectToSelf(GainEffect, 1.f, PlayerASC->MakeEffectContext());
 }
 
 bool UCombatModeSubsystem::ResolveTBEntryBudget()

@@ -22,4 +22,7 @@ class WOLFCORE_API UResourceGainEffect : public UGameplayEffect
 
 public:
 	UResourceGainEffect();
+
+	static const FName DataName_FlowAmount;
+	static const FName DataName_AdrenalineAmount;
 };

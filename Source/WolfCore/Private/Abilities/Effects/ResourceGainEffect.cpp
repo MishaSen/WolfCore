@@ -7,6 +7,11 @@
 #include "Core/WolfGameplayTags.h"
 #include "GameplayEffect.h"
 
+// Keyed by name, not tag: this constructor runs for the CDO at module load, before native tags
+// are registered (UWolfAssetManager::StartInitialLoading), so FWolfGameplayTags::Get() is still invalid here.
+const FName UResourceGainEffect::DataName_FlowAmount(TEXT("Data.FlowAmount"));
+const FName UResourceGainEffect::DataName_AdrenalineAmount(TEXT("Data.AdrenalineAmount"));
+
 UResourceGainEffect::UResourceGainEffect()
 {
 	DurationPolicy = EGameplayEffectDurationType::Instant;
