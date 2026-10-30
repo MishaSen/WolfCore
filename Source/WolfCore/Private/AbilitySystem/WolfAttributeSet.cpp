@@ -99,7 +99,9 @@ void UWolfAttributeSet::PostGameplayEffectExecute(const FGameplayEffectModCallba
 	if (Attribute == GetAdrenalineAttribute())
 	{
 		SetAdrenaline(FMath::Max(GetAdrenaline(), 0.f));
-		WOLF_LOG(Log, TEXT("[%s] Adrenaline: %f"), *ActorName, GetAdrenaline());
+		/* Commenting out this log because it got annoying
+		 *WOLF_LOG(Log, TEXT("[%s] Adrenaline: %f"), *ActorName, GetAdrenaline());
+		 */
 	}
 	
 	if (Attribute == GetFlowGaugeAttribute())
