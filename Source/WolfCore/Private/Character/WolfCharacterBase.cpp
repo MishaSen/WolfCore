@@ -181,6 +181,15 @@ void AWolfCharacterBase::Die_Implementation()
 		MoveComp->DisableMovement();
 	}
 
+	if (auto* CharMesh = GetMesh())
+	{
+		CharMesh->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
+		CharMesh->SetCollisionProfileName(TEXT("Ragdoll"));
+		CharMesh->SetSimulatePhysics(true);
+		CharMesh->WakeAllRigidBodies();
+		CharMesh->bBlendPhysics = true;
+	}
+
 	WolfASC->CancelAllAbilities();
 	WolfASC->AddLooseGameplayTag(FWolfGameplayTags::Get().InputState_Dead);
 
